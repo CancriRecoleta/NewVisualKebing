@@ -30,8 +30,8 @@ public abstract class MixinControlsScreen extends OptionsSubScreen {
 
         for (GuiEventListener listener : new ArrayList<>(this.children())) {
             if (listener instanceof Button button
-                    && button.getX() == x
-                    && button.getY() == y
+                    && button.x == x
+                    && button.y == y
                     && button.getWidth() == 150
                     && button.getMessage().getString().equals(Component.translatable("controls.keybinds").getString())) {
                 removeWidget(listener);
@@ -39,9 +39,7 @@ public abstract class MixinControlsScreen extends OptionsSubScreen {
             }
         }
 
-        addRenderableWidget(Button.builder(Component.translatable("controls.keybinds"), button ->
-                Minecraft.getInstance().setScreen(new KeybindViewerScreen((Screen) (Object) this)))
-                .bounds(x, y, 150, 20)
-                .build());
+        addRenderableWidget(new Button(x, y, 150, 20, Component.translatable("controls.keybinds"), button ->
+                Minecraft.getInstance().setScreen(new KeybindViewerScreen((Screen) (Object) this))));
     }
 }

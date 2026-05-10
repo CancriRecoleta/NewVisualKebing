@@ -1,6 +1,5 @@
 package com.github.newvisualkeybing.client.ui;
 
-import net.minecraft.client.gui.GuiGraphics;
 
 
 
@@ -507,4 +506,3 @@ public final class UITheme {
         public int dimOverlay() { return widgetBorderHover; }
     }
 }
-

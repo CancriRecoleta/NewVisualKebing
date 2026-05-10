@@ -3,7 +3,7 @@ package com.github.newvisualkeybing.client.screen;
 import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
@@ -54,7 +54,7 @@ final class KeybindProfilePanel {
         UITheme.fillRoundedRect(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5, colors.inputBg());
         UITheme.drawRoundedBorder(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5,
                 renaming || nameBox.isFocused() ? colors.accent() : colors.widgetBorder());
-        nameBox.render(graphics, mouseX, mouseY, 1.0f);
+        nameBox.render(graphics.pose(), mouseX, mouseY, 1.0f);
 
         int rowY = y + 58;
         List<KeybindProfileStore.Profile> profiles = profileStore.profiles();
@@ -114,12 +114,12 @@ final class KeybindProfilePanel {
         int nameX = x + 10;
         int nameY = y + 32;
         if (nameBox != null && nameBox.mouseClicked(mouseX, mouseY, 0)) {
-            nameBox.setFocused(true);
+            nameBox.setFocus(true);
             if (profileStore.selectedProfile() != null) renaming = true;
             return true;
         }
         if (!inside(mouseX, mouseY, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4) && nameBox != null) {
-            nameBox.setFocused(false);
+            nameBox.setFocus(false);
         }
 
         int buttonTop = buttonTop(y, h);
@@ -221,7 +221,7 @@ final class KeybindProfilePanel {
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             renaming = false;
             syncNameBox(true);
-            nameBox.setFocused(false);
+            nameBox.setFocus(false);
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER) {
@@ -246,7 +246,7 @@ final class KeybindProfilePanel {
         releaseExternalFocus.run();
         renaming = true;
         nameBox.setValue(profile.name);
-        nameBox.setFocused(true);
+        nameBox.setFocus(true);
         nameBox.setHighlightPos(0);
         nameBox.setCursorPosition(profile.name.length());
     }
@@ -259,7 +259,7 @@ final class KeybindProfilePanel {
         }
         setNameText(profile.name);
         renaming = false;
-        if (nameBox != null) nameBox.setFocused(false);
+        if (nameBox != null) nameBox.setFocus(false);
         rebuildEntries.run();
         noticeSink.notice(Component.translatable("screen.newvisualkeybing.viewer.profile.renamed", profile.name).getString());
     }
@@ -272,13 +272,13 @@ final class KeybindProfilePanel {
         if (nameBox == null) {
             nameBox = new EditBox(font, x, y, WIDTH - 20, NAME_BOX_H,
                     Component.translatable("screen.newvisualkeybing.viewer.profile.name"));
-            nameBox.setHint(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder"));
+            nameBox.setSuggestion(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder").getString());
             nameBox.setBordered(false);
             nameBox.setMaxLength(48);
             syncNameBox(true);
         }
         nameBox.setX(x);
-        nameBox.setY(y);
+        nameBox.y = y;
     }
 
     private void syncNameBox() {

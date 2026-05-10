@@ -4,7 +4,7 @@ import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 
 import java.util.List;
 import java.util.function.IntPredicate;

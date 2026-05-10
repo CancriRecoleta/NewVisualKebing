@@ -1,7 +1,7 @@
 package com.github.newvisualkeybing;
 
 import com.github.newvisualkeybing.platform.Services;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Registry;
 import net.minecraft.world.item.Items;
 
 public class CommonClass {
@@ -12,7 +12,7 @@ public class CommonClass {
                 Services.PLATFORM.getPlatformName(),
                 Services.PLATFORM.getEnvironmentName()
         );
-        Constants.LOG.info("The ID for diamonds is {}", BuiltInRegistries.ITEM.getKey(Items.DIAMOND));
+        Constants.LOG.info("The ID for diamonds is {}", Registry.ITEM.getKey(Items.DIAMOND));
 
         if (Services.PLATFORM.isModLoaded(Constants.MOD_ID)) {
             Constants.LOG.info("Hello to {}", Constants.MOD_ID);

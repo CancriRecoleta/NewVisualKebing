@@ -1,7 +1,6 @@
 package com.github.newvisualkeybing.client.ui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -168,4 +167,3 @@ public class MCPanel {
         void render(GuiGraphics graphics, int x, int y, int width, int height);
     }
 }
-

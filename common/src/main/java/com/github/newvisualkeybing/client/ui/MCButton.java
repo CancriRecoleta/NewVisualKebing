@@ -1,7 +1,7 @@
 package com.github.newvisualkeybing.client.ui;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
@@ -39,11 +39,15 @@ public class MCButton extends AbstractWidget {
     }
 
     @Override
+    public void renderButton(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
+        renderWidget(new GuiGraphics(poseStack), mouseX, mouseY, partialTick);
+    }
+
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         updateAnimations(partialTick);
 
         var colors = UITheme.colors();
-        int x = getX(), y = getY(), w = getWidth(), h = getHeight();
+        int x = this.x, y = this.y, w = getWidth(), h = getHeight();
 
         float easedHover = UITheme.easeOutCubic(hoverProgress);
         float easedPress = UITheme.easeOutCubic(pressAnimation);
@@ -139,8 +143,7 @@ public class MCButton extends AbstractWidget {
     }
 
     @Override
-    protected void updateWidgetNarration(NarrationElementOutput output) {
+    public void updateNarration(NarrationElementOutput output) {
         this.defaultButtonNarrationText(output);
     }
 }
-

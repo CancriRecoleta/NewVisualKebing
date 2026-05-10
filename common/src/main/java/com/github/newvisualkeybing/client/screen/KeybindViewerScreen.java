@@ -7,7 +7,8 @@ import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.UITheme;
-import net.minecraft.client.gui.GuiGraphics;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -168,7 +169,7 @@ public class KeybindViewerScreen extends Screen {
         int searchBoxY = HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2;
         searchBox = new EditBox(font, toolbarSearchX, searchBoxY, toolbarSearchW, SEARCH_BH,
                 Component.translatable("screen.newvisualkeybing.viewer.search"));
-        searchBox.setHint(Component.translatable("screen.newvisualkeybing.viewer.search"));
+        searchBox.setSuggestion(Component.translatable("screen.newvisualkeybing.viewer.search").getString());
         searchBox.setResponder(value -> markFiltersDirty());
         addRenderableWidget(searchBox);
 
@@ -281,11 +282,12 @@ public class KeybindViewerScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
+        GuiGraphics g = new GuiGraphics(poseStack);
         long nowMs = System.currentTimeMillis();
         if (filtersDirty) refreshFilters();
         animTick += partialTick;
-        renderBackground(g);
+        renderBackground(poseStack);
         layoutPanels();
         hoveredVirtualKey = null;
 
@@ -310,7 +312,7 @@ public class KeybindViewerScreen extends Screen {
         renderDetailPanel(g, selectedVirtualKey != null ? selectedVirtualKey : hoveredVirtualKey, mouseX, mouseY);
         renderStatusBar(g);
 
-        super.render(g, mouseX, mouseY, partialTick);
+        super.render(poseStack, mouseX, mouseY, partialTick);
 
         if (hoveredVirtualKey != null
                 && (selectedVirtualKey == null || hoveredVirtualKey.intValue() != selectedVirtualKey.intValue())) {
@@ -714,7 +716,7 @@ public class KeybindViewerScreen extends Screen {
 
     private void releaseSearchFocus() {
         if (searchBox != null && searchBox.isFocused()) {
-            searchBox.setFocused(false);
+            searchBox.setFocus(false);
         }
         if (this.getFocused() == searchBox) {
             this.setFocused(null);

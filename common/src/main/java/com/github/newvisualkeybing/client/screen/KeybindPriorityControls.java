@@ -4,7 +4,7 @@ import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 
 final class KeybindPriorityControls {
 

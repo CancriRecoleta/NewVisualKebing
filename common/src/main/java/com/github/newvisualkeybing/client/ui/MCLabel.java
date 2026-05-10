@@ -2,7 +2,6 @@ package com.github.newvisualkeybing.client.ui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -89,4 +88,3 @@ public class MCLabel {
         return (0xFF << 24) | (r << 16) | (g << 8) | b;
     }
 }
-

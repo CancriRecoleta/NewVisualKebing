@@ -8,9 +8,10 @@ import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.mixin.KeyMappingAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -85,7 +86,7 @@ public class KeybindEditScreen extends Screen {
         searchX = KeybindProfilePanel.WIDTH + 22;
         searchW = Mth.clamp(width - searchX - 300, 150, 360);
         searchBox = new EditBox(font, searchX, 11, searchW, 16, Component.translatable("screen.newvisualkeybing.viewer.search"));
-        searchBox.setHint(Component.translatable("screen.newvisualkeybing.viewer.search"));
+        searchBox.setSuggestion(Component.translatable("screen.newvisualkeybing.viewer.search").getString());
         searchBox.setResponder(value -> rebuildEntries());
         searchBox.setBordered(false);
         addRenderableWidget(searchBox);
@@ -161,8 +162,9 @@ public class KeybindEditScreen extends Screen {
     private int listW() { return width - listX() - 8; }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics);
+    public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
+        GuiGraphics graphics = new GuiGraphics(poseStack);
+        renderBackground(poseStack);
         var colors = UITheme.colors();
         graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE4));
 
@@ -170,7 +172,7 @@ public class KeybindEditScreen extends Screen {
         profilePanel.render(graphics, font, 8, listTop(), listHeight(), mouseX, mouseY);
         renderEntries(graphics, mouseX, mouseY);
         renderFooter(graphics);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(poseStack, mouseX, mouseY, partialTick);
 
         if (waitingMapping != null) renderWaitingOverlay(graphics);
         renderNotice(graphics);
@@ -264,8 +266,6 @@ public class KeybindEditScreen extends Screen {
         priorityControls.render(graphics, font, ke.mapping, priorityX, y, ENTRY_H, mouseX, mouseY, hovered);
 
         int changeX = priorityX + KeybindPriorityControls.WIDTH + COL_GAP;
-        // Always show the mapping's actual current binding. Focused-mode is communicated via the
-        // screen title ("Assign X to an action") + the focusedTarget side-bar highlight + button color.
         String changeLabel = isWaiting
                 ? "> ... <"
                 : (isUnbound ? Component.translatable("screen.newvisualkeybing.viewer.unbound").getString()
@@ -541,4 +541,3 @@ public class KeybindEditScreen extends Screen {
     private record CategoryEntry(String name) {}
     private record KeyEntry(KeyMapping mapping) {}
 }
-
