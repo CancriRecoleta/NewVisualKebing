@@ -114,5 +114,6 @@
   "screen.newvisualkeybing.viewer.profile.deleted": "Deleted %s",
   "screen.newvisualkeybing.viewer.profile.no_selection": "No profile selected",
   "screen.newvisualkeybing.viewer.profile.no_exports": "No exported profiles found",
-  "screen.newvisualkeybing.viewer.priority.changed": "%s priority: %s"
+  "screen.newvisualkeybing.viewer.priority.changed": "%s priority: %s",
+  "screen.newvisualkeybing.viewer.fps": "%s FPS"
 }

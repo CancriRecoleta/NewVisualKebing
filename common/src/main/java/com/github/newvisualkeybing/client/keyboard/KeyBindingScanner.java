@@ -75,6 +75,16 @@ public class KeyBindingScanner {
     private long lastScanTime = -1L;
     private static final long RESCAN_INTERVAL_MS = 3000L;
 
+    private long cachedFilterKeysVersion = -1L;
+    private String cachedFilterKeysQuery;
+    private Set<Integer> cachedFilterKeys;
+    private long cachedFilterStatusVersion = -1L;
+    private FilterTab cachedFilterStatusTab;
+    private Set<Integer> cachedFilterStatus;
+    private long cachedFilterModVersion = -1L;
+    private String cachedFilterModId;
+    private Set<Integer> cachedFilterMod;
+
     public boolean refreshIfNeeded() {
         if (System.currentTimeMillis() - lastScanTime <= RESCAN_INTERVAL_MS) return false;
         scan();
@@ -236,6 +246,9 @@ public class KeyBindingScanner {
 
     public Set<Integer> filterByStatus(FilterTab tab) {
         if (tab == null || tab == FilterTab.ALL) return null;
+        if (cachedFilterStatusVersion == version && cachedFilterStatusTab == tab) {
+            return cachedFilterStatus;
+        }
         Set<Integer> matches = new LinkedHashSet<>();
         for (KeyboardLayoutData.KeyDef key : KeyboardLayoutData.KEYS) {
             if (matchesStatus(getStatus(key.glfwKey()), tab)) matches.add(key.glfwKey());
@@ -245,26 +258,43 @@ public class KeyBindingScanner {
                 matches.add(key.glfwKey());
             }
         }
+        cachedFilterStatusVersion = version;
+        cachedFilterStatusTab = tab;
+        cachedFilterStatus = matches;
         return matches;
     }
 
     public Set<Integer> filterByMod(String modId) {
         if (modId == null || modId.isBlank()) return null;
+        if (cachedFilterModVersion == version && modId.equals(cachedFilterModId)) {
+            return cachedFilterMod;
+        }
         Set<Integer> matches = new LinkedHashSet<>();
         for (Map.Entry<Integer, List<KeyBindingInfo>> entry : keyboardBindings.entrySet()) {
-            if (entry.getValue().stream().anyMatch(info -> modId.equals(info.modId()))) matches.add(entry.getKey());
-        }
-        for (Map.Entry<Integer, List<KeyBindingInfo>> entry : mouseBindings.entrySet()) {
-            if (entry.getValue().stream().anyMatch(info -> modId.equals(info.modId()))) {
-                matches.add(KeyboardLayoutData.mouseToVirtual(entry.getKey()));
+            for (KeyBindingInfo info : entry.getValue()) {
+                if (modId.equals(info.modId())) { matches.add(entry.getKey()); break; }
             }
         }
+        for (Map.Entry<Integer, List<KeyBindingInfo>> entry : mouseBindings.entrySet()) {
+            for (KeyBindingInfo info : entry.getValue()) {
+                if (modId.equals(info.modId())) {
+                    matches.add(KeyboardLayoutData.mouseToVirtual(entry.getKey()));
+                    break;
+                }
+            }
+        }
+        cachedFilterModVersion = version;
+        cachedFilterModId = modId;
+        cachedFilterMod = matches;
         return matches;
     }
 
     public Set<Integer> filterKeys(String query) {
         if (query == null || query.isBlank()) return null;
         String q = query.toLowerCase(Locale.ROOT).trim();
+        if (cachedFilterKeysVersion == version && q.equals(cachedFilterKeysQuery)) {
+            return cachedFilterKeys;
+        }
         Set<Integer> matches = new LinkedHashSet<>();
 
         for (KeyboardLayoutData.KeyDef key : KeyboardLayoutData.KEYS) {
@@ -287,6 +317,9 @@ public class KeyBindingScanner {
                 if (matches(info, q)) { matches.add(key.glfwKey()); break; }
             }
         }
+        cachedFilterKeysVersion = version;
+        cachedFilterKeysQuery = q;
+        cachedFilterKeys = matches;
         return matches;
     }
 

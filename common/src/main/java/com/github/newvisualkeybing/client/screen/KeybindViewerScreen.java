@@ -71,8 +71,13 @@ public class KeybindViewerScreen extends Screen {
     private float animTick;
     private Integer tooltipHoverKey;
     private long tooltipHoverStartMs;
-    private static final long TOOLTIP_DELAY_MS = 220;
-    private static final long TOOLTIP_FADE_MS = 160;
+    private static final long TOOLTIP_DELAY_MS = 80;
+    private static final long TOOLTIP_FADE_MS = 90;
+    private static final int FPS_DISPLAY_CAP = 240;
+
+    private long fpsWindowStartMs;
+    private int fpsFrameCount;
+    private int fpsLastValue;
 
     private FilterTab activeFilter = FilterTab.ALL;
     private Set<Integer> textFilteredKeys;
@@ -285,6 +290,7 @@ public class KeybindViewerScreen extends Screen {
     public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
         GuiGraphics g = new GuiGraphics(poseStack);
         long nowMs = System.currentTimeMillis();
+        sampleFps(nowMs);
         if (filtersDirty) refreshFilters();
         animTick += partialTick;
         renderBackground(poseStack);
@@ -435,7 +441,15 @@ public class KeybindViewerScreen extends Screen {
 
         int hintW = font.width(hintLabel);
         int hintX = width - hintW - 10;
-        int leftLimit = Math.max(10, Math.min(middleX - 8, hintX - 8));
+
+        int fpsValue = Math.min(FPS_DISPLAY_CAP, Math.max(0, fpsLastValue));
+        String fpsText = Component.translatable("screen.newvisualkeybing.viewer.fps", fpsValue).getString();
+        int fpsChipW = font.width(fpsText) + 18;
+        int fpsChipX = hintX - fpsChipW - 10;
+        int fpsDot = fpsAccent(fpsValue);
+        renderFpsChip(g, fpsChipX, chipY, fpsChipW, fpsDot, fpsText);
+
+        int leftLimit = Math.max(10, Math.min(middleX - 8, fpsChipX - 8));
         int x = 10;
 
         x = renderStatChip(g, x, chipY, c.widgetBorder(),
@@ -474,6 +488,40 @@ public class KeybindViewerScreen extends Screen {
         UITheme.fillRoundedRect(g, x + 5, y + (chipH - 5) / 2, 5, 5, 2, dotColor);
         g.drawString(font, text, x + 13, y + (chipH - font.lineHeight) / 2 + 1, c.textSecondary(), false);
         return x + chipW;
+    }
+
+    private void renderFpsChip(GuiGraphics g, int x, int y, int chipW, int dotColor, String text) {
+        var c = UITheme.colors();
+        int chipH = 14;
+        int fill = UITheme.lerpColor(c.widgetBg(), dotColor, 0.18f);
+        UITheme.fillRoundedRect(g, x, y, chipW, chipH, chipH / 2, fill);
+        UITheme.drawRoundedBorder(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dotColor, 0xB0));
+        UITheme.fillRoundedRect(g, x + 5, y + (chipH - 5) / 2, 5, 5, 2, dotColor);
+        g.drawString(font, text, x + 13, y + (chipH - font.lineHeight) / 2 + 1, c.textPrimary(), false);
+    }
+
+    private void sampleFps(long nowMs) {
+        if (fpsWindowStartMs == 0L) {
+            fpsWindowStartMs = nowMs;
+            fpsFrameCount = 0;
+            return;
+        }
+        fpsFrameCount++;
+        long elapsed = nowMs - fpsWindowStartMs;
+        if (elapsed >= 500L) {
+            int value = (int) Math.round(fpsFrameCount * 1000.0 / elapsed);
+            fpsLastValue = Math.min(FPS_DISPLAY_CAP, Math.max(0, value));
+            fpsWindowStartMs = nowMs;
+            fpsFrameCount = 0;
+        }
+    }
+
+    private int fpsAccent(int fps) {
+        var c = UITheme.colors();
+        if (fps >= 120) return c.success();
+        if (fps >= 60)  return c.accent();
+        if (fps >= 30)  return c.accentLight();
+        return c.danger();
     }
 
     static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int x, int y, int w, int h, String title) {
@@ -831,7 +879,6 @@ public class KeybindViewerScreen extends Screen {
     }
 
     private void refreshFilters() {
-        TextFitCache.clear();
         textFilteredKeys = scanner.filterKeys(searchBox != null ? searchBox.getValue() : "");
         tabFilteredKeys = scanner.filterByStatus(activeFilter);
         modFilteredKeys = scanner.filterByMod(selectedModId);
