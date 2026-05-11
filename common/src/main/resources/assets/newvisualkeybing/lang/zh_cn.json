@@ -114,6 +114,5 @@
   "screen.newvisualkeybing.viewer.profile.deleted": "已删除 %s",
   "screen.newvisualkeybing.viewer.profile.no_selection": "未选择方案",
   "screen.newvisualkeybing.viewer.profile.no_exports": "未找到已导出的方案",
-  "screen.newvisualkeybing.viewer.priority.changed": "%s 优先级: %s",
-  "screen.newvisualkeybing.viewer.fps": "%s FPS"
+  "screen.newvisualkeybing.viewer.priority.changed": "%s 优先级: %s"
 }

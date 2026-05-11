@@ -23,12 +23,12 @@ final class KeybindPriorityControls {
         int h = entryHeight - 4;
         boolean upHover = rowHovered && inside(mouseX, mouseY, x, y + 1, BUTTON_W, h);
         boolean downHover = rowHovered && inside(mouseX, mouseY, x + WIDTH - BUTTON_W, y + 1, BUTTON_W, h);
-        UITheme.fillRoundedRect(graphics, x, y + 1, BUTTON_W, h, 4,
+        UITheme.fillRoundedRectFast(graphics, x, y + 1, BUTTON_W, h, 4,
                 UITheme.lerpColor(colors.widgetBg(), colors.accent(), upHover ? 0.42f : 0.18f));
-        UITheme.drawRoundedBorder(graphics, x, y + 1, BUTTON_W, h, 4, UITheme.withAlpha(colors.accent(), 0x88));
-        UITheme.fillRoundedRect(graphics, x + WIDTH - BUTTON_W, y + 1, BUTTON_W, h, 4,
+        UITheme.drawRoundedBorderFast(graphics, x, y + 1, BUTTON_W, h, 4, UITheme.withAlpha(colors.accent(), 0x88));
+        UITheme.fillRoundedRectFast(graphics, x + WIDTH - BUTTON_W, y + 1, BUTTON_W, h, 4,
                 UITheme.lerpColor(colors.widgetBg(), colors.warningColor(), downHover ? 0.42f : 0.18f));
-        UITheme.drawRoundedBorder(graphics, x + WIDTH - BUTTON_W, y + 1, BUTTON_W, h, 4, UITheme.withAlpha(colors.warningColor(), 0x88));
+        UITheme.drawRoundedBorderFast(graphics, x + WIDTH - BUTTON_W, y + 1, BUTTON_W, h, 4, UITheme.withAlpha(colors.warningColor(), 0x88));
         graphics.drawString(font, "+", x + 6, y + (entryHeight - font.lineHeight) / 2, colors.textPrimary(), false);
         graphics.drawString(font, "-", x + WIDTH - BUTTON_W + 7, y + (entryHeight - font.lineHeight) / 2, colors.textPrimary(), false);
         String value = String.valueOf(profileStore.priorityOf(mapping));

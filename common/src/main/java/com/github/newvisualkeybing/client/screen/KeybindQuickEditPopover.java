@@ -147,7 +147,7 @@ final class KeybindQuickEditPopover {
             KeyMapping km = mappings.get(i);
             int rowY = rowsTop + i * (ROW_H + ROW_GAP);
 
-            UITheme.fillRoundedRect(g, rowX, rowY, rowW, ROW_H, 4,
+            UITheme.fillRoundedRectFast(g, rowX, rowY, rowW, ROW_H, 4,
                     UITheme.withAlpha(c.widgetBg(), 0x66));
 
             int rebindBtnX = rowX + rowW - BTN_UNBIND_W - BTN_GAP - BTN_REBIND_W;
@@ -294,9 +294,9 @@ final class KeybindQuickEditPopover {
                                       boolean hovered, int idleColor, int hoverColor) {
         var c = UITheme.colors();
         if (hovered) {
-            UITheme.fillRoundedRect(g, x, y, size, size, 3,
+            UITheme.fillRoundedRectFast(g, x, y, size, size, 3,
                     UITheme.lerpColor(c.widgetBg(), hoverColor, 0.55f));
-            UITheme.drawRoundedBorder(g, x, y, size, size, 3, UITheme.withAlpha(hoverColor, 0xC0));
+            UITheme.drawRoundedBorderFast(g, x, y, size, size, 3, UITheme.withAlpha(hoverColor, 0xC0));
         }
         int cx = x + size / 2;
         int cy = y + size / 2;

@@ -74,6 +74,77 @@ public final class UITheme {
         fillRoundedCorner(g, x + w - radius, y + h - radius, radius, color, false, false);
     }
 
+    private static final int[][] FAST_INSETS = new int[33][];
+    private static final int[] EMPTY_INSETS = new int[0];
+
+    private static int[] fastInsets(int r) {
+        if (r <= 0) return EMPTY_INSETS;
+        if (r < FAST_INSETS.length) {
+            int[] cached = FAST_INSETS[r];
+            if (cached != null) return cached;
+            int[] built = computeFastInsets(r);
+            FAST_INSETS[r] = built;
+            return built;
+        }
+        return computeFastInsets(r);
+    }
+
+    private static int[] computeFastInsets(int r) {
+        int[] insets = new int[r];
+        float r2 = (float) r * r;
+        for (int dy = 0; dy < r; dy++) {
+            float fy = r - dy - 0.5f;
+            int dx;
+            for (dx = 0; dx < r; dx++) {
+                float fx = r - dx - 0.5f;
+                if (fx * fx + fy * fy <= r2) break;
+            }
+            insets[dy] = dx;
+        }
+        return insets;
+    }
+
+    public static void fillRoundedRectFast(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+        if (radius <= 0 || w < radius * 2 || h < radius * 2) {
+            g.fill(x, y, x + w, y + h, color);
+            return;
+        }
+        int[] insets = fastInsets(radius);
+        int skip = 0;
+        while (skip < radius && insets[skip] > 0) skip++;
+        g.fill(x, y + skip, x + w, y + h - skip, color);
+        for (int i = 0; i < skip; i++) {
+            int inset = insets[i];
+            g.fill(x + inset, y + i, x + w - inset, y + i + 1, color);
+            g.fill(x + inset, y + h - 1 - i, x + w - inset, y + h - i, color);
+        }
+    }
+
+    public static void drawRoundedBorderFast(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+        if (radius <= 0 || w < radius * 2 || h < radius * 2) {
+            g.fill(x, y, x + w, y + 1, color);
+            g.fill(x, y + h - 1, x + w, y + h, color);
+            g.fill(x, y + 1, x + 1, y + h - 1, color);
+            g.fill(x + w - 1, y + 1, x + w, y + h - 1, color);
+            return;
+        }
+        int[] insets = fastInsets(radius);
+        int skip = 0;
+        while (skip < radius && insets[skip] > 0) skip++;
+        int outerInset = insets[0];
+        g.fill(x + outerInset, y, x + w - outerInset, y + 1, color);
+        g.fill(x + outerInset, y + h - 1, x + w - outerInset, y + h, color);
+        g.fill(x, y + skip, x + 1, y + h - skip, color);
+        g.fill(x + w - 1, y + skip, x + w, y + h - skip, color);
+        for (int i = 1; i < skip; i++) {
+            int inset = insets[i];
+            g.fill(x + inset, y + i, x + inset + 1, y + i + 1, color);
+            g.fill(x + w - inset - 1, y + i, x + w - inset, y + i + 1, color);
+            g.fill(x + inset, y + h - 1 - i, x + inset + 1, y + h - i, color);
+            g.fill(x + w - inset - 1, y + h - 1 - i, x + w - inset, y + h - i, color);
+        }
+    }
+
 
     private static int scaleAlpha(int color, float coverage) {
         if (coverage <= 0f) return 0;
@@ -369,27 +440,23 @@ public final class UITheme {
 
     public static void drawCardShadow(GuiGraphics g, int x, int y, int w, int h, int radius) {
         var c = colors();
-        for (int i = 4; i >= 1; i--) {
-            int alpha = Math.max(2, 8 - i * 2);
-            fillRoundedRect(g, x + i, y + i, w, h, radius, withAlpha(c.shadow(), alpha));
-        }
-        fillRoundedRect(g, x + 2, y + 2, w, h, radius, withAlpha(c.shadow(), 0x20));
+        int color = withAlpha(c.shadow(), 0x40);
+        g.fill(x + 2, y + h, x + w + 2, y + h + 3, color);
+        g.fill(x + w, y + 2, x + w + 3, y + h, color);
     }
 
     public static void drawGlassBackground(GuiGraphics g, int x, int y, int w, int h, int radius) {
         var c = colors();
-        fillRoundedRect(g, x, y, w, h, radius, c.glassBg());
-        fillRoundedRect(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, 0x08));
-        drawRoundedBorder(g, x, y, w, h, radius, withAlpha(c.widgetBorder(), 0x60));
+        fillRoundedRectFast(g, x, y, w, h, radius, c.glassBg());
+        drawRoundedBorderFast(g, x, y, w, h, radius, withAlpha(c.widgetBorder(), 0x60));
     }
 
-    
+
     public static void drawGlassPanel(GuiGraphics g, int x, int y, int w, int h, int radius) {
         var c = colors();
         drawCardShadow(g, x - 2, y - 2, w + 4, h + 4, radius + 2);
-        fillRoundedRect(g, x, y, w, h, radius, c.panelBg());
-        fillRoundedRect(g, x + 1, y + 1, w - 2, Math.max(3, h / 6), radius, withAlpha(0xFFFFFF, 0x10));
-        drawRoundedBorder(g, x, y, w, h, radius, c.widgetBorder());
+        fillRoundedRectFast(g, x, y, w, h, radius, c.panelBg());
+        drawRoundedBorderFast(g, x, y, w, h, radius, c.widgetBorder());
     }
 
     public static void drawGradientButton(GuiGraphics g, int x, int y, int w, int h, int radius,

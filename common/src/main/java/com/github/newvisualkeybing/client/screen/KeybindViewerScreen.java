@@ -73,11 +73,6 @@ public class KeybindViewerScreen extends Screen {
     private long tooltipHoverStartMs;
     private static final long TOOLTIP_DELAY_MS = 80;
     private static final long TOOLTIP_FADE_MS = 90;
-    private static final int FPS_DISPLAY_CAP = 240;
-
-    private long fpsWindowStartMs;
-    private int fpsFrameCount;
-    private int fpsLastValue;
 
     private FilterTab activeFilter = FilterTab.ALL;
     private Set<Integer> textFilteredKeys;
@@ -290,15 +285,13 @@ public class KeybindViewerScreen extends Screen {
     public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
         GuiGraphics g = new GuiGraphics(poseStack);
         long nowMs = System.currentTimeMillis();
-        sampleFps(nowMs);
         if (filtersDirty) refreshFilters();
         animTick += partialTick;
-        renderBackground(poseStack);
         layoutPanels();
         hoveredVirtualKey = null;
 
         var c = UITheme.colors();
-        g.fill(0, 0, width, height, UITheme.withAlpha(c.panelBg(), 0xE6));
+        g.fill(0, 0, width, height, c.panelBg() | 0xFF000000);
 
         renderHeaderBar(g);
         renderToolbar(g, mouseX, mouseY);
@@ -347,9 +340,7 @@ public class KeybindViewerScreen extends Screen {
 
     private void renderHeaderBar(GuiGraphics g) {
         var c = UITheme.colors();
-        UITheme.fillGradient(g, 0, 0, width, HEADER_H,
-                UITheme.lerpColor(c.headerBg(), c.panelBg(), 0.10f),
-                c.headerBg());
+        g.fill(0, 0, width, HEADER_H, c.headerBg());
         g.fill(0, HEADER_H - 1, width, HEADER_H, c.divider());
         g.fill(0, HEADER_H, width, HEADER_H + 1, UITheme.withAlpha(c.accent(), 0x70));
 
@@ -359,8 +350,7 @@ public class KeybindViewerScreen extends Screen {
     private void renderToolbar(GuiGraphics g, int mouseX, int mouseY) {
         var c = UITheme.colors();
         int y = HEADER_H;
-        UITheme.fillGradient(g, 0, y, width, y + TOOLBAR_H,
-                c.headerBg(), UITheme.lerpColor(c.headerBg(), c.panelBg(), 0.55f));
+        g.fill(0, y, width, y + TOOLBAR_H, UITheme.lerpColor(c.headerBg(), c.panelBg(), 0.30f));
         g.fill(0, y + TOOLBAR_H - 1, width, y + TOOLBAR_H, c.divider());
 
         renderToolbarTabs(g, mouseX, mouseY);
@@ -382,8 +372,8 @@ public class KeybindViewerScreen extends Screen {
             int fill = active
                     ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.55f)
                     : hovered ? UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f) : c.widgetBg();
-            UITheme.fillRoundedRect(g, x, y, w, h, h / 2, fill);
-            UITheme.drawRoundedBorder(g, x, y, w, h, h / 2,
+            UITheme.fillRoundedRectFast(g, x, y, w, h, h / 2, fill);
+            UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 2,
                     active ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xB0));
             g.drawString(font, tabLabels[i], x + 7, y + (h - font.lineHeight) / 2,
                     active ? 0xFFFFFFFF : c.textSecondary(), false);
@@ -398,7 +388,7 @@ public class KeybindViewerScreen extends Screen {
         int sw = toolbarSearchW + 6;
         int sh = SEARCH_BH + 6;
         int focusColor = searchBox != null && searchBox.isFocused() ? c.accent() : UITheme.withAlpha(c.accent(), 0x40);
-        UITheme.drawRoundedBorder(g, sx, sy, sw, sh, 6, focusColor);
+        UITheme.drawRoundedBorderFast(g, sx, sy, sw, sh, 6, focusColor);
     }
 
     private void renderToolbarLegend(GuiGraphics g, int mouseX, int mouseY) {
@@ -410,8 +400,8 @@ public class KeybindViewerScreen extends Screen {
         int[] colors = { c.widgetBorder(), c.accent(), c.success(), c.danger() };
 
         for (int i = 0; i < legendLabels.length; i++) {
-            UITheme.fillRoundedRect(g, x, y + 2, 8, 8, 4, colors[i]);
-            UITheme.drawRoundedBorder(g, x, y + 2, 8, 8, 4, UITheme.withAlpha(0xFFFFFF, 0x30));
+            UITheme.fillRoundedRectFast(g, x, y + 2, 8, 8, 4, colors[i]);
+            UITheme.drawRoundedBorderFast(g, x, y + 2, 8, 8, 4, UITheme.withAlpha(0xFFFFFF, 0x30));
             x += 8;
             if (!compact) {
                 x += 4;
@@ -425,9 +415,7 @@ public class KeybindViewerScreen extends Screen {
     private void renderStatusBar(GuiGraphics g) {
         var c = UITheme.colors();
         int y = height - STATUS_H;
-        UITheme.fillGradient(g, 0, y, width, height,
-                UITheme.lerpColor(c.headerBg(), c.panelBg(), 0.50f),
-                c.headerBg());
+        g.fill(0, y, width, height, c.headerBg());
         g.fill(0, y, width, y + 1, c.divider());
 
         KeyBindingScanner.ScanStats stats = scanner.getStats();
@@ -441,15 +429,7 @@ public class KeybindViewerScreen extends Screen {
 
         int hintW = font.width(hintLabel);
         int hintX = width - hintW - 10;
-
-        int fpsValue = Math.min(FPS_DISPLAY_CAP, Math.max(0, fpsLastValue));
-        String fpsText = Component.translatable("screen.newvisualkeybing.viewer.fps", fpsValue).getString();
-        int fpsChipW = font.width(fpsText) + 18;
-        int fpsChipX = hintX - fpsChipW - 10;
-        int fpsDot = fpsAccent(fpsValue);
-        renderFpsChip(g, fpsChipX, chipY, fpsChipW, fpsDot, fpsText);
-
-        int leftLimit = Math.max(10, Math.min(middleX - 8, fpsChipX - 8));
+        int leftLimit = Math.max(10, Math.min(middleX - 8, hintX - 8));
         int x = 10;
 
         x = renderStatChip(g, x, chipY, c.widgetBorder(),
@@ -483,48 +463,14 @@ public class KeybindViewerScreen extends Screen {
         if (x + chipW > maxRight) return x;
         int chipH = 14;
         int fill = UITheme.lerpColor(c.widgetBg(), dotColor, 0.14f);
-        UITheme.fillRoundedRect(g, x, y, chipW, chipH, chipH / 2, fill);
-        UITheme.drawRoundedBorder(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dotColor, 0x90));
-        UITheme.fillRoundedRect(g, x + 5, y + (chipH - 5) / 2, 5, 5, 2, dotColor);
+        UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, chipH / 2, fill);
+        UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dotColor, 0x90));
+        UITheme.fillRoundedRectFast(g, x + 5, y + (chipH - 5) / 2, 5, 5, 2, dotColor);
         g.drawString(font, text, x + 13, y + (chipH - font.lineHeight) / 2 + 1, c.textSecondary(), false);
         return x + chipW;
     }
 
-    private void renderFpsChip(GuiGraphics g, int x, int y, int chipW, int dotColor, String text) {
-        var c = UITheme.colors();
-        int chipH = 14;
-        int fill = UITheme.lerpColor(c.widgetBg(), dotColor, 0.18f);
-        UITheme.fillRoundedRect(g, x, y, chipW, chipH, chipH / 2, fill);
-        UITheme.drawRoundedBorder(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dotColor, 0xB0));
-        UITheme.fillRoundedRect(g, x + 5, y + (chipH - 5) / 2, 5, 5, 2, dotColor);
-        g.drawString(font, text, x + 13, y + (chipH - font.lineHeight) / 2 + 1, c.textPrimary(), false);
-    }
-
-    private void sampleFps(long nowMs) {
-        if (fpsWindowStartMs == 0L) {
-            fpsWindowStartMs = nowMs;
-            fpsFrameCount = 0;
-            return;
-        }
-        fpsFrameCount++;
-        long elapsed = nowMs - fpsWindowStartMs;
-        if (elapsed >= 500L) {
-            int value = (int) Math.round(fpsFrameCount * 1000.0 / elapsed);
-            fpsLastValue = Math.min(FPS_DISPLAY_CAP, Math.max(0, value));
-            fpsWindowStartMs = nowMs;
-            fpsFrameCount = 0;
-        }
-    }
-
-    private int fpsAccent(int fps) {
-        var c = UITheme.colors();
-        if (fps >= 120) return c.success();
-        if (fps >= 60)  return c.accent();
-        if (fps >= 30)  return c.accentLight();
-        return c.danger();
-    }
-
-    static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int x, int y, int w, int h, String title) {
+static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int x, int y, int w, int h, String title) {
         var c = UITheme.colors();
         UITheme.drawGlassPanel(g, x, y, w, h, PANEL_RADIUS);
         g.drawString(font, title, x + PANEL_PAD, y + PANEL_TITLE_Y, c.textPrimary(), false);
@@ -544,8 +490,8 @@ public class KeybindViewerScreen extends Screen {
         int fieldX = x + PANEL_PAD;
         int fieldW = w - PANEL_PAD * 2;
         int searchY = contentY + 4;
-        UITheme.fillRoundedRect(g, fieldX, searchY, fieldW, 18, 6, c.inputBg());
-        UITheme.drawRoundedBorder(g, fieldX, searchY, fieldW, 18, 6, c.widgetBorder());
+        UITheme.fillRoundedRectFast(g, fieldX, searchY, fieldW, 18, 6, c.inputBg());
+        UITheme.drawRoundedBorderFast(g, fieldX, searchY, fieldW, 18, 6, c.widgetBorder());
         String display = modSearchQuery.isBlank()
                 ? modSearchPlaceholder
                 : modSearchQuery;
@@ -568,7 +514,7 @@ public class KeybindViewerScreen extends Screen {
             boolean hovered = inside(mouseX, mouseY, fieldX, rowY, fieldW, rowH - 1);
             int fill = selected ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.40f)
                     : hovered ? UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.18f) : c.widgetBg();
-            UITheme.fillRoundedRect(g, fieldX, rowY, fieldW, rowH - 1, 5, fill);
+            UITheme.fillRoundedRectFast(g, fieldX, rowY, fieldW, rowH - 1, 5, fill);
             if (!selected && !hovered && i < mods.size() - 1
                     && i < modScrollOffset + visibleRows - 1) {
                 g.fill(fieldX + 6, rowY + rowH - 2, fieldX + fieldW - 6, rowY + rowH - 1,
@@ -615,8 +561,8 @@ public class KeybindViewerScreen extends Screen {
 
     private void renderKeyboardTopBand(GuiGraphics g, int x, int y, int w, int h) {
         var c = UITheme.colors();
-        UITheme.fillRoundedRect(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xC4));
-        UITheme.drawRoundedBorder(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x8E));
+        UITheme.fillRoundedRectFast(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xC4));
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x8E));
         int textY = y + (h - font.lineHeight) / 2;
         if (selectedModId == null) {
             String text = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.no_mod").getString();
@@ -640,8 +586,8 @@ public class KeybindViewerScreen extends Screen {
 
     private void renderKeyboardBottomBand(GuiGraphics g, int x, int y, int w, int h, Integer virtualKey) {
         var c = UITheme.colors();
-        UITheme.fillRoundedRect(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xB8));
-        UITheme.drawRoundedBorder(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x78));
+        UITheme.fillRoundedRectFast(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xB8));
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x78));
         int textY = y + (h - font.lineHeight) / 2;
         if (virtualKey == null) {
             String text = Component.translatable("screen.newvisualkeybing.viewer.hover_hint").getString();
@@ -651,7 +597,7 @@ public class KeybindViewerScreen extends Screen {
         List<KeyBindingScanner.KeyBindingInfo> bindings = scanner.getVirtualBindings(virtualKey);
         String keyLabel = scanner.getVirtualKeyLabel(virtualKey);
         int labelW = Math.min(font.width(keyLabel) + 16, Math.max(46, w / 5));
-        UITheme.fillRoundedRect(g, x + 7, y + 4, labelW, h - 8, 5,
+        UITheme.fillRoundedRectFast(g, x + 7, y + 4, labelW, h - 8, 5,
                 UITheme.lerpColor(c.widgetBg(), statusAccentColor(scanner.getVirtualStatus(virtualKey)), 0.18f));
         g.drawString(font, fitToWidth(font, keyLabel, labelW - 8), x + 11, textY, c.textPrimary(), false);
         int curX = x + labelW + 14;
@@ -665,7 +611,7 @@ public class KeybindViewerScreen extends Screen {
         for (int i = 0; i < max && curX < right - 20; i++) {
             KeyBindingScanner.KeyBindingInfo info = bindings.get(i);
             int chunkW = Math.min(Math.max(78, w / 4), right - curX);
-            UITheme.fillRoundedRect(g, curX, y + 4, chunkW, h - 8, 5, UITheme.withAlpha(c.widgetBg(), 0x90));
+            UITheme.fillRoundedRectFast(g, curX, y + 4, chunkW, h - 8, 5, UITheme.withAlpha(c.widgetBg(), 0x90));
             String text = info.modName() + " / " + info.actionName();
             g.drawString(font, fitToWidth(font, text, chunkW - 10), curX + 5, textY, c.textSecondary(), false);
             curX += chunkW + 5;
@@ -711,9 +657,9 @@ public class KeybindViewerScreen extends Screen {
         var c = UITheme.colors();
         String fitted = fitToWidth(font, label, w - 10);
         int fill = UITheme.lerpColor(c.widgetBg(), accent, hovered ? 0.50f : 0.26f);
-        UITheme.fillRoundedRect(g, x, y, w, h, h / 3, fill);
-        UITheme.drawRoundedBorder(g, x, y, w, h, h / 3, UITheme.withAlpha(accent, 0xC0));
-        UITheme.fillRoundedRect(g, x + 1, y + 1, w - 2, 1, h / 3, UITheme.withAlpha(0xFFFFFF, hovered ? 0x18 : 0x10));
+        UITheme.fillRoundedRectFast(g, x, y, w, h, h / 3, fill);
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 3, UITheme.withAlpha(accent, 0xC0));
+        UITheme.fillRoundedRectFast(g, x + 1, y + 1, w - 2, 1, h / 3, UITheme.withAlpha(0xFFFFFF, hovered ? 0x18 : 0x10));
         g.drawString(font, fitted,
                 x + (w - font.width(fitted)) / 2,
                 y + (h - font.lineHeight) / 2,
@@ -746,9 +692,9 @@ public class KeybindViewerScreen extends Screen {
         int boxX = (width - boxW) / 2;
         int boxY = height - STATUS_H - boxH - 8;
 
-        UITheme.fillRoundedRect(g, boxX, boxY, boxW, boxH, 8, bgColor);
-        UITheme.drawRoundedBorder(g, boxX, boxY, boxW, boxH, 8, accent);
-        UITheme.fillRoundedRect(g, boxX, boxY, boxW, 2, 2, accent);
+        UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, boxH, 8, bgColor);
+        UITheme.drawRoundedBorderFast(g, boxX, boxY, boxW, boxH, 8, accent);
+        UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, 2, 2, accent);
         g.drawString(font, noticeMsg, boxX + padX, boxY + padY, textColor, false);
     }
 

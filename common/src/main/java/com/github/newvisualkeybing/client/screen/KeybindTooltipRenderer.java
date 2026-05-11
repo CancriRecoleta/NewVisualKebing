@@ -76,7 +76,7 @@ final class KeybindTooltipRenderer {
         int ty = clamp(mouseY + 12, 4, screenH - totalH - 4);
 
         UITheme.renderTooltipBackground(g, tx, ty, totalW, totalH);
-        UITheme.fillRoundedRect(g, tx, ty, totalW, 2, 2, statusAccentColor(status));
+        UITheme.fillRoundedRectFast(g, tx, ty, totalW, 2, 2, statusAccentColor(status));
 
         int curX = tx + padX;
         int curY = ty + padY;
@@ -103,7 +103,7 @@ final class KeybindTooltipRenderer {
             for (BindingRowLayout row : layout.rows()) {
                 KeyBindingScanner.KeyBindingInfo info = row.info();
                 int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
-                UITheme.fillRoundedRect(g, curX, curY, innerW, rowH - 1, 4,
+                UITheme.fillRoundedRectFast(g, curX, curY, innerW, rowH - 1, 4,
                         UITheme.withAlpha(c.widgetBg(), info.self() ? 0xA0 : 0x70));
                 g.fill(curX, curY + 2, curX + 2, curY + rowH - 2, sideColor);
 
@@ -259,9 +259,9 @@ final class KeybindTooltipRenderer {
         int chipW = statusChipWidth(font, status);
         if (measureOnly) return chipW;
         int chipFill = UITheme.lerpColor(c.widgetBg(), dot, 0.22f);
-        UITheme.fillRoundedRect(g, x, y, chipW, chipH, 6, UITheme.withAlpha(chipFill, 0xE0));
-        UITheme.drawRoundedBorder(g, x, y, chipW, chipH, 6, UITheme.withAlpha(dot, 0xD0));
-        UITheme.fillRoundedRect(g, x + 4, y + (chipH - 4) / 2, 4, 4, 2, dot);
+        UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, 6, UITheme.withAlpha(chipFill, 0xE0));
+        UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, 6, UITheme.withAlpha(dot, 0xD0));
+        UITheme.fillRoundedRectFast(g, x + 4, y + (chipH - 4) / 2, 4, 4, 2, dot);
         g.drawString(font, label, x + 10, y + (chipH - font.lineHeight) / 2 + 1, textColor, true);
         return chipW;
     }

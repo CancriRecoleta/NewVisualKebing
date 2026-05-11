@@ -107,9 +107,9 @@ final class KeybindDetailPanel {
         if (virtualKey == null) {
             int boxH = 54;
             int boxY = contentY + Math.max(8, (innerBottom - contentY - boxH) / 2);
-            UITheme.fillRoundedRect(g, innerX, boxY, innerW, boxH, 6,
+            UITheme.fillRoundedRectFast(g, innerX, boxY, innerW, boxH, 6,
                     UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
-            UITheme.drawRoundedBorder(g, innerX, boxY, innerW, boxH, 6,
+            UITheme.drawRoundedBorderFast(g, innerX, boxY, innerW, boxH, 6,
                     UITheme.withAlpha(c.widgetBorder(), 0x90));
             String hint = KeybindViewerScreen.fitToWidth(font, hoverHint, innerW - 16);
             g.drawString(font, hint, innerX + 8, boxY + (boxH - font.lineHeight) / 2, c.textMuted(), false);
@@ -209,8 +209,8 @@ final class KeybindDetailPanel {
     private static void renderInfoBox(GuiGraphics g, Font font, int x, int y, int w, String text, int textColor) {
         var c = UITheme.colors();
         int h = font.lineHeight + 12;
-        UITheme.fillRoundedRect(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
-        UITheme.drawRoundedBorder(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
+        UITheme.fillRoundedRectFast(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
         String fit = KeybindViewerScreen.fitToWidth(font, text, w - 16);
         g.drawString(font, fit, x + 8, y + (h - font.lineHeight) / 2, textColor, false);
     }
@@ -231,9 +231,9 @@ final class KeybindDetailPanel {
         int chipW = font.width(label) + 16;
         if (measureOnly) return chipW;
         int chipFill = UITheme.lerpColor(c.widgetBg(), dot, 0.18f);
-        UITheme.fillRoundedRect(g, x, y, chipW, chipH, chipH / 2, chipFill);
-        UITheme.drawRoundedBorder(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xC0));
-        UITheme.fillRoundedRect(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
+        UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, chipH / 2, chipFill);
+        UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xC0));
+        UITheme.fillRoundedRectFast(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
         g.drawString(font, label, x + 11, y + (chipH - font.lineHeight) / 2 + 1, textColor, false);
         return chipW;
     }
@@ -257,9 +257,9 @@ final class KeybindDetailPanel {
 
     private static void renderInfoChip(GuiGraphics g, Font font, UITheme.ColorPalette c,
                                        int x, int y, int w, int h, String label) {
-        UITheme.fillRoundedRect(g, x, y, w, h, 5,
+        UITheme.fillRoundedRectFast(g, x, y, w, h, 5,
                 UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.12f));
-        UITheme.drawRoundedBorder(g, x, y, w, h, 5,
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, 5,
                 UITheme.withAlpha(c.widgetBorder(), 0x70));
         g.drawString(font, KeybindViewerScreen.fitToWidth(font, label, w - 8),
                 x + 5, y + (h - font.lineHeight) / 2 + 1, c.textMuted(), false);
@@ -396,7 +396,7 @@ final class KeybindDetailPanel {
         boolean rowHovered = KeybindViewerScreen.inside(mouseX, mouseY, x, y, w, rowH);
 
         if (info.self()) {
-            UITheme.fillRoundedRect(g, x, y, textW, rowH, 4,
+            UITheme.fillRoundedRectFast(g, x, y, textW, rowH, 4,
                     UITheme.lerpColor(c.widgetBg(), c.accent(), 0.10f));
         }
         int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
@@ -419,7 +419,7 @@ final class KeybindDetailPanel {
                 int tagX = rightX - font.width(ctxTag) - 6;
                 int tagBgW = font.width(ctxTag) + 4;
                 int tagBgH = font.lineHeight + 1;
-                UITheme.fillRoundedRect(g, tagX - 2, line2Y - 1, tagBgW, tagBgH, 3,
+                UITheme.fillRoundedRectFast(g, tagX - 2, line2Y - 1, tagBgW, tagBgH, 3,
                         UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
                 g.drawString(font, ctxTag, tagX, line2Y, c.accentAlt(), false);
             }
@@ -439,7 +439,7 @@ final class KeybindDetailPanel {
                 int tagX = rightX - font.width(ctxTag) - 6;
                 int tagBgW = font.width(ctxTag) + 4;
                 int tagBgH = font.lineHeight + 1;
-                UITheme.fillRoundedRect(g, tagX - 2, textY - 1, tagBgW, tagBgH, 3,
+                UITheme.fillRoundedRectFast(g, tagX - 2, textY - 1, tagBgW, tagBgH, 3,
                         UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
                 g.drawString(font, ctxTag, tagX, textY, c.accentAlt(), false);
             }
@@ -455,8 +455,8 @@ final class KeybindDetailPanel {
         boolean xHovered = KeybindViewerScreen.inside(mouseX, mouseY, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W);
         int fill = xHovered ? UITheme.lerpColor(c.widgetBg(), c.danger(), 0.55f)
                             : UITheme.lerpColor(c.widgetBg(), c.danger(), rowHovered ? 0.18f : 0.10f);
-        UITheme.fillRoundedRect(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3, fill);
-        UITheme.drawRoundedBorder(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3,
+        UITheme.fillRoundedRectFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3, fill);
+        UITheme.drawRoundedBorderFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3,
                 UITheme.withAlpha(c.danger(), xHovered ? 0xC0 : 0x78));
         int cx = xButtonX + ROW_UNBIND_W / 2;
         int cy = xButtonY + ROW_UNBIND_W / 2;
@@ -478,13 +478,13 @@ final class KeybindDetailPanel {
         priorityHits.add(new PriorityHit(plusX, y, ROW_PRIORITY_BTN_W, h, 1, info));
         priorityHits.add(new PriorityHit(minusX, y, ROW_PRIORITY_BTN_W, h, -1, info));
 
-        UITheme.fillRoundedRect(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.fillRoundedRectFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
                 UITheme.lerpColor(c.widgetBg(), c.accent(), plusHover ? 0.48f : 0.18f));
-        UITheme.drawRoundedBorder(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.drawRoundedBorderFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
                 UITheme.withAlpha(c.accent(), plusHover ? 0xC0 : 0x80));
-        UITheme.fillRoundedRect(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.fillRoundedRectFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
                 UITheme.lerpColor(c.widgetBg(), c.warningColor(), minusHover ? 0.48f : 0.18f));
-        UITheme.drawRoundedBorder(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.drawRoundedBorderFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
                 UITheme.withAlpha(c.warningColor(), minusHover ? 0xC0 : 0x80));
 
         g.drawString(font, "+", plusX + 4, y + (h - font.lineHeight) / 2, c.textPrimary(), false);

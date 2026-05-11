@@ -183,8 +183,8 @@ public class KeybindEditScreen extends Screen {
         UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4, 8);
 
         
-        UITheme.fillRoundedRect(graphics, searchX - 4, 8, searchW + 8, 22, 6, colors.inputBg());
-        UITheme.drawRoundedBorder(graphics, searchX - 4, 8, searchW + 8, 22, 6,
+        UITheme.fillRoundedRectFast(graphics, searchX - 4, 8, searchW + 8, 22, 6, colors.inputBg());
+        UITheme.drawRoundedBorderFast(graphics, searchX - 4, 8, searchW + 8, 22, 6,
                 searchBox != null && searchBox.isFocused() ? colors.accent() : colors.widgetBorder());
 
         
@@ -202,8 +202,8 @@ public class KeybindEditScreen extends Screen {
         int x = listX();
         int w = listW();
 
-        UITheme.fillRoundedRect(graphics, x, listTop, w, listH, 8, UITheme.withAlpha(colors.headerBg(), 0xC0));
-        UITheme.drawRoundedBorder(graphics, x, listTop, w, listH, 8, colors.widgetBorder());
+        UITheme.fillRoundedRectFast(graphics, x, listTop, w, listH, 8, UITheme.withAlpha(colors.headerBg(), 0xC0));
+        UITheme.drawRoundedBorderFast(graphics, x, listTop, w, listH, 8, colors.widgetBorder());
 
         graphics.enableScissor(x + 1, listTop + 1, x + w - 1, listTop + listH - 1);
         int drawY = listTop + 4 - scrollOffset;
@@ -228,14 +228,14 @@ public class KeybindEditScreen extends Screen {
             float ratio = (float) listH / totalListH;
             int sbH = Math.max(20, (int) (listH * ratio));
             int sbY = listTop + (int) ((float) scrollOffset / totalListH * listH);
-            UITheme.fillRoundedRect(graphics, x + w - 6, listTop, 4, listH, 2, colors.scrollbarTrack());
-            UITheme.fillRoundedRect(graphics, x + w - 6, sbY, 4, sbH, 2, colors.scrollbarThumb());
+            UITheme.fillRoundedRectFast(graphics, x + w - 6, listTop, 4, listH, 2, colors.scrollbarTrack());
+            UITheme.fillRoundedRectFast(graphics, x + w - 6, sbY, 4, sbH, 2, colors.scrollbarThumb());
         }
     }
 
     private void renderCategory(GuiGraphics graphics, CategoryEntry ce, int x, int y, int w) {
         var colors = UITheme.colors();
-        UITheme.fillRoundedRect(graphics, x, y, w, CATEGORY_H, 4, UITheme.withAlpha(colors.accent(), 0x22));
+        UITheme.fillRoundedRectFast(graphics, x, y, w, CATEGORY_H, 4, UITheme.withAlpha(colors.accent(), 0x22));
         graphics.fill(x, y, x + 3, y + CATEGORY_H, colors.accent());
         graphics.drawString(font, ce.name, x + 10, y + (CATEGORY_H - font.lineHeight) / 2, colors.accentLight(), false);
     }
@@ -249,12 +249,12 @@ public class KeybindEditScreen extends Screen {
         boolean focusedTarget = focusVirtualKey != null && matchesFocus(ke.mapping);
 
         if (focusedTarget) {
-            UITheme.fillRoundedRect(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.accent(), 0x36));
+            UITheme.fillRoundedRectFast(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.accent(), 0x36));
             graphics.fill(x, y + 2, x + 3, y + ENTRY_H - 4, colors.accent());
         } else if (isWaiting) {
-            UITheme.fillRoundedRect(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.accent(), 0x55));
+            UITheme.fillRoundedRectFast(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.accent(), 0x55));
         } else if (hovered) {
-            UITheme.fillRoundedRect(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.widgetBg(), 0xA0));
+            UITheme.fillRoundedRectFast(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.widgetBg(), 0xA0));
         }
 
         String name = Component.translatable(ke.mapping.getName()).getString();
@@ -284,8 +284,8 @@ public class KeybindEditScreen extends Screen {
                 : focusVirtualKey != null && isUnbound ? colors.accentLight()
                 : isUnbound ? colors.textMuted()
                 : colors.accentLight();
-        UITheme.fillRoundedRect(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, chBg);
-        UITheme.drawRoundedBorder(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, UITheme.withAlpha(statusColor, 0x88));
+        UITheme.fillRoundedRectFast(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, chBg);
+        UITheme.drawRoundedBorderFast(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, UITheme.withAlpha(statusColor, 0x88));
         graphics.fill(changeX + 3, y + 1, changeX + CHANGE_BTN_W - 3, y + 2, statusColor);
         int chTextX = changeX + (CHANGE_BTN_W - font.width(changeLabel)) / 2;
         int chTextY = y + (ENTRY_H - font.lineHeight) / 2;
@@ -300,8 +300,8 @@ public class KeybindEditScreen extends Screen {
         int rsBg = isDefault ? UITheme.withAlpha(colors.widgetBg(), 0x60)
                 : rsHover ? UITheme.lerpColor(colors.widgetBg(), colors.successColor(), 0.40f)
                 : colors.widgetBg();
-        UITheme.fillRoundedRect(graphics, resetX, y + 1, RESET_BTN_W, ENTRY_H - 4, 4, rsBg);
-        UITheme.drawRoundedBorder(graphics, resetX, y + 1, RESET_BTN_W, ENTRY_H - 4, 4,
+        UITheme.fillRoundedRectFast(graphics, resetX, y + 1, RESET_BTN_W, ENTRY_H - 4, 4, rsBg);
+        UITheme.drawRoundedBorderFast(graphics, resetX, y + 1, RESET_BTN_W, ENTRY_H - 4, 4,
                 isDefault ? UITheme.withAlpha(colors.widgetBorder(), 0x60) : UITheme.withAlpha(colors.successColor(), 0x88));
         String defLabel = ke.mapping.getDefaultKey().getDisplayName().getString();
         if (defLabel.length() > 8) defLabel = defLabel.substring(0, 8) + "..";
@@ -345,8 +345,8 @@ public class KeybindEditScreen extends Screen {
         int w = font.width(noticeMessage) + 24;
         int x = (width - w) / 2;
         int y = height - FOOTER_H - 26;
-        UITheme.fillRoundedRect(graphics, x, y, w, 20, 6, UITheme.withAlpha(colors.successBg(), 0xE0));
-        UITheme.drawRoundedBorder(graphics, x, y, w, 20, 6, colors.successColor());
+        UITheme.fillRoundedRectFast(graphics, x, y, w, 20, 6, UITheme.withAlpha(colors.successBg(), 0xE0));
+        UITheme.drawRoundedBorderFast(graphics, x, y, w, 20, 6, colors.successColor());
         graphics.drawString(font, noticeMessage, x + 12, y + 6, colors.textPrimary(), false);
     }
 

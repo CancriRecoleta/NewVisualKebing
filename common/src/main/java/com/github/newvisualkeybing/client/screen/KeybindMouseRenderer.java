@@ -110,7 +110,7 @@ final class KeybindMouseRenderer {
         int leftW = (bodyW - WHEEL_COL_W) / 2;
         int wheelX = bodyX + leftW;
         int wheelDepthColor = UITheme.lerpColor(frameFill, 0x000000, 0.45f);
-        UITheme.fillRoundedRect(g, wheelX, bodyY + 1, WHEEL_COL_W,
+        UITheme.fillRoundedRectFast(g, wheelX, bodyY + 1, WHEEL_COL_W,
                 Math.round(MOUSE_TOP_AREA_H * mouseScale) - 1, 4, wheelDepthColor);
 
         UITheme.drawRoundedBorderEx(g, bodyX, bodyY, bodyW, bodyH,
@@ -119,6 +119,9 @@ final class KeybindMouseRenderer {
 
         float dt = lastFrameMs > 0 ? Math.min((nowMs - lastFrameMs) / 1000f, 0.05f) : 0.016f;
         lastFrameMs = nowMs;
+        int pulseAccent = KeybindViewerScreen.pulseAccent(animTick);
+        int searchPulseColor = KeybindViewerScreen.searchPulseColor(animTick);
+        int searchPulseAlpha = KeybindViewerScreen.searchPulseAlpha(animTick);
         Integer hovered = null;
         for (int i = 0; i < KeyboardLayoutData.MOUSE_KEYS.size(); i++) {
             Rect b = boundsAt(i);
@@ -145,46 +148,39 @@ final class KeybindMouseRenderer {
 
             boolean searchMatch = matched && !hidden && isSearchMatch.test(key.glfwKey());
             if (searchMatch && hoverEase < 0.99f && selectEase < 0.99f) {
-                int basePulse = KeybindViewerScreen.searchPulseAlpha(animTick);
-                int searchInner = Math.round(basePulse * (1f - Math.max(hoverEase, selectEase)));
+                int searchInner = Math.round(searchPulseAlpha * (1f - Math.max(hoverEase, selectEase)));
                 if (searchInner > 0) {
-                    int searchColor = KeybindViewerScreen.searchPulseColor(animTick);
-                    UITheme.fillRoundedRect(g, b.x - 2, b.y - 2, b.w + 4, b.h + 4, radius + 2,
-                            UITheme.withAlpha(searchColor, Math.max(0x14, searchInner / 3)));
-                    UITheme.fillRoundedRect(g, b.x - 1, b.y - 1, b.w + 2, b.h + 2, radius + 1,
-                            UITheme.withAlpha(searchColor, searchInner));
+                    UITheme.drawRoundedBorderFast(g, b.x - 2, b.y - 2, b.w + 4, b.h + 4, radius + 2,
+                            UITheme.withAlpha(searchPulseColor, Math.max(0x14, searchInner / 3)));
                 }
             }
             if (matched && !hidden && hoverProgress[i] > 0.005f && selectProgress[i] < 0.99f) {
                 int alpha = Math.round(0x55 * hoverEase * (1f - selectEase));
                 if (alpha > 0) {
-                    UITheme.fillRoundedRect(g, b.x - 1, b.y - 1, b.w + 2, b.h + 2, radius + 1,
+                    UITheme.drawRoundedBorderFast(g, b.x - 1, b.y - 1, b.w + 2, b.h + 2, radius + 1,
                             UITheme.withAlpha(c.accentAlt(), alpha));
                 }
             }
             if (selectProgress[i] > 0.005f) {
-                int pulseColor = KeybindViewerScreen.pulseAccent(animTick);
-                int innerAlpha = Math.round(0x80 * selectEase);
                 int outerAlpha = Math.round(0x38 * selectEase);
-                int growW = Math.round(2f * selectEase);
-                int growH = Math.round(2f * selectEase);
-                UITheme.fillRoundedRect(g, b.x - growW - 1, b.y - growH - 1,
-                        b.w + growW * 2 + 2, b.h + growH * 2 + 2, radius + 2,
-                        UITheme.withAlpha(pulseColor, outerAlpha));
-                UITheme.fillRoundedRect(g, b.x - 1, b.y - 1, b.w + 2, b.h + 2, radius + 1,
-                        UITheme.withAlpha(pulseColor, innerAlpha));
+                int grow = Math.round(2f * selectEase);
+                if (outerAlpha > 0 && grow > 0) {
+                    UITheme.drawRoundedBorderFast(g, b.x - grow - 1, b.y - grow - 1,
+                            b.w + grow * 2 + 2, b.h + grow * 2 + 2, radius + 2,
+                            UITheme.withAlpha(pulseAccent, outerAlpha));
+                }
             }
 
             int fill = KeybindViewerScreen.keyStatusColor(status, matched);
             if (hidden) fill = UITheme.withAlpha(c.widgetBg(), 0x24);
-            UITheme.fillRoundedRect(g, b.x, b.y, b.w, b.h, radius, fill);
+            UITheme.fillRoundedRectFast(g, b.x, b.y, b.w, b.h, radius, fill);
             renderMouseButtonSurface(g, b, radius, status, hover || selected, wheel, hidden);
             int baseBorder = matched && !hidden ? c.widgetBorder()
                     : UITheme.withAlpha(c.widgetBorder(), hidden ? 0x28 : 0x60);
             int targetBorder = selectProgress[i] > hoverProgress[i]
-                    ? UITheme.lerpColor(baseBorder, KeybindViewerScreen.pulseAccent(animTick), selectEase)
+                    ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
                     : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
-            UITheme.drawRoundedBorder(g, b.x, b.y, b.w, b.h, radius, targetBorder);
+            UITheme.drawRoundedBorderFast(g, b.x, b.y, b.w, b.h, radius, targetBorder);
 
             if (!hidden && b.w >= 14 && b.h >= 10) {
                 int textColor = matched ? KeybindViewerScreen.labelColorForStatus(status)
@@ -231,7 +227,7 @@ final class KeybindMouseRenderer {
         }
         if (status != KeyBindingScanner.KeyStatus.FREE) {
             int edgeColor = KeybindViewerScreen.keyStatusColor(status);
-            UITheme.fillRoundedRect(g, b.x + 2, b.y + b.h - 3, b.w - 4, 2, Math.max(1, radius - 1),
+            UITheme.fillRoundedRectFast(g, b.x + 2, b.y + b.h - 3, b.w - 4, 2, Math.max(1, radius - 1),
                     UITheme.withAlpha(edgeColor, active ? 0xD0 : 0x9A));
         }
     }
@@ -246,8 +242,7 @@ final class KeybindMouseRenderer {
         int bx = b.x + b.w - bw - 2;
         int by = b.y + 2;
         int chipColor = status == KeyBindingScanner.KeyStatus.CONFLICT ? c.danger() : c.accent();
-        UITheme.fillRoundedRect(g, bx, by, bw, bh, bh / 2, chipColor);
-        UITheme.drawRoundedBorder(g, bx, by, bw, bh, bh / 2, UITheme.withAlpha(0xFFFFFF, 0x40));
+        UITheme.fillRoundedRectFast(g, bx, by, bw, bh, bh / 2, chipColor);
         g.drawString(font, text, bx + 3, by + 1, 0xFFFFFFFF, false);
     }
 

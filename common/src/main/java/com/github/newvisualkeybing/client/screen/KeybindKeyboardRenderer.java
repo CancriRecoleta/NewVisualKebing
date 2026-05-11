@@ -42,6 +42,17 @@ final class KeybindKeyboardRenderer {
         long scannerVersion = scanner.version();
         float dt = lastFrameMs > 0 ? Math.min((nowMs - lastFrameMs) / 1000f, 0.05f) : 0.016f;
         lastFrameMs = nowMs;
+
+        int pulseAccent = KeybindViewerScreen.pulseAccent(animTick);
+        int searchPulseColor = KeybindViewerScreen.searchPulseColor(animTick);
+        int searchPulseAlpha = KeybindViewerScreen.searchPulseAlpha(animTick);
+        int accentAlt = c.accentAlt();
+        int conflictBorder = UITheme.lerpColor(c.danger(), c.widgetBorder(), 0.30f);
+        int widgetBorder = c.widgetBorder();
+        int hiddenGhost = UITheme.withAlpha(c.widgetBg(), 0x24);
+        int hiddenBorder = UITheme.withAlpha(widgetBorder, 0x28);
+        int normalBorder = UITheme.withAlpha(widgetBorder, 0x60);
+
         Integer hovered = null;
         for (KeyDrawState state : drawStates) {
             state.matched = isVisibleKey.test(state.glfwKey);
@@ -55,13 +66,16 @@ final class KeybindKeyboardRenderer {
                 state.bindingCount = scanner.getBindingCount(state.glfwKey);
                 state.cachedBindings = scanner.getBindings(state.glfwKey);
                 state.cachedInlineMaxW = Integer.MIN_VALUE;
+                refreshCachedColors(state);
             }
             state.hoverProgress = advanceProgress(state.hoverProgress,
                     state.hover && state.matched ? 1f : 0f, dt, 16f);
             state.selectProgress = advanceProgress(state.selectProgress,
                     state.selected ? 1f : 0f, dt, 18f);
             if (state.hover) hovered = state.glfwKey;
-            renderKeyShape(g, state, c, animTick);
+            renderKeyShape(g, state, pulseAccent, searchPulseColor, searchPulseAlpha,
+                    accentAlt, conflictBorder, widgetBorder,
+                    hiddenGhost, hiddenBorder, normalBorder);
         }
 
         for (KeyDrawState state : drawStates) {
@@ -108,6 +122,7 @@ final class KeybindKeyboardRenderer {
             state.subLabel = key.subLabel() == null ? null : KeybindViewerScreen.fitToWidth(font, key.subLabel(), labelMaxW);
             state.subLabelW = state.subLabel == null ? 0 : font.width(state.subLabel);
             state.cachedInlineMaxW = Integer.MIN_VALUE;
+            state.cachedDataVersion = Long.MIN_VALUE;
         }
     }
 
@@ -118,7 +133,9 @@ final class KeybindKeyboardRenderer {
     }
 
     private static void renderKeyShape(GuiGraphics g, KeyDrawState state,
-                                       UITheme.ColorPalette c, float animTick) {
+                                       int pulseAccent, int searchPulseColor, int searchPulseAlpha,
+                                       int accentAlt, int conflictBorder, int widgetBorder,
+                                       int hiddenGhost, int hiddenBorder, int normalBorder) {
         int x = state.x;
         int y = state.y;
         int w = state.w;
@@ -127,67 +144,77 @@ final class KeybindKeyboardRenderer {
         if (state.matched && !state.hidden) {
             float selectEase = UITheme.easeOutCubic(state.selectProgress);
             float hoverEase = UITheme.easeOutCubic(state.hoverProgress);
+            boolean active = state.hover || state.selected;
+
             if (state.searchMatch && state.selectProgress < 0.6f && state.hoverProgress < 0.6f) {
-                int basePulse = KeybindViewerScreen.searchPulseAlpha(animTick);
-                int searchInner = Math.round(basePulse * (1f - Math.max(selectEase, hoverEase)));
+                int searchInner = Math.round(searchPulseAlpha * (1f - Math.max(selectEase, hoverEase)));
                 if (searchInner > 0) {
-                    int outerAlpha = Math.max(0x14, searchInner / 3);
-                    UITheme.fillRoundedRect(g, x - 2, y - 2, w + 4, h + 3, radius + 2,
-                            UITheme.withAlpha(KeybindViewerScreen.searchPulseColor(animTick), outerAlpha));
-                    UITheme.fillRoundedRect(g, x - 1, y - 1, w + 2, h + 1, radius + 1,
-                            UITheme.withAlpha(KeybindViewerScreen.searchPulseColor(animTick), searchInner));
+                    UITheme.drawRoundedBorderFast(g, x - 2, y - 2, w + 4, h + 4, radius + 2,
+                            UITheme.withAlpha(searchPulseColor, Math.max(0x14, searchInner / 3)));
                 }
             }
             if (state.hoverProgress > 0.005f && state.selectProgress < 0.99f) {
                 int alpha = Math.round(0x60 * hoverEase * (1f - selectEase));
                 if (alpha > 0) {
-                    UITheme.fillRoundedRect(g, x - 1, y - 1, w + 2, h + 1, radius + 1,
-                            UITheme.withAlpha(c.accentAlt(), alpha));
+                    UITheme.drawRoundedBorderFast(g, x - 1, y - 1, w + 2, h + 2, radius + 1,
+                            UITheme.withAlpha(accentAlt, alpha));
                 }
             }
             if (state.selectProgress > 0.005f) {
-                int pulseColor = KeybindViewerScreen.pulseAccent(animTick);
-                int innerAlpha = Math.round(0x90 * selectEase);
                 int outerAlpha = Math.round(0x40 * selectEase);
-                int growW = Math.round(2f * selectEase);
-                int growH = Math.round(2f * selectEase);
-                UITheme.fillRoundedRect(g, x - growW - 1, y - growH - 1,
-                        w + growW * 2 + 2, h + growH * 2 + 1, radius + 2,
-                        UITheme.withAlpha(pulseColor, outerAlpha));
-                UITheme.fillRoundedRect(g, x - 1, y - 1, w + 2, h + 1, radius + 1,
-                        UITheme.withAlpha(pulseColor, innerAlpha));
+                int grow = Math.round(2f * selectEase);
+                if (outerAlpha > 0 && grow > 0) {
+                    UITheme.drawRoundedBorderFast(g, x - grow - 1, y - grow - 1,
+                            w + grow * 2 + 2, h + grow * 2 + 2, radius + 2,
+                            UITheme.withAlpha(pulseAccent, outerAlpha));
+                }
             }
 
-            int topFill = applyZoneTint(KeybindViewerScreen.keyStatusColor(state.status), state.zone, state.status);
             int faceH = h - 1;
+            UITheme.fillRoundedRectFast(g, x, y, w, faceH, radius, state.cachedTopFill);
 
-            int shadow = UITheme.lerpColor(topFill, 0x000000, 0.50f);
-            UITheme.fillRoundedRect(g, x, y + 1, w, h, radius, shadow);
-            UITheme.fillRoundedRect(g, x, y, w, faceH, radius, topFill);
-
-            int half = faceH / 2;
             int hlAlpha = state.hover ? 0x18 : 0x10;
-            g.fill(x + 1, y + 1, x + w - 1, y + half, UITheme.withAlpha(0xFFFFFF, hlAlpha));
-            g.fill(x + 1, y + faceH - 1, x + w - 1, y + faceH, UITheme.withAlpha(0x000000, 0x18));
-            g.fill(x + radius, y, x + w - radius, y + 1, UITheme.withAlpha(0xFFFFFF, 0x30));
-            renderStatusEdge(g, x, y, w, faceH, radius, state.status, state.hover || state.selected);
+            int half = faceH / 2;
+            g.fill(x + radius, y + 1, x + w - radius, y + half, UITheme.withAlpha(0xFFFFFF, hlAlpha));
+            g.fill(x + radius, y + faceH - 1, x + w - radius, y + faceH, FACE_BOTTOM_TINT);
 
-            int borderColor = state.selected ? KeybindViewerScreen.pulseAccent(animTick)
-                    : state.hover ? c.accentAlt()
-                    : state.status == KeyBindingScanner.KeyStatus.CONFLICT
-                        ? UITheme.lerpColor(c.danger(), c.widgetBorder(), 0.30f)
-                        : c.widgetBorder();
-            UITheme.drawRoundedBorder(g, x, y, w, faceH, radius, borderColor);
-        } else {
-            int ghostFill = KeybindViewerScreen.keyStatusColor(state.status, false);
-            if (state.hidden) ghostFill = UITheme.withAlpha(c.widgetBg(), 0x24);
-            UITheme.fillRoundedRect(g, x, y, w, h - 1, radius, ghostFill);
-            if (!state.hidden && state.status != KeyBindingScanner.KeyStatus.FREE) {
-                renderStatusEdge(g, x, y, w, h - 1, radius, state.status, false);
+            if (state.status != KeyBindingScanner.KeyStatus.FREE) {
+                int alpha = active ? 0xD0 : 0x86;
+                int edgeH = state.status == KeyBindingScanner.KeyStatus.CONFLICT ? 3 : 2;
+                if (w >= 10 && faceH >= 8) {
+                    g.fill(x + 2, y + faceH - edgeH - 1, x + w - 2, y + faceH - 1,
+                            UITheme.withAlpha(state.cachedStatusEdgeColor, alpha));
+                }
             }
-            UITheme.drawRoundedBorder(g, x, y, w, h - 1, radius,
-                    UITheme.withAlpha(c.widgetBorder(), state.hidden ? 0x28 : 0x60));
+
+            int borderColor = state.selected ? pulseAccent
+                    : state.hover ? accentAlt
+                    : state.status == KeyBindingScanner.KeyStatus.CONFLICT
+                        ? conflictBorder
+                        : widgetBorder;
+            UITheme.drawRoundedBorderFast(g, x, y, w, faceH, radius, borderColor);
+        } else {
+            int ghostFill = state.hidden ? hiddenGhost : state.cachedGhostFill;
+            int faceH = h - 1;
+            UITheme.fillRoundedRectFast(g, x, y, w, faceH, radius, ghostFill);
+            if (!state.hidden && state.status != KeyBindingScanner.KeyStatus.FREE && w >= 10 && faceH >= 8) {
+                int edgeH = state.status == KeyBindingScanner.KeyStatus.CONFLICT ? 3 : 2;
+                g.fill(x + 2, y + faceH - edgeH - 1, x + w - 2, y + faceH - 1,
+                        UITheme.withAlpha(state.cachedStatusEdgeColor, 0x86));
+            }
+            UITheme.drawRoundedBorderFast(g, x, y, w, faceH, radius,
+                    state.hidden ? hiddenBorder : normalBorder);
         }
+    }
+
+    private static final int FACE_BOTTOM_TINT = UITheme.withAlpha(0x000000, 0x18);
+
+    private static void refreshCachedColors(KeyDrawState state) {
+        int base = KeybindViewerScreen.keyStatusColor(state.status);
+        int topFill = applyZoneTint(base, state.zone, state.status);
+        state.cachedTopFill = topFill;
+        state.cachedGhostFill = KeybindViewerScreen.keyStatusColor(state.status, false);
+        state.cachedStatusEdgeColor = base;
     }
 
     
@@ -204,24 +231,6 @@ final class KeybindKeyboardRenderer {
         };
     }
 
-    private static void renderStatusEdge(GuiGraphics g, int x, int y, int w, int h, int radius,
-                                         KeyBindingScanner.KeyStatus status, boolean active) {
-        if (w < 10 || h < 8) return;
-        int color = KeybindViewerScreen.keyStatusColor(status);
-        int alpha = active ? 0xD0 : 0x86;
-        int edgeH = status == KeyBindingScanner.KeyStatus.CONFLICT ? 3 : 2;
-        UITheme.fillRoundedRect(g, x + 2, y + h - edgeH - 1, w - 4, edgeH, Math.max(1, radius - 1),
-                UITheme.withAlpha(color, alpha));
-        if (status == KeyBindingScanner.KeyStatus.CONFLICT && w >= 18) {
-            int sx = x + 4;
-            while (sx < x + w - 4) {
-                g.fill(sx, y + 2, Math.min(sx + 3, x + w - 4), y + 3, UITheme.withAlpha(color, 0xB0));
-                sx += 7;
-            }
-        }
-    }
-
-    
     private static void renderChassis(GuiGraphics g, KeyboardLayoutData.Style style, int keyboardX, int keyboardY, float keyScale) {
         var c = UITheme.colors();
         int kbW = KeyboardLayoutData.totalWidthPx(style, keyScale);
@@ -233,21 +242,13 @@ final class KeybindKeyboardRenderer {
         int h = kbH + pad * 2;
         int radius = 8;
 
-        UITheme.fillRoundedRect(g, x + 2, y + 3, w, h, radius + 1,
-                UITheme.withAlpha(0x000000, 0x40));
-
         int chassisOuter = UITheme.lerpColor(c.panelBg(), 0x000000, 0.35f);
-        UITheme.fillRoundedRect(g, x, y, w, h, radius, chassisOuter);
+        UITheme.fillRoundedRectFast(g, x, y, w, h, radius, chassisOuter);
 
         int trayColor = UITheme.lerpColor(c.headerBg(), 0x000000, 0.20f);
-        UITheme.fillRoundedRect(g, x + 2, y + 2, w - 4, h - 4, radius - 2, trayColor);
+        UITheme.fillRoundedRectFast(g, x + 2, y + 2, w - 4, h - 4, radius - 2, trayColor);
 
-        g.fill(x + 4, y + 2, x + w - 4, y + 3, UITheme.withAlpha(0x000000, 0x60));
-        g.fill(x + 2, y + 4, x + 3, y + h - 4, UITheme.withAlpha(0x000000, 0x40));
-
-        g.fill(x + radius, y, x + w - radius, y + 1, UITheme.withAlpha(0xFFFFFF, 0x18));
-
-        UITheme.drawRoundedBorder(g, x, y, w, h, radius,
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, radius,
                 UITheme.withAlpha(c.widgetBorder(), 0xC0));
     }
 
@@ -294,7 +295,7 @@ final class KeybindKeyboardRenderer {
         int chipX = x + (w - chipW) / 2;
         int chipY = y + h - font.lineHeight - 3;
         int fill = UITheme.lerpColor(c.widgetBg(), c.accent(), 0.20f);
-        UITheme.fillRoundedRect(g, chipX, chipY, chipW, font.lineHeight + 1, 4, UITheme.withAlpha(fill, 0xCC));
+        UITheme.fillRoundedRectFast(g, chipX, chipY, chipW, font.lineHeight + 1, 3, UITheme.withAlpha(fill, 0xCC));
         g.drawString(font, text, chipX + 3, chipY + 1, c.textPrimary(), false);
     }
 
@@ -310,12 +311,11 @@ final class KeybindKeyboardRenderer {
             int bx = x + w - bw - 2;
             int by = y + 2;
             int chipColor = status == KeyBindingScanner.KeyStatus.CONFLICT ? c.danger() : c.accent();
-            UITheme.fillRoundedRect(g, bx, by, bw, bh, bh / 2, chipColor);
-            UITheme.drawRoundedBorder(g, bx, by, bw, bh, bh / 2, UITheme.withAlpha(0xFFFFFF, 0x40));
+            UITheme.fillRoundedRectFast(g, bx, by, bw, bh, bh / 2, chipColor);
             g.drawString(font, s, bx + 3, by + 1, 0xFFFFFFFF, false);
         } else if (w >= 16) {
             int dotColor = status == KeyBindingScanner.KeyStatus.SELF ? c.accent() : c.success();
-            UITheme.fillRoundedRect(g, x + w - 5, y + 3, 3, 3, 1, dotColor);
+            UITheme.fillRoundedRectFast(g, x + w - 5, y + 3, 3, 3, 1, dotColor);
         }
     }
 
@@ -346,5 +346,8 @@ final class KeybindKeyboardRenderer {
         String cachedInlineText;
         int cachedInlineTextW;
         int cachedInlineMaxW = Integer.MIN_VALUE;
+        int cachedTopFill;
+        int cachedGhostFill;
+        int cachedStatusEdgeColor;
     }
 }

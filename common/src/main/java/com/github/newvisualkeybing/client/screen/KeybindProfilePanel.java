@@ -40,8 +40,8 @@ final class KeybindProfilePanel {
 
     void render(GuiGraphics graphics, Font font, int x, int y, int h, int mouseX, int mouseY) {
         var colors = UITheme.colors();
-        UITheme.fillRoundedRect(graphics, x, y, WIDTH, h, 8, UITheme.withAlpha(colors.headerBg(), 0xC8));
-        UITheme.drawRoundedBorder(graphics, x, y, WIDTH, h, 8, colors.widgetBorder());
+        UITheme.fillRoundedRectFast(graphics, x, y, WIDTH, h, 8, UITheme.withAlpha(colors.headerBg(), 0xC8));
+        UITheme.drawRoundedBorderFast(graphics, x, y, WIDTH, h, 8, colors.widgetBorder());
 
         String title = Component.translatable("screen.newvisualkeybing.viewer.profile.title").getString();
         graphics.drawString(font, title, x + 10, y + 9, colors.textPrimary(), false);
@@ -51,8 +51,8 @@ final class KeybindProfilePanel {
         int nameY = y + 32;
         ensureNameBox(font, nameX, nameY);
         syncNameBox();
-        UITheme.fillRoundedRect(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5, colors.inputBg());
-        UITheme.drawRoundedBorder(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5,
+        UITheme.fillRoundedRectFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5, colors.inputBg());
+        UITheme.drawRoundedBorderFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5,
                 renaming || nameBox.isFocused() ? colors.accent() : colors.widgetBorder());
         nameBox.render(graphics.pose(), mouseX, mouseY, 1.0f);
 
@@ -68,7 +68,7 @@ final class KeybindProfilePanel {
             int fill = active ? UITheme.lerpColor(colors.widgetBg(), colors.accent(), 0.42f)
                     : hovered ? UITheme.withAlpha(colors.widgetBg(), 0xB0)
                     : UITheme.withAlpha(colors.widgetBg(), 0x66);
-            UITheme.fillRoundedRect(graphics, x + 8, rowY, WIDTH - 16, ROW_H - 2, 5, fill);
+            UITheme.fillRoundedRectFast(graphics, x + 8, rowY, WIDTH - 16, ROW_H - 2, 5, fill);
             if (active) graphics.fill(x + 10, rowY + 3, x + 12, rowY + ROW_H - 5, colors.accent());
             String label = fit(font, profileStore.compactProfileLabel(profile), WIDTH - 30);
             graphics.drawString(font, label, x + 16, rowY + 5, active ? colors.textPrimary() : colors.textSecondary(), false);
@@ -308,9 +308,9 @@ final class KeybindProfilePanel {
 
     private void renderButton(GuiGraphics graphics, Font font, int x, int y, int w, int h, String label, int accent, boolean hovered) {
         var colors = UITheme.colors();
-        UITheme.fillRoundedRect(graphics, x, y, w, h, 4,
+        UITheme.fillRoundedRectFast(graphics, x, y, w, h, 4,
                 UITheme.lerpColor(colors.widgetBg(), accent, hovered ? 0.42f : 0.24f));
-        UITheme.drawRoundedBorder(graphics, x, y, w, h, 4, UITheme.withAlpha(accent, 0xA0));
+        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, 4, UITheme.withAlpha(accent, 0xA0));
         String fitted = fit(font, label, w - 8);
         graphics.drawString(font, fitted, x + (w - font.width(fitted)) / 2,
                 y + (h - font.lineHeight) / 2, colors.textPrimary(), false);

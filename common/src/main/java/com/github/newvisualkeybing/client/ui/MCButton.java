@@ -63,26 +63,8 @@ public class MCButton extends AbstractWidget {
             x += shrink; y += shrink; w -= shrink * 2; h -= shrink * 2;
         }
 
-        if (this.active) {
-            int shadowLayers = easedHover > 0.1f ? 2 : 1;
-            for (int i = shadowLayers; i >= 1; i--) {
-                float hoverFactor = 0.6f + 0.4f * easedHover;
-                int alpha = (int) (12 * hoverFactor * (shadowLayers - i + 1) / shadowLayers);
-                int offset = i;
-                UITheme.fillRoundedRect(graphics, x + offset, y + offset, w, h, CORNER_RADIUS,
-                        UITheme.withAlpha(colors.shadow(), alpha));
-            }
-        }
-
-        UITheme.fillRoundedRect(graphics, x, y, w, h, CORNER_RADIUS, cachedBgBottom);
-        UITheme.fillRoundedRect(graphics, x, y, w, h / 2 + 2, CORNER_RADIUS, cachedBgTop);
-        UITheme.drawRoundedBorder(graphics, x, y, w, h, CORNER_RADIUS, cachedBorderColor);
-
-        if (this.active) {
-            int highlightAlpha = (int) (20 + 15 * easedHover);
-            UITheme.fillRoundedRect(graphics, x + 1, y + 1, w - 2, 3, 3,
-                    UITheme.withAlpha(0xFFFFFFFF, highlightAlpha));
-        }
+        UITheme.fillRoundedRectFast(graphics, x, y, w, h, CORNER_RADIUS, cachedBgBottom);
+        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, CORNER_RADIUS, cachedBorderColor);
 
         Minecraft mc = Minecraft.getInstance();
         int textWidth = mc.font.width(getMessage());
