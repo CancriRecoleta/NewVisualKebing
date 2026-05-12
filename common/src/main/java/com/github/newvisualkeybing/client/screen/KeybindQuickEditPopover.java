@@ -241,7 +241,7 @@ final class KeybindQuickEditPopover {
         if (listenMapping == null) return;
         Minecraft mc = Minecraft.getInstance();
         String action = Component.translatable(listenMapping.getName()).getString();
-        mc.options.setKey(listenMapping, key);
+        listenMapping.setKey(key);
         KeybindPriorityEnforcer.resetAndEnforce();
         mc.options.save();
         listenMapping = null;
@@ -254,7 +254,7 @@ final class KeybindQuickEditPopover {
     private void unbind(KeyMapping mapping) {
         Minecraft mc = Minecraft.getInstance();
         String action = Component.translatable(mapping.getName()).getString();
-        mc.options.setKey(mapping, InputConstants.UNKNOWN);
+        mapping.setKey(InputConstants.UNKNOWN);
         KeybindPriorityEnforcer.resetAndEnforce();
         mc.options.save();
         if (onMutation != null) onMutation.run();

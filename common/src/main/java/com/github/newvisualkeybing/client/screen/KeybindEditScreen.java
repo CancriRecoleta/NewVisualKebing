@@ -407,7 +407,7 @@ public class KeybindEditScreen extends Screen {
                         return true;
                     }
                     if (mouseX >= resetX && mouseX < resetX + RESET_BTN_W) {
-                        Minecraft.getInstance().options.setKey(ke.mapping, ke.mapping.getDefaultKey());
+                        ke.mapping.setKey(ke.mapping.getDefaultKey());
                         KeybindPriorityEnforcer.resetAndEnforce();
                         Minecraft.getInstance().options.save();
                         rebuildEntries();
@@ -456,7 +456,7 @@ public class KeybindEditScreen extends Screen {
     }
 
     private void applyKey(KeyMapping km, InputConstants.Key key) {
-        Minecraft.getInstance().options.setKey(km, key);
+        km.setKey(key);
         KeybindPriorityEnforcer.resetAndEnforce();
         Minecraft.getInstance().options.save();
         waitingMapping = null;
@@ -474,7 +474,7 @@ public class KeybindEditScreen extends Screen {
             showNotice(Component.translatable("screen.newvisualkeybing.viewer.wheel_unsupported").getString());
             return;
         }
-        Minecraft.getInstance().options.setKey(km, targetInputKey());
+        km.setKey(targetInputKey());
         KeybindPriorityEnforcer.resetAndEnforce();
         Minecraft.getInstance().options.save();
         rebuildEntries();
@@ -505,7 +505,7 @@ public class KeybindEditScreen extends Screen {
 
     private void resetAllMappings() {
         for (KeyMapping km : Minecraft.getInstance().options.keyMappings) {
-            Minecraft.getInstance().options.setKey(km, km.getDefaultKey());
+            km.setKey(km.getDefaultKey());
         }
         KeybindPriorityEnforcer.resetAndEnforce();
         Minecraft.getInstance().options.save();
@@ -541,10 +541,10 @@ public class KeybindEditScreen extends Screen {
             if (KeyboardLayoutData.isMouse(virtualKey)) {
                 int btn = KeyboardLayoutData.virtualToMouseBtn(virtualKey);
                 if (key.getType() == InputConstants.Type.MOUSE && key.getValue() == btn) {
-                    minecraft.options.setKey(mapping, InputConstants.UNKNOWN);
+                    mapping.setKey(InputConstants.UNKNOWN);
                 }
             } else if (key.getType() != InputConstants.Type.MOUSE && key.getValue() == virtualKey) {
-                minecraft.options.setKey(mapping, InputConstants.UNKNOWN);
+                mapping.setKey(InputConstants.UNKNOWN);
             }
         }
         KeybindPriorityEnforcer.resetAndEnforce();

@@ -741,7 +741,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             if (km.getName().equals(info.translationKey())) { target = km; break; }
         }
         if (target == null) return;
-        minecraft.options.setKey(target, com.mojang.blaze3d.platform.InputConstants.UNKNOWN);
+        target.setKey(com.mojang.blaze3d.platform.InputConstants.UNKNOWN);
         com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer.resetAndEnforce();
         minecraft.options.save();
         scanner.scan();
