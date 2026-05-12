@@ -4,7 +4,7 @@ import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.List;
 import java.util.function.IntPredicate;
@@ -30,7 +30,7 @@ final class KeybindKeyboardRenderer {
     
 
 
-    Integer render(GuiGraphics g, Font font, KeyboardLayoutData.Style style,
+    Integer render(GuiGraphicsExtractor g, Font font, KeyboardLayoutData.Style style,
                    int keyboardX, int keyboardY, float keyScale,
                    Integer selectedVirtualKey, IntPredicate isVisibleKey,
                    IntPredicate isHiddenKey, IntPredicate isSearchMatch,
@@ -132,7 +132,7 @@ final class KeybindKeyboardRenderer {
         return updated;
     }
 
-    private static void renderKeyShape(GuiGraphics g, KeyDrawState state,
+    private static void renderKeyShape(GuiGraphicsExtractor g, KeyDrawState state,
                                        int pulseAccent, int searchPulseColor, int searchPulseAlpha,
                                        int accentAlt, int conflictBorder, int widgetBorder,
                                        int hiddenGhost, int hiddenBorder, int normalBorder) {
@@ -232,7 +232,7 @@ final class KeybindKeyboardRenderer {
         };
     }
 
-    private static void renderChassis(GuiGraphics g, KeyboardLayoutData.Style style, int keyboardX, int keyboardY, float keyScale) {
+    private static void renderChassis(GuiGraphicsExtractor g, KeyboardLayoutData.Style style, int keyboardX, int keyboardY, float keyScale) {
         var c = UITheme.colors();
         int kbW = KeyboardLayoutData.totalWidthPx(style, keyScale);
         int kbH = KeyboardLayoutData.totalHeightPx(style, keyScale);
@@ -254,7 +254,7 @@ final class KeybindKeyboardRenderer {
     }
 
     
-    private static void renderKeyLabels(GuiGraphics g, Font font, KeyDrawState state,
+    private static void renderKeyLabels(GuiGraphicsExtractor g, Font font, KeyDrawState state,
                                         int labelColor, boolean showSub) {
         var c = UITheme.colors();
         int x = state.x;
@@ -265,18 +265,18 @@ final class KeybindKeyboardRenderer {
         String sub = state.subLabel;
         if (showSub && sub != null && h >= 18) {
             int subColor = UITheme.withAlpha(c.textSecondary(), 0xB0);
-            g.drawString(font, sub, x + (w - state.subLabelW) / 2, y + 3, subColor, false);
-            g.drawString(font, main, x + (w - state.mainLabelW) / 2,
+            g.text(font, sub, x + (w - state.subLabelW) / 2, y + 3, subColor, false);
+            g.text(font, main, x + (w - state.mainLabelW) / 2,
                     y + h - font.lineHeight - 4, labelColor, false);
         } else {
-            g.drawString(font, main,
+            g.text(font, main,
                     x + (w - state.mainLabelW) / 2,
                     y + (h - font.lineHeight) / 2,
                     labelColor, false);
         }
     }
 
-    private static void renderInlineBindings(GuiGraphics g, Font font, KeyDrawState state) {
+    private static void renderInlineBindings(GuiGraphicsExtractor g, Font font, KeyDrawState state) {
         int x = state.x;
         int y = state.y;
         int w = state.w;
@@ -298,11 +298,11 @@ final class KeybindKeyboardRenderer {
         int fill = UITheme.lerpColor(c.widgetBg(), c.accent(), 0.20f);
         UITheme.fillRoundedRectFast(g, chipX, chipY, chipW, font.lineHeight + 1, 3,
                 UITheme.withAlpha(fill, 0xCC));
-        g.drawString(font, text, chipX + 3, chipY + 1, c.textPrimary(), false);
+        g.text(font, text, chipX + 3, chipY + 1, c.textPrimary(), false);
     }
 
     
-    private static void renderBindingBadge(GuiGraphics g, Font font, int x, int y, int w, int h,
+    private static void renderBindingBadge(GuiGraphicsExtractor g, Font font, int x, int y, int w, int h,
                                            int count, KeyBindingScanner.KeyStatus status) {
         if (count <= 0 || h < 14) return;
         var c = UITheme.colors();
@@ -316,7 +316,7 @@ final class KeybindKeyboardRenderer {
                     : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
                     : c.accent();
             UITheme.fillRoundedRectFast(g, bx, by, bw, bh, bh / 2, chipColor);
-            g.drawString(font, s, bx + 3, by + 1, 0xFFFFFFFF, false);
+            g.text(font, s, bx + 3, by + 1, 0xFFFFFFFF, false);
         } else if (w >= 16) {
             int dotColor = status == KeyBindingScanner.KeyStatus.SELF ? c.accent()
                     : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()

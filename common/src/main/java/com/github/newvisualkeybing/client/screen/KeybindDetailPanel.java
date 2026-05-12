@@ -6,7 +6,7 @@ import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.platform.services.IPlatformHelper.ConflictContext;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
@@ -89,7 +89,7 @@ final class KeybindDetailPanel {
         return null;
     }
 
-    void render(GuiGraphics g, Font font, int x, int y, int w, int h,
+    void render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int h,
                 Integer virtualKey, int mouseX, int mouseY) {
         ensureTextCache();
         modifyX = modifyY = unbindX = unbindY = -1;
@@ -111,7 +111,7 @@ final class KeybindDetailPanel {
             UITheme.drawRoundedBorderFast(g, innerX, boxY, innerW, boxH, 6,
                     UITheme.withAlpha(c.widgetBorder(), 0x90));
             String hint = KeybindViewerScreen.fitToWidth(font, hoverHint, innerW - 16);
-            g.drawString(font, hint, innerX + 8, textY(font, boxY, boxH), c.textMuted(), false);
+            g.text(font, hint, innerX + 8, textY(font, boxY, boxH), c.textMuted(), false);
             return;
         }
 
@@ -134,7 +134,7 @@ final class KeybindDetailPanel {
         int lineY;
         if (stackHead) {
             String displayKeyName = KeybindViewerScreen.fitToWidth(font, keyName, innerW);
-            g.drawString(font, displayKeyName, innerX, textY(font, contentY, 12), c.textPrimary(), false);
+            g.text(font, displayKeyName, innerX, textY(font, contentY, 12), c.textPrimary(), false);
             renderStatusChip(g, font, innerX, contentY + font.lineHeight + 4, status, false);
             lineY = contentY + font.lineHeight + 4 + 12 + 4;
         } else {
@@ -142,7 +142,7 @@ final class KeybindDetailPanel {
             renderStatusChip(g, font, chipX, contentY, status, false);
             int keyNameMaxW = innerW - chipW - 6;
             String displayKeyName = KeybindViewerScreen.fitToWidth(font, keyName, keyNameMaxW);
-            g.drawString(font, displayKeyName, innerX, textY(font, contentY, 12), c.textPrimary(), false);
+            g.text(font, displayKeyName, innerX, textY(font, contentY, 12), c.textPrimary(), false);
             lineY = contentY + Math.max(font.lineHeight, 12) + 4;
         }
 
@@ -153,7 +153,7 @@ final class KeybindDetailPanel {
                 if (distinct > 1) catText = catText + "  +" + (distinct - 1);
             }
             String catFit = KeybindViewerScreen.fitToWidth(font, catText, innerW);
-            g.drawString(font, catFit, innerX, lineY, c.textMuted(), false);
+            g.text(font, catFit, innerX, lineY, c.textMuted(), false);
             lineY += font.lineHeight + 2;
         }
 
@@ -205,16 +205,16 @@ final class KeybindDetailPanel {
         textCacheReady = true;
     }
 
-    private static void renderInfoBox(GuiGraphics g, Font font, int x, int y, int w, String text, int textColor) {
+    private static void renderInfoBox(GuiGraphicsExtractor g, Font font, int x, int y, int w, String text, int textColor) {
         var c = UITheme.colors();
         int h = font.lineHeight + 12;
         UITheme.fillRoundedRectFast(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
         UITheme.drawRoundedBorderFast(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
         String fit = KeybindViewerScreen.fitToWidth(font, text, w - 16);
-        g.drawString(font, fit, x + 8, textY(font, y, h), textColor, false);
+        g.text(font, fit, x + 8, textY(font, y, h), textColor, false);
     }
 
-    private int renderStatusChip(GuiGraphics g, Font font, int x, int y, KeyBindingScanner.KeyStatus status, boolean measureOnly) {
+    private int renderStatusChip(GuiGraphicsExtractor g, Font font, int x, int y, KeyBindingScanner.KeyStatus status, boolean measureOnly) {
         var c = UITheme.colors();
         int dot;
         int textColor;
@@ -234,11 +234,11 @@ final class KeybindDetailPanel {
         UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, chipH / 2, chipFill);
         UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xC0));
         UITheme.fillRoundedRectFast(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
-        g.drawString(font, label, x + 11, textY(font, y, chipH), textColor, false);
+        g.text(font, label, x + 11, textY(font, y, chipH), textColor, false);
         return chipW;
     }
 
-    private static int renderInfoChips(GuiGraphics g, Font font, int x, int y, int w,
+    private static int renderInfoChips(GuiGraphicsExtractor g, Font font, int x, int y, int w,
                                        List<KeyBindingScanner.KeyBindingInfo> bindings) {
         var c = UITheme.colors();
         int gap = 4;
@@ -255,17 +255,17 @@ final class KeybindDetailPanel {
         return y + chipH * 2 + 6;
     }
 
-    private static void renderInfoChip(GuiGraphics g, Font font, UITheme.ColorPalette c,
+    private static void renderInfoChip(GuiGraphicsExtractor g, Font font, UITheme.ColorPalette c,
                                        int x, int y, int w, int h, String label) {
         UITheme.fillRoundedRectFast(g, x, y, w, h, 5,
                 UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.12f));
         UITheme.drawRoundedBorderFast(g, x, y, w, h, 5,
                 UITheme.withAlpha(c.widgetBorder(), 0x70));
-        g.drawString(font, KeybindViewerScreen.fitToWidth(font, label, w - 8),
+        g.text(font, KeybindViewerScreen.fitToWidth(font, label, w - 8),
                 x + 5, textY(font, y, h), c.textMuted(), false);
     }
 
-    private void renderBindingList(GuiGraphics g, Font font, int x, int y, int w, int h,
+    private void renderBindingList(GuiGraphicsExtractor g, Font font, int x, int y, int w, int h,
                                    List<KeyBindingScanner.KeyBindingInfo> bindings,
                                    int mouseX, int mouseY) {
         var c = UITheme.colors();
@@ -318,7 +318,7 @@ final class KeybindDetailPanel {
             int more = bindings.size() - end + scrollOffset;
             if (more > 0) {
                 String s = "+" + more;
-                g.drawString(font, s, x + w - font.width(s), y + h - font.lineHeight, c.textMuted(), false);
+                g.text(font, s, x + w - font.width(s), y + h - font.lineHeight, c.textMuted(), false);
             }
         }
     }
@@ -379,7 +379,7 @@ final class KeybindDetailPanel {
     }
 
     
-    private void renderBindingRow(GuiGraphics g, Font font, int x, int y, int w, int rowH,
+    private void renderBindingRow(GuiGraphicsExtractor g, Font font, int x, int y, int w, int rowH,
                                   KeyBindingScanner.KeyBindingInfo info, boolean showPriority,
                                   int mouseX, int mouseY) {
         var c = UITheme.colors();
@@ -407,16 +407,16 @@ final class KeybindDetailPanel {
         int actionMaxW = Math.max(24, textW - 8 - rightBlockW - 4);
         String actionText = KeybindViewerScreen.fitToWidth(font, info.actionName(), actionMaxW);
         int rowTextY = textY(font, y, rowH);
-        g.drawString(font, actionText, x + 6, rowTextY, actionColor, false);
+        g.text(font, actionText, x + 6, rowTextY, actionColor, false);
         int rightX = x + textW - modW;
-        g.drawString(font, modFit, rightX, rowTextY, c.textMuted(), false);
+        g.text(font, modFit, rightX, rowTextY, c.textMuted(), false);
         if (!ctxTag.isEmpty()) {
             int tagX = rightX - font.width(ctxTag) - 6;
             int tagBgW = font.width(ctxTag) + 4;
             int tagBgH = font.lineHeight + 1;
             UITheme.fillRoundedRectFast(g, tagX - 2, rowTextY - 1, tagBgW, tagBgH, 3,
                     UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
-            g.drawString(font, ctxTag, tagX, rowTextY, c.accentAlt(), false);
+            g.text(font, ctxTag, tagX, rowTextY, c.accentAlt(), false);
         }
 
         int xButtonX = x + w - ROW_UNBIND_W;
@@ -441,7 +441,7 @@ final class KeybindDetailPanel {
         }
     }
 
-    private void renderPriorityControls(GuiGraphics g, Font font, KeyBindingScanner.KeyBindingInfo info,
+    private void renderPriorityControls(GuiGraphicsExtractor g, Font font, KeyBindingScanner.KeyBindingInfo info,
                                         int x, int y, int mouseX, int mouseY) {
         var c = UITheme.colors();
         int h = ROW_UNBIND_W;
@@ -462,13 +462,13 @@ final class KeybindDetailPanel {
                 UITheme.withAlpha(c.warningColor(), minusHover ? 0xC0 : 0x80));
 
         int buttonTextY = textY(font, y, h);
-        g.drawString(font, "+", plusX + 4, buttonTextY, c.textPrimary(), false);
-        g.drawString(font, "-", minusX + 5, buttonTextY, c.textPrimary(), false);
+        g.text(font, "+", plusX + 4, buttonTextY, c.textPrimary(), false);
+        g.text(font, "-", minusX + 5, buttonTextY, c.textPrimary(), false);
         String value = String.valueOf(profileStore.priorityOf(info.translationKey()));
         int valueX = x + ROW_PRIORITY_BTN_W;
         int valueW = ROW_PRIORITY_W - ROW_PRIORITY_BTN_W * 2;
         String fitted = KeybindViewerScreen.fitToWidth(font, value, valueW);
-        g.drawString(font, fitted,
+        g.text(font, fitted,
                 valueX + (valueW - font.width(fitted)) / 2,
                 buttonTextY, c.textMuted(), false);
     }

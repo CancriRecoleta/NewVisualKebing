@@ -3,7 +3,7 @@ package com.github.newvisualkeybing.client.screen;
 import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -41,7 +41,7 @@ final class KeybindProfilePanel {
         this.releaseExternalFocus = releaseExternalFocus == null ? () -> {} : releaseExternalFocus;
     }
 
-    void render(GuiGraphics graphics, Font font, int x, int y, int h, int mouseX, int mouseY) {
+    void render(GuiGraphicsExtractor graphics, Font font, int x, int y, int h, int mouseX, int mouseY) {
         var colors = UITheme.colors();
         String title = Component.translatable("screen.newvisualkeybing.viewer.profile.title").getString();
         int contentY = KeybindViewerScreen.paintPanelBase(graphics, font, x, y, WIDTH, h, title);
@@ -53,7 +53,7 @@ final class KeybindProfilePanel {
         UITheme.fillRoundedRectFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5, colors.inputBg());
         UITheme.drawRoundedBorderFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5,
                 renaming || nameBox.isFocused() ? colors.accent() : colors.widgetBorder());
-        nameBox.render(graphics, mouseX, mouseY, 1.0f);
+        nameBox.extractRenderState(graphics, mouseX, mouseY, 1.0f);
 
         int rowY = contentY + 30;
         List<KeybindProfileStore.Profile> profiles = profileStore.profiles();
@@ -71,14 +71,14 @@ final class KeybindProfilePanel {
             if (active) graphics.fill(x + 10, rowY + 3, x + 12, rowY + ROW_H - 5, colors.accent());
             String label = fit(font, profileStore.compactProfileLabel(profile), WIDTH - 30);
             int labelX = x + 8 + (WIDTH - 16 - font.width(label)) / 2;
-            graphics.drawString(font, label, labelX, textY(font, rowY, ROW_H - 2),
+            graphics.text(font, label, labelX, textY(font, rowY, ROW_H - 2),
                     active ? colors.textPrimary() : colors.textSecondary(), false);
             rowY += ROW_H;
         }
 
         if (profiles.isEmpty()) {
             String empty = Component.translatable("screen.newvisualkeybing.viewer.profile.empty").getString();
-            graphics.drawString(font, fit(font, empty, WIDTH - 20), x + 10,
+            graphics.text(font, fit(font, empty, WIDTH - 20), x + 10,
                     textY(font, rowY, ROW_H - 2), colors.textMuted(), false);
         }
 
@@ -315,13 +315,13 @@ final class KeybindProfilePanel {
         return nameBox == null ? "" : nameBox.getValue();
     }
 
-    private void renderButton(GuiGraphics graphics, Font font, int x, int y, int w, int h, String label, int accent, boolean hovered) {
+    private void renderButton(GuiGraphicsExtractor graphics, Font font, int x, int y, int w, int h, String label, int accent, boolean hovered) {
         var colors = UITheme.colors();
         UITheme.fillRoundedRectFast(graphics, x, y, w, h, 4,
                 UITheme.lerpColor(colors.widgetBg(), accent, hovered ? 0.42f : 0.24f));
         UITheme.drawRoundedBorderFast(graphics, x, y, w, h, 4, UITheme.withAlpha(accent, 0xA0));
         String fitted = fit(font, label, w - 8);
-        graphics.drawString(font, fitted, x + (w - font.width(fitted)) / 2,
+        graphics.text(font, fitted, x + (w - font.width(fitted)) / 2,
                 textY(font, y, h), colors.textPrimary(), false);
     }
 

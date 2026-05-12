@@ -1,7 +1,7 @@
 package com.github.newvisualkeybing.client.ui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +41,7 @@ public class MCPanel {
     public MCPanel clearEntries() { entries.clear(); return this; }
     public MCPanel addEntry(RenderEntry entry) { entries.add(entry); return this; }
 
-    public void render(GuiGraphics graphics, int mouseX, int mouseY) {
+    public void render(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         updateAnimations(mouseX, mouseY);
         var colors = UITheme.colors();
         boolean hasTitle = title != null && !title.isEmpty();
@@ -122,7 +122,7 @@ public class MCPanel {
         }
     }
 
-    private void renderTitleBar(GuiGraphics graphics, UITheme.ColorPalette colors, int mouseX, int mouseY) {
+    private void renderTitleBar(GuiGraphicsExtractor graphics, UITheme.ColorPalette colors, int mouseX, int mouseY) {
         UITheme.fillRoundedRect(graphics, x, y, width, TITLE_BAR_HEIGHT / 2,
                 CORNER_RADIUS, UITheme.brighten(colors.headerBg(), 0.03f));
         UITheme.fillRoundedRect(graphics, x, y + TITLE_BAR_HEIGHT / 2 - 2, width, TITLE_BAR_HEIGHT / 2 + 2,
@@ -149,23 +149,23 @@ public class MCPanel {
         if (collapsible) {
             String indicator = expandProgress > 0.5f ? "\u25BC" : "\u25B6";
             int indicatorColor = UITheme.lerpColor(colors.textMuted(), colors.accentLight(), titleHoverAnim);
-            graphics.drawString(mc.font, indicator, x + INNER_PADDING + 1, textY + 1,
+            graphics.text(mc.font, indicator, x + INNER_PADDING + 1, textY + 1,
                     UITheme.withAlpha(0xFF000000, 0x40), false);
-            graphics.drawString(mc.font, indicator, x + INNER_PADDING, textY, indicatorColor, true);
+            graphics.text(mc.font, indicator, x + INNER_PADDING, textY, indicatorColor, true);
         }
 
         int titleX = x + INNER_PADDING + (collapsible ? 18 : 0);
         int displayTitleColor = collapsible
                 ? UITheme.lerpColor(titleColor, colors.accentLight(), titleHoverAnim * 0.4f)
                 : titleColor;
-        graphics.drawString(mc.font, title, titleX + 1, textY + 1,
+        graphics.text(mc.font, title, titleX + 1, textY + 1,
                 UITheme.withAlpha(0xFF000000, 0x50), false);
-        graphics.drawString(mc.font, title, titleX, textY, displayTitleColor, true);
+        graphics.text(mc.font, title, titleX, textY, displayTitleColor, true);
     }
 
     @FunctionalInterface
     public interface RenderEntry {
-        void render(GuiGraphics graphics, int x, int y, int width, int height);
+        void render(GuiGraphicsExtractor graphics, int x, int y, int width, int height);
     }
 }
 

@@ -4,7 +4,7 @@ import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 final class KeybindPriorityControls {
 
@@ -17,7 +17,7 @@ final class KeybindPriorityControls {
         this.profileStore = profileStore;
     }
 
-    void render(GuiGraphics graphics, Font font, KeyMapping mapping, int x, int y,
+    void render(GuiGraphicsExtractor graphics, Font font, KeyMapping mapping, int x, int y,
                 int entryHeight, int mouseX, int mouseY, boolean rowHovered) {
         var colors = UITheme.colors();
         int h = entryHeight - 4;
@@ -29,10 +29,10 @@ final class KeybindPriorityControls {
         UITheme.fillRoundedRectFast(graphics, x + WIDTH - BUTTON_W, y + 1, BUTTON_W, h, 4,
                 UITheme.lerpColor(colors.widgetBg(), colors.warningColor(), downHover ? 0.42f : 0.18f));
         UITheme.drawRoundedBorderFast(graphics, x + WIDTH - BUTTON_W, y + 1, BUTTON_W, h, 4, UITheme.withAlpha(colors.warningColor(), 0x88));
-        graphics.drawString(font, "+", x + 6, y + (entryHeight - font.lineHeight) / 2, colors.textPrimary(), false);
-        graphics.drawString(font, "-", x + WIDTH - BUTTON_W + 7, y + (entryHeight - font.lineHeight) / 2, colors.textPrimary(), false);
+        graphics.text(font, "+", x + 6, y + (entryHeight - font.lineHeight) / 2, colors.textPrimary(), false);
+        graphics.text(font, "-", x + WIDTH - BUTTON_W + 7, y + (entryHeight - font.lineHeight) / 2, colors.textPrimary(), false);
         String value = String.valueOf(profileStore.priorityOf(mapping));
-        graphics.drawString(font, value, x + (WIDTH - font.width(value)) / 2,
+        graphics.text(font, value, x + (WIDTH - font.width(value)) / 2,
                 y + (entryHeight - font.lineHeight) / 2, colors.textMuted(), false);
     }
 

@@ -12,7 +12,7 @@ import com.github.newvisualkeybing.platform.Services;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -166,11 +166,11 @@ public class KeybindEditScreen extends Screen {
     private int listW() { return width - listX() - 8; }
 
     @Override
-    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         var colors = UITheme.colors();
         graphics.fill(0, 0, width, height, colors.panelBg() | 0xFF000000);
 
@@ -178,13 +178,13 @@ public class KeybindEditScreen extends Screen {
         profilePanel.render(graphics, font, 8, listTop(), listHeight(), mouseX, mouseY);
         renderEntries(graphics, mouseX, mouseY);
         renderFooter(graphics);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
         if (waitingMapping != null) renderWaitingOverlay(graphics);
         renderNotice(graphics);
     }
 
-    private void renderHeader(GuiGraphics graphics) {
+    private void renderHeader(GuiGraphicsExtractor graphics) {
         var colors = UITheme.colors();
         UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4, 8);
 
@@ -198,10 +198,10 @@ public class KeybindEditScreen extends Screen {
                 ? Component.translatable("screen.newvisualkeybing.viewer.edit_title_focused",
                     targetKeyName()).getString()
                 : Component.translatable("screen.newvisualkeybing.viewer.edit_title").getString();
-        graphics.drawString(font, title, searchX + searchW + 14, 14, colors.textPrimary(), false);
+        graphics.text(font, title, searchX + searchW + 14, 14, colors.textPrimary(), false);
     }
 
-    private void renderEntries(GuiGraphics graphics, int mouseX, int mouseY) {
+    private void renderEntries(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         var colors = UITheme.colors();
         int listTop = listTop();
         int listH = listHeight();
@@ -239,14 +239,14 @@ public class KeybindEditScreen extends Screen {
         }
     }
 
-    private void renderCategory(GuiGraphics graphics, CategoryEntry ce, int x, int y, int w) {
+    private void renderCategory(GuiGraphicsExtractor graphics, CategoryEntry ce, int x, int y, int w) {
         var colors = UITheme.colors();
         UITheme.fillRoundedRectFast(graphics, x, y, w, CATEGORY_H, 4, UITheme.withAlpha(colors.accent(), 0x22));
         graphics.fill(x, y, x + 3, y + CATEGORY_H, colors.accent());
-        graphics.drawString(font, ce.name, x + 10, y + (CATEGORY_H - font.lineHeight) / 2, colors.accentLight(), false);
+        graphics.text(font, ce.name, x + 10, y + (CATEGORY_H - font.lineHeight) / 2, colors.accentLight(), false);
     }
 
-    private void renderKeyEntry(GuiGraphics graphics, KeyEntry ke, int x, int y, int w,
+    private void renderKeyEntry(GuiGraphicsExtractor graphics, KeyEntry ke, int x, int y, int w,
                                 int mouseX, int mouseY, boolean hovered, KeyMapping[] all) {
         var colors = UITheme.colors();
         boolean isWaiting = waitingMapping == ke.mapping;
@@ -267,7 +267,7 @@ public class KeybindEditScreen extends Screen {
         String name = Component.translatable(ke.mapping.getName()).getString();
         int nameMaxW = w - CHANGE_BTN_W - RESET_BTN_W - KeybindPriorityControls.WIDTH - COL_GAP * 5 - 12;
         if (font.width(name) > nameMaxW) name = font.plainSubstrByWidth(name, nameMaxW - 6) + "..";
-        graphics.drawString(font, name, x + 8, y + (ENTRY_H - font.lineHeight) / 2, colors.textPrimary(), false);
+        graphics.text(font, name, x + 8, y + (ENTRY_H - font.lineHeight) / 2, colors.textPrimary(), false);
 
         int priorityX = x + w - KeybindPriorityControls.WIDTH - CHANGE_BTN_W - RESET_BTN_W - COL_GAP * 3;
         priorityControls.render(graphics, font, ke.mapping, priorityX, y, ENTRY_H, mouseX, mouseY, hovered);
@@ -303,7 +303,7 @@ public class KeybindEditScreen extends Screen {
                 : isUnbound ? colors.textMuted() : conflict ? colors.dangerColor()
                 : combo ? colors.warning()
                 : colors.textPrimary();
-        graphics.drawString(font, changeLabel, chTextX, chTextY, chTextColor, false);
+        graphics.text(font, changeLabel, chTextX, chTextY, chTextColor, false);
 
         int resetX = changeX + CHANGE_BTN_W + COL_GAP;
         boolean isDefault = ke.mapping.isDefault();
@@ -319,22 +319,22 @@ public class KeybindEditScreen extends Screen {
         if (defLabel.length() > 8) defLabel = defLabel.substring(0, 8) + "..";
         defLabel = "(" + defLabel + ")";
         int rsTextColor = isDefault ? colors.textMuted() : rsHover ? colors.successColor() : colors.textSecondary();
-        graphics.drawString(font, defLabel, resetX + (RESET_BTN_W - font.width(defLabel)) / 2,
+        graphics.text(font, defLabel, resetX + (RESET_BTN_W - font.width(defLabel)) / 2,
                 y + (ENTRY_H - font.lineHeight) / 2, rsTextColor, false);
     }
 
-    private void renderFooter(GuiGraphics graphics) {
+    private void renderFooter(GuiGraphicsExtractor graphics) {
         var colors = UITheme.colors();
         int y = height - FOOTER_H;
         graphics.fill(0, y, width, y + 1, colors.divider());
         String hint = waitingMapping != null
                 ? Component.translatable("screen.newvisualkeybing.viewer.waiting").getString()
                 : Component.translatable("screen.newvisualkeybing.viewer.edit_hint").getString();
-        graphics.drawString(font, hint, (width - font.width(hint)) / 2,
+        graphics.text(font, hint, (width - font.width(hint)) / 2,
                 y + (FOOTER_H - font.lineHeight) / 2, colors.textSecondary(), false);
     }
 
-    private void renderWaitingOverlay(GuiGraphics graphics) {
+    private void renderWaitingOverlay(GuiGraphicsExtractor graphics) {
         var colors = UITheme.colors();
         graphics.fill(0, 0, width, height, 0xC0000000);
         int bw = 320, bh = 80;
@@ -344,12 +344,12 @@ public class KeybindEditScreen extends Screen {
         String l1 = Component.translatable("screen.newvisualkeybing.viewer.waiting").getString();
         String l2 = Component.translatable(waitingMapping.getName()).getString();
         String l3 = Component.translatable("screen.newvisualkeybing.viewer.waiting_hint").getString();
-        graphics.drawString(font, l1, bx + (bw - font.width(l1)) / 2, by + 12, colors.accentLight(), true);
-        graphics.drawString(font, l2, bx + (bw - font.width(l2)) / 2, by + 30, colors.textPrimary(), true);
-        graphics.drawString(font, l3, bx + (bw - font.width(l3)) / 2, by + bh - 16, colors.textMuted(), false);
+        graphics.text(font, l1, bx + (bw - font.width(l1)) / 2, by + 12, colors.accentLight(), true);
+        graphics.text(font, l2, bx + (bw - font.width(l2)) / 2, by + 30, colors.textPrimary(), true);
+        graphics.text(font, l3, bx + (bw - font.width(l3)) / 2, by + bh - 16, colors.textMuted(), false);
     }
 
-    private void renderNotice(GuiGraphics graphics) {
+    private void renderNotice(GuiGraphicsExtractor graphics) {
         if (noticeMessage == null) return;
         long now = System.currentTimeMillis();
         if (now > noticeUntil) { noticeMessage = null; return; }
@@ -359,7 +359,7 @@ public class KeybindEditScreen extends Screen {
         int y = height - FOOTER_H - 26;
         UITheme.fillRoundedRectFast(graphics, x, y, w, 20, 6, UITheme.withAlpha(colors.successBg(), 0xE0));
         UITheme.drawRoundedBorderFast(graphics, x, y, w, 20, 6, colors.successColor());
-        graphics.drawString(font, noticeMessage, x + 12, y + 6, colors.textPrimary(), false);
+        graphics.text(font, noticeMessage, x + 12, y + 6, colors.textPrimary(), false);
     }
 
     private void showNotice(String msg) {

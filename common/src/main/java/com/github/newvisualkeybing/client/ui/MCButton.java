@@ -1,7 +1,7 @@
 package com.github.newvisualkeybing.client.ui;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -40,7 +40,7 @@ public class MCButton extends AbstractWidget {
     }
 
     @Override
-    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    public void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         updateAnimations(partialTick);
 
         var colors = UITheme.colors();
@@ -69,10 +69,10 @@ public class MCButton extends AbstractWidget {
         int textY = y + (h - mc.font.lineHeight) / 2 + 1;
 
         if (this.active) {
-            graphics.drawString(mc.font, getMessage(), textX + 1, textY + 1,
+            graphics.text(mc.font, getMessage(), textX + 1, textY + 1,
                     UITheme.withAlpha(0xFF000000, 0x60), false);
         }
-        graphics.drawString(mc.font, getMessage(), textX, textY, cachedTextColor, true);
+        graphics.text(mc.font, getMessage(), textX, textY, cachedTextColor, true);
     }
 
     private void updateRenderCache(UITheme.ColorPalette colors, float easedHover) {

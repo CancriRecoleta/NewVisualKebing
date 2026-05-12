@@ -1,6 +1,6 @@
 package com.github.newvisualkeybing.client.ui;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 
 
@@ -61,7 +61,7 @@ public final class UITheme {
     public static ColorPalette colors() { return currentMode == Mode.DARK ? DARK : LIGHT; }
 
 
-    public static void fillRoundedRect(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+    public static void fillRoundedRect(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius, int color) {
         if (radius <= 0 || w < radius * 2 || h < radius * 2) {
             g.fill(x, y, x + w, y + h, color);
             return;
@@ -106,7 +106,7 @@ public final class UITheme {
         return insets;
     }
 
-    public static void fillRoundedRectFast(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+    public static void fillRoundedRectFast(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius, int color) {
         if (radius <= 0 || w < radius * 2 || h < radius * 2) {
             g.fill(x, y, x + w, y + h, color);
             return;
@@ -122,7 +122,7 @@ public final class UITheme {
         }
     }
 
-    public static void drawRoundedBorderFast(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+    public static void drawRoundedBorderFast(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius, int color) {
         if (radius <= 0 || w < radius * 2 || h < radius * 2) {
             g.fill(x, y, x + w, y + 1, color);
             g.fill(x, y + h - 1, x + w, y + h, color);
@@ -158,7 +158,7 @@ public final class UITheme {
     }
 
 
-    private static void fillRoundedCorner(GuiGraphics g, int cx, int cy, int r, int color, boolean left, boolean top) {
+    private static void fillRoundedCorner(GuiGraphicsExtractor g, int cx, int cy, int r, int color, boolean left, boolean top) {
         if (r <= 0) return;
         if (r == 1) {
             g.fill(cx, cy, cx + 1, cy + 1, color);
@@ -167,7 +167,7 @@ public final class UITheme {
         drawCornerSpans(g, cx, cy, fillCornerSpans(r, left, top), color);
     }
 
-    public static void drawRoundedBorder(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+    public static void drawRoundedBorder(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius, int color) {
         if (radius <= 0) {
             g.fill(x, y, x + w, y + 1, color);
             g.fill(x, y + h - 1, x + w, y + h, color);
@@ -186,7 +186,7 @@ public final class UITheme {
     }
 
     
-    public static void fillRoundedRectEx(GuiGraphics g, int x, int y, int w, int h,
+    public static void fillRoundedRectEx(GuiGraphicsExtractor g, int x, int y, int w, int h,
                                          int rTL, int rTR, int rBR, int rBL, int color) {
         rTL = Math.min(rTL, Math.min(w / 2, h / 2));
         rTR = Math.min(rTR, Math.min(w / 2, h / 2));
@@ -219,7 +219,7 @@ public final class UITheme {
     }
 
     
-    public static void drawRoundedBorderEx(GuiGraphics g, int x, int y, int w, int h,
+    public static void drawRoundedBorderEx(GuiGraphicsExtractor g, int x, int y, int w, int h,
                                            int rTL, int rTR, int rBR, int rBL, int color) {
         rTL = Math.min(rTL, Math.min(w / 2, h / 2));
         rTR = Math.min(rTR, Math.min(w / 2, h / 2));
@@ -246,7 +246,7 @@ public final class UITheme {
 
     
 
-    private static void drawCornerArc(GuiGraphics g, int cx, int cy, int r, int color,
+    private static void drawCornerArc(GuiGraphicsExtractor g, int cx, int cy, int r, int color,
                                       boolean left, boolean top) {
         if (r <= 0) return;
         if (r == 1) {
@@ -256,7 +256,7 @@ public final class UITheme {
         drawCornerSpans(g, cx, cy, borderCornerSpans(r, left, top), color);
     }
 
-    private static void drawCornerSpans(GuiGraphics g, int cx, int cy, int[] spans, int color) {
+    private static void drawCornerSpans(GuiGraphicsExtractor g, int cx, int cy, int[] spans, int color) {
         int i = 0;
         while (i < spans.length) {
             int y = spans[i];
@@ -427,7 +427,7 @@ public final class UITheme {
         return spans;
     }
 
-    public static void fillGradient(GuiGraphics g, int x, int y, int w, int h, int colorTop, int colorBottom) {
+    public static void fillGradient(GuiGraphicsExtractor g, int x, int y, int w, int h, int colorTop, int colorBottom) {
         if (h <= 0 || w <= 0) return;
         int steps = Math.min(h, 16);
         int stepH = Math.max(h / steps, 1);
@@ -440,14 +440,14 @@ public final class UITheme {
         }
     }
 
-    public static void drawCardShadow(GuiGraphics g, int x, int y, int w, int h, int radius) {
+    public static void drawCardShadow(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius) {
         var c = colors();
         int color = withAlpha(c.shadow(), 0x40);
         g.fill(x + 2, y + h, x + w + 2, y + h + 3, color);
         g.fill(x + w, y + 2, x + w + 3, y + h, color);
     }
 
-    public static void drawGlassBackground(GuiGraphics g, int x, int y, int w, int h, int radius) {
+    public static void drawGlassBackground(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius) {
         var c = colors();
         fillRoundedRect(g, x, y, w, h, radius, c.glassBg());
         fillRoundedRect(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, 0x08));
@@ -455,14 +455,14 @@ public final class UITheme {
     }
 
 
-    public static void drawGlassPanel(GuiGraphics g, int x, int y, int w, int h, int radius) {
+    public static void drawGlassPanel(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius) {
         var c = colors();
         drawCardShadow(g, x - 2, y - 2, w + 4, h + 4, radius + 2);
         fillRoundedRectFast(g, x, y, w, h, radius, c.panelBg());
         drawRoundedBorderFast(g, x, y, w, h, radius, c.widgetBorder());
     }
 
-    public static void drawGradientButton(GuiGraphics g, int x, int y, int w, int h, int radius,
+    public static void drawGradientButton(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius,
                                           int colorTop, int colorBottom, float hoverProgress) {
         fillGradient(g, x, y, w, h, colorTop, colorBottom);
         drawRoundedBorder(g, x, y, w, h, radius, withAlpha(0xFFFFFF, 0x20));
@@ -472,7 +472,7 @@ public final class UITheme {
         }
     }
 
-    public static void renderTooltipBackground(GuiGraphics g, int x, int y, int w, int h) {
+    public static void renderTooltipBackground(GuiGraphicsExtractor g, int x, int y, int w, int h) {
         var c = colors();
         for (int i = 5; i >= 1; i--) {
             int alpha = Math.max(2, 14 - i * 2);
@@ -486,7 +486,7 @@ public final class UITheme {
         fillRoundedRect(g, x, y, w, 3, 3, withAlpha(0xFFFFFF, 0x28));
     }
 
-    public static void drawHLine(GuiGraphics g, int x, int y, int width, int color) {
+    public static void drawHLine(GuiGraphicsExtractor g, int x, int y, int width, int color) {
         g.fill(x, y, x + width, y + 1, color);
     }
 

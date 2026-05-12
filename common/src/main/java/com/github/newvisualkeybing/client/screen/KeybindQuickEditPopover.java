@@ -9,7 +9,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -76,7 +76,7 @@ final class KeybindQuickEditPopover {
         this.listenMapping = null;
     }
 
-    void render(GuiGraphics g, Font font, int screenW, int screenH, int mouseX, int mouseY) {
+    void render(GuiGraphicsExtractor g, Font font, int screenW, int screenH, int mouseX, int mouseY) {
         if (!open) return;
         ensureTextCache();
         var c = UITheme.colors();
@@ -97,7 +97,7 @@ final class KeybindQuickEditPopover {
 
         String keyLabel = scanner.getVirtualKeyLabel(virtualKey);
         String title = titleLabel + ": " + keyLabel;
-        g.drawString(font, title, cardX + CARD_PAD, cardY + (HEADER_H - font.lineHeight) / 2 + 2,
+        g.text(font, title, cardX + CARD_PAD, cardY + (HEADER_H - font.lineHeight) / 2 + 2,
                 c.textPrimary(), false);
         g.fill(cardX + 8, cardY + HEADER_H - 1, cardX + cardW - 8, cardY + HEADER_H,
                 UITheme.withAlpha(c.divider(), 0xA0));
@@ -132,14 +132,14 @@ final class KeybindQuickEditPopover {
         textCacheReady = true;
     }
 
-    private void renderBrowseMode(GuiGraphics g, Font font, List<KeyMapping> mappings,
+    private void renderBrowseMode(GuiGraphicsExtractor g, Font font, List<KeyMapping> mappings,
                                   int mouseX, int mouseY, UITheme.ColorPalette c) {
         int rowsTop = cardY + HEADER_H + CARD_PAD;
         int rowX = cardX + CARD_PAD;
         int rowW = cardW - CARD_PAD * 2;
 
         if (mappings.isEmpty()) {
-            g.drawString(font, emptyLabel, cardX + (cardW - font.width(emptyLabel)) / 2,
+            g.text(font, emptyLabel, cardX + (cardW - font.width(emptyLabel)) / 2,
                     rowsTop + (ROW_H - font.lineHeight) / 2, c.textMuted(), false);
             return;
         }
@@ -159,7 +159,7 @@ final class KeybindQuickEditPopover {
             String action = Component.translatable(km.getName()).getString();
             int labelMaxW = rebindBtnX - rowX - 12;
             String fitted = KeybindViewerScreen.fitToWidth(font, action, labelMaxW);
-            g.drawString(font, fitted, rowX + 8, rowY + (ROW_H - font.lineHeight) / 2,
+            g.text(font, fitted, rowX + 8, rowY + (ROW_H - font.lineHeight) / 2,
                     c.textPrimary(), false);
 
             boolean rebindHover = KeybindViewerScreen.inside(mouseX, mouseY, rebindBtnX, btnY, BTN_REBIND_W, btnH);
@@ -173,13 +173,13 @@ final class KeybindQuickEditPopover {
         }
     }
 
-    private void renderListenMode(GuiGraphics g, Font font, UITheme.ColorPalette c) {
+    private void renderListenMode(GuiGraphicsExtractor g, Font font, UITheme.ColorPalette c) {
         int contentTop = cardY + HEADER_H + CARD_PAD;
         String action = Component.translatable(listenMapping.getName()).getString();
         String l1 = Component.translatable("screen.newvisualkeybing.viewer.quick_edit.listening", action).getString();
-        g.drawString(font, l1, cardX + (cardW - font.width(l1)) / 2, contentTop + 12,
+        g.text(font, l1, cardX + (cardW - font.width(l1)) / 2, contentTop + 12,
                 c.accentLight(), true);
-        g.drawString(font, waitingHint, cardX + (cardW - font.width(waitingHint)) / 2, contentTop + 36,
+        g.text(font, waitingHint, cardX + (cardW - font.width(waitingHint)) / 2, contentTop + 36,
                 c.textMuted(), false);
     }
 
@@ -296,7 +296,7 @@ final class KeybindQuickEditPopover {
         cachedMappingsVersion = Long.MIN_VALUE;
     }
 
-    private static void renderXButton(GuiGraphics g, int x, int y, int size,
+    private static void renderXButton(GuiGraphicsExtractor g, int x, int y, int size,
                                       boolean hovered, int idleColor, int hoverColor) {
         var c = UITheme.colors();
         if (hovered) {

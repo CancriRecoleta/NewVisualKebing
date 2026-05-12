@@ -5,7 +5,7 @@ import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.platform.services.IPlatformHelper.ConflictContext;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
 import java.util.Collections;
@@ -59,7 +59,7 @@ final class KeybindTooltipRenderer {
         cacheReady = true;
     }
 
-    void render(GuiGraphics g, Font font, int screenW, int screenH, int virtualKey, int mouseX, int mouseY) {
+    void render(GuiGraphicsExtractor g, Font font, int screenW, int screenH, int virtualKey, int mouseX, int mouseY) {
         TooltipLayout layout = layout(font, screenW, virtualKey);
         var c = UITheme.colors();
         List<KeyBindingScanner.KeyBindingInfo> bindings = layout.bindings();
@@ -83,22 +83,22 @@ final class KeybindTooltipRenderer {
 
         int chipX = tx + totalW - padX - chipW;
         renderStatusChip(g, font, chipX, curY, status, false);
-        g.drawString(font, layout.keyNameFit(), curX, curY + 1, c.textPrimary(), true);
+        g.text(font, layout.keyNameFit(), curX, curY + 1, c.textPrimary(), true);
         curY += titleH + 4;
 
         g.fill(curX, curY, curX + innerW, curY + 1, UITheme.withAlpha(c.divider(), 0x90));
         curY += 4;
-        g.drawString(font, layout.statusLineFit(), curX, curY, c.textSecondary(), true);
+        g.text(font, layout.statusLineFit(), curX, curY, c.textSecondary(), true);
         curY += font.lineHeight + 5;
 
         if (layout.isWheel()) {
-            g.drawString(font, wheelHintText, curX, curY, c.textMuted(), true);
+            g.text(font, wheelHintText, curX, curY, c.textMuted(), true);
             curY += font.lineHeight + 4;
         } else if (bindings.isEmpty()) {
-            g.drawString(font, unboundText, curX, curY, c.textMuted(), true);
+            g.text(font, unboundText, curX, curY, c.textMuted(), true);
             curY += font.lineHeight + 4;
         } else {
-            g.drawString(font, layout.summaryFit(), curX, curY, c.textSecondary(), true);
+            g.text(font, layout.summaryFit(), curX, curY, c.textSecondary(), true);
             curY += font.lineHeight + 5;
             for (BindingRowLayout row : layout.rows()) {
                 KeyBindingScanner.KeyBindingInfo info = row.info();
@@ -108,32 +108,32 @@ final class KeybindTooltipRenderer {
                 g.fill(curX, curY + 2, curX + 2, curY + rowH - 2, sideColor);
 
                 int textY = curY + 2;
-                g.drawString(font, row.actionFit(), curX + 6, textY,
+                g.text(font, row.actionFit(), curX + 6, textY,
                         info.self() ? c.accent() : c.textPrimary(), true);
                 int rightX = curX + innerW - row.modW();
-                g.drawString(font, row.modText(), rightX, textY, c.textSecondary(), true);
+                g.text(font, row.modText(), rightX, textY, c.textSecondary(), true);
                 if (!row.ctxTag().isEmpty()) {
                     int tagX = rightX - row.ctxTagW() - 6;
-                    g.drawString(font, row.ctxTag(), tagX, textY, c.accentAlt(), true);
+                    g.text(font, row.ctxTag(), tagX, textY, c.accentAlt(), true);
                 }
-                g.drawString(font, row.metaFit(),
+                g.text(font, row.metaFit(),
                         curX + 6, curY + font.lineHeight + 4, c.textMuted(), true);
-                g.drawString(font, row.keyMetaFit(),
+                g.text(font, row.keyMetaFit(),
                         curX + 6, curY + font.lineHeight * 2 + 6, UITheme.withAlpha(c.textMuted(), 0xD0), true);
                 curY += rowH;
             }
             if (layout.moreText() != null) {
-                g.drawString(font, layout.moreText(), curX, curY, c.textMuted(), true);
+                g.text(font, layout.moreText(), curX, curY, c.textMuted(), true);
                 curY += font.lineHeight + 2;
             }
         }
 
         if (status == KeyBindingScanner.KeyStatus.CONFLICT) {
-            g.drawString(font, layout.conflictFit(), curX, curY, c.dangerColor(), true);
+            g.text(font, layout.conflictFit(), curX, curY, c.dangerColor(), true);
             curY += font.lineHeight + 4;
         }
 
-        g.drawString(font, layout.clickFit(), curX, curY, c.textMuted(), true);
+        g.text(font, layout.clickFit(), curX, curY, c.textMuted(), true);
     }
 
     private TooltipLayout layout(Font font, int screenW, int virtualKey) {
@@ -248,7 +248,7 @@ final class KeybindTooltipRenderer {
         return cachedLayout;
     }
 
-    private int renderStatusChip(GuiGraphics g, Font font, int x, int y,
+    private int renderStatusChip(GuiGraphicsExtractor g, Font font, int x, int y,
                                  KeyBindingScanner.KeyStatus status, boolean measureOnly) {
         var c = UITheme.colors();
         int dot = statusAccentColor(status);
@@ -267,7 +267,7 @@ final class KeybindTooltipRenderer {
         UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, 6, UITheme.withAlpha(chipFill, 0xE0));
         UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, 6, UITheme.withAlpha(dot, 0xD0));
         UITheme.fillRoundedRectFast(g, x + 4, y + (chipH - 4) / 2, 4, 4, 2, dot);
-        g.drawString(font, label, x + 10, y + (chipH - font.lineHeight) / 2 + 1, textColor, true);
+        g.text(font, label, x + 10, y + (chipH - font.lineHeight) / 2 + 1, textColor, true);
         return chipW;
     }
 

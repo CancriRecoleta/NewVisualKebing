@@ -4,7 +4,7 @@ import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
@@ -59,7 +59,7 @@ final class KeybindMouseRenderer {
     
 
 
-    Integer render(GuiGraphics g, Font font, int x, int y, int w, int h,
+    Integer render(GuiGraphicsExtractor g, Font font, int x, int y, int w, int h,
                    Integer selectedVirtualKey, IntPredicate isVisibleKey,
                    IntPredicate isHiddenKey, IntPredicate isSearchMatch,
                    int mouseX, int mouseY, float animTick, long nowMs) {
@@ -186,7 +186,7 @@ final class KeybindMouseRenderer {
                 int textColor = matched ? KeybindViewerScreen.labelColorForStatus(status)
                         : UITheme.withAlpha(c.textMuted(), 0x80);
                 String label = key.label();
-                g.drawString(font, label,
+                g.text(font, label,
                         b.x + (b.w - labelWidths[i]) / 2,
                         b.y + (b.h - font.lineHeight) / 2,
                         textColor, false);
@@ -213,7 +213,7 @@ final class KeybindMouseRenderer {
         }
     }
 
-    private static void renderMouseButtonSurface(GuiGraphics g, Rect b, int radius,
+    private static void renderMouseButtonSurface(GuiGraphicsExtractor g, Rect b, int radius,
                                                  KeyBindingScanner.KeyStatus status, boolean active,
                                                  boolean wheel, boolean hidden) {
         var c = UITheme.colors();
@@ -232,7 +232,7 @@ final class KeybindMouseRenderer {
         }
     }
 
-    private static void renderBindingBadge(GuiGraphics g, Font font, Rect b, int count,
+    private static void renderBindingBadge(GuiGraphicsExtractor g, Font font, Rect b, int count,
                                            KeyBindingScanner.KeyStatus status) {
         if (count <= 1 || b.w < 16 || b.h < 14) return;
         var c = UITheme.colors();
@@ -245,7 +245,7 @@ final class KeybindMouseRenderer {
                 : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
                 : c.accent();
         UITheme.fillRoundedRectFast(g, bx, by, bw, bh, bh / 2, chipColor);
-        g.drawString(font, text, bx + 3, by + 1, 0xFFFFFFFF, false);
+        g.text(font, text, bx + 3, by + 1, 0xFFFFFFFF, false);
     }
 
     

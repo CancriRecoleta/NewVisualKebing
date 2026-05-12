@@ -9,7 +9,7 @@ import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -286,11 +286,11 @@ public class KeybindViewerScreen extends Screen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
         long nowMs = System.currentTimeMillis();
         if (filtersDirty) refreshFilters();
         animTick += partialTick;
@@ -318,7 +318,7 @@ public class KeybindViewerScreen extends Screen {
         renderDetailPanel(g, selectedVirtualKey != null ? selectedVirtualKey : hoveredVirtualKey, mouseX, mouseY);
         renderStatusBar(g);
 
-        super.render(g, mouseX, mouseY, partialTick);
+        super.extractRenderState(g, mouseX, mouseY, partialTick);
 
         if (hoveredVirtualKey != null
                 && (selectedVirtualKey == null || hoveredVirtualKey.intValue() != selectedVirtualKey.intValue())) {
@@ -345,16 +345,16 @@ public class KeybindViewerScreen extends Screen {
         quickEdit.render(g, font, width, height, mouseX, mouseY);
     }
 
-    private void renderHeaderBar(GuiGraphics g) {
+    private void renderHeaderBar(GuiGraphicsExtractor g) {
         var c = UITheme.colors();
         g.fill(0, 0, width, HEADER_H, c.headerBg());
         g.fill(0, HEADER_H - 1, width, HEADER_H, c.divider());
         g.fill(0, HEADER_H, width, HEADER_H + 1, UITheme.withAlpha(c.accent(), 0x70));
 
-        g.drawString(font, title, 12, (HEADER_H - font.lineHeight) / 2, c.textPrimary(), true);
+        g.text(font, title, 12, (HEADER_H - font.lineHeight) / 2, c.textPrimary(), true);
     }
 
-    private void renderToolbar(GuiGraphics g, int mouseX, int mouseY) {
+    private void renderToolbar(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         var c = UITheme.colors();
         int y = HEADER_H;
         g.fill(0, y, width, y + TOOLBAR_H, UITheme.lerpColor(c.headerBg(), c.panelBg(), 0.30f));
@@ -365,7 +365,7 @@ public class KeybindViewerScreen extends Screen {
         renderToolbarLegend(g, mouseX, mouseY);
     }
 
-    private void renderToolbarTabs(GuiGraphics g, int mouseX, int mouseY) {
+    private void renderToolbarTabs(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         var c = UITheme.colors();
         int x = toolbarTabsX;
         int y = HEADER_H + 4;
@@ -382,13 +382,13 @@ public class KeybindViewerScreen extends Screen {
             UITheme.fillRoundedRectFast(g, x, y, w, h, h / 2, fill);
             UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 2,
                     active ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xB0));
-            g.drawString(font, tabLabels[i], x + 7, y + (h - font.lineHeight) / 2,
+            g.text(font, tabLabels[i], x + 7, y + (h - font.lineHeight) / 2,
                     active ? 0xFFFFFFFF : c.textSecondary(), false);
             x += w + 4;
         }
     }
 
-    private void renderToolbarSearchFrame(GuiGraphics g) {
+    private void renderToolbarSearchFrame(GuiGraphicsExtractor g) {
         var c = UITheme.colors();
         int sx = toolbarSearchX - 3;
         int sy = HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2 - 3;
@@ -398,7 +398,7 @@ public class KeybindViewerScreen extends Screen {
         UITheme.drawRoundedBorderFast(g, sx, sy, sw, sh, 6, focusColor);
     }
 
-    private void renderToolbarLegend(GuiGraphics g, int mouseX, int mouseY) {
+    private void renderToolbarLegend(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         var c = UITheme.colors();
         boolean compact = width < COMPACT_WIDTH_THRESHOLD;
         int x = toolbarLegendX;
@@ -411,14 +411,14 @@ public class KeybindViewerScreen extends Screen {
             x += 8;
             if (!compact) {
                 x += 4;
-                g.drawString(font, legendLabels[i], x, y + 2, c.textSecondary(), false);
+                g.text(font, legendLabels[i], x, y + 2, c.textSecondary(), false);
                 x += legendLabelWidths[i];
             }
             if (i < legendLabels.length - 1) x += 10;
         }
     }
 
-    private void renderStatusBar(GuiGraphics g) {
+    private void renderStatusBar(GuiGraphicsExtractor g) {
         var c = UITheme.colors();
         int y = height - STATUS_H;
         g.fill(0, y, width, height, c.headerBg());
@@ -459,14 +459,14 @@ public class KeybindViewerScreen extends Screen {
                 stats.conflict(), leftLimit);
 
         if (middleX > x + 8 && middleX + middleW < hintX - 8) {
-            g.drawString(font, middle, middleX, textY, c.textMuted(), false);
+            g.text(font, middle, middleX, textY, c.textMuted(), false);
         }
         if (hintX > Math.max(x, middleX + middleW) + 8) {
-            g.drawString(font, hintLabel, hintX, textY, c.textMuted(), false);
+            g.text(font, hintLabel, hintX, textY, c.textMuted(), false);
         }
     }
 
-    private int renderStatChip(GuiGraphics g, int x, int y, int dotColor, String label, int count, int maxRight) {
+    private int renderStatChip(GuiGraphicsExtractor g, int x, int y, int dotColor, String label, int count, int maxRight) {
         var c = UITheme.colors();
         String text = count + " " + label;
         int chipW = font.width(text) + 18;
@@ -476,20 +476,20 @@ public class KeybindViewerScreen extends Screen {
         UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, chipH / 2, fill);
         UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dotColor, 0x90));
         UITheme.fillRoundedRectFast(g, x + 5, y + (chipH - 5) / 2, 5, 5, 2, dotColor);
-        g.drawString(font, text, x + 13, y + (chipH - font.lineHeight) / 2 + 1, c.textSecondary(), false);
+        g.text(font, text, x + 13, y + (chipH - font.lineHeight) / 2 + 1, c.textSecondary(), false);
         return x + chipW;
     }
 
-static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int x, int y, int w, int h, String title) {
+static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font, int x, int y, int w, int h, String title) {
         var c = UITheme.colors();
         UITheme.drawGlassPanel(g, x, y, w, h, PANEL_RADIUS);
-        g.drawString(font, title, x + PANEL_PAD, y + PANEL_TITLE_Y, c.textPrimary(), false);
+        g.text(font, title, x + PANEL_PAD, y + PANEL_TITLE_Y, c.textPrimary(), false);
         int divY = y + PANEL_TITLE_Y + font.lineHeight + 4;
         g.fill(x + PANEL_PAD, divY, x + w - PANEL_PAD, divY + 1, UITheme.withAlpha(c.divider(), 0xA0));
         return y + PANEL_CONTENT_TOP;
     }
 
-    private void renderModPanel(GuiGraphics g, int mouseX, int mouseY) {
+    private void renderModPanel(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         var c = UITheme.colors();
         int x = BODY_PAD;
         int y = contentTop;
@@ -505,7 +505,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         String display = modSearchQuery.isBlank()
                 ? modSearchPlaceholder
                 : modSearchQuery;
-        g.drawString(font, display, fieldX + 6, searchY + 5,
+        g.text(font, display, fieldX + 6, searchY + 5,
                 modSearchQuery.isBlank() ? c.textMuted() : c.textPrimary(), false);
 
         int listY = searchY + 26;
@@ -532,9 +532,9 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
                         UITheme.withAlpha(c.divider(), 0x30));
             }
             int textY = rowY + (rowH - 1 - font.lineHeight) / 2;
-            g.drawString(font, mod.name(), fieldX + 6, textY,
+            g.text(font, mod.name(), fieldX + 6, textY,
                     selected ? 0xFFFFFFFF : c.textSecondary(), false);
-            g.drawString(font, mod.count(), fieldX + fieldW - mod.countW() - 6, textY,
+            g.text(font, mod.count(), fieldX + fieldW - mod.countW() - 6, textY,
                     mod.conflict() ? c.danger() : c.textMuted(), false);
             rowY += rowH;
         }
@@ -559,7 +559,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
                 selectedModId == null ? c.widgetBorder() : c.danger(), clearHover);
     }
 
-    private void renderKeyboard(GuiGraphics g, int mouseX, int mouseY, long nowMs) {
+    private void renderKeyboard(GuiGraphicsExtractor g, int mouseX, int mouseY, long nowMs) {
         Integer hover = keyboardRenderer.render(g, font, currentStyle,
                 keyboardX, keyboardY, keyScale,
                 selectedVirtualKey, this::isVisibleKey, this::isHiddenBySelectedMod,
@@ -568,7 +568,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         if (hover != null) hoveredVirtualKey = hover;
     }
 
-    private void renderKeyboardInfoBands(GuiGraphics g, int mouseX, int mouseY) {
+    private void renderKeyboardInfoBands(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         int kbW = KeyboardLayoutData.totalWidthPx(currentStyle, keyScale);
         if (keyboardInfoTopH > 0) renderKeyboardTopBand(g, keyboardX, keyboardInfoTopY, kbW, keyboardInfoTopH);
         if (keyboardInfoBottomH > 0) {
@@ -577,39 +577,39 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         }
     }
 
-    private void renderKeyboardTopBand(GuiGraphics g, int x, int y, int w, int h) {
+    private void renderKeyboardTopBand(GuiGraphicsExtractor g, int x, int y, int w, int h) {
         var c = UITheme.colors();
         UITheme.fillRoundedRectFast(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xC4));
         UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x8E));
         int textY = y + (h - font.lineHeight) / 2;
         if (selectedModId == null) {
             String text = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.no_mod").getString();
-            g.drawString(font, fitToWidth(font, text, w - 18), x + 9, textY, c.textMuted(), false);
+            g.text(font, fitToWidth(font, text, w - 18), x + 9, textY, c.textMuted(), false);
             return;
         }
         String modName = scanner.getAllRegisteredMods().getOrDefault(selectedModId, selectedModId);
         KeyBindingScanner.ModStats stats = scanner.getModStats(selectedModId);
         String left = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.mod",
                 modName, stats.inputs(), stats.bindings()).getString();
-        g.drawString(font, fitToWidth(font, left, Math.max(80, w / 2)), x + 9, textY, c.textPrimary(), false);
+        g.text(font, fitToWidth(font, left, Math.max(80, w / 2)), x + 9, textY, c.textPrimary(), false);
         String right = Component.translatable(viewerConfig.hideNonSelectedMod()
                 ? "screen.newvisualkeybing.viewer.keyboard_band.hidden_on"
                 : "screen.newvisualkeybing.viewer.keyboard_band.hidden_off").getString();
         int rightW = font.width(right);
         if (rightW < w / 2 - 8) {
-            g.drawString(font, right, x + w - rightW - 9, textY,
+            g.text(font, right, x + w - rightW - 9, textY,
                     viewerConfig.hideNonSelectedMod() ? c.accentLight() : c.textMuted(), false);
         }
     }
 
-    private void renderKeyboardBottomBand(GuiGraphics g, int x, int y, int w, int h, Integer virtualKey) {
+    private void renderKeyboardBottomBand(GuiGraphicsExtractor g, int x, int y, int w, int h, Integer virtualKey) {
         var c = UITheme.colors();
         UITheme.fillRoundedRectFast(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xB8));
         UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x78));
         int textY = y + (h - font.lineHeight) / 2;
         if (virtualKey == null) {
             String text = Component.translatable("screen.newvisualkeybing.viewer.hover_hint").getString();
-            g.drawString(font, fitToWidth(font, text, w - 18), x + 9, textY, c.textMuted(), false);
+            g.text(font, fitToWidth(font, text, w - 18), x + 9, textY, c.textMuted(), false);
             return;
         }
         List<KeyBindingScanner.KeyBindingInfo> bindings = scanner.getVirtualBindings(virtualKey);
@@ -617,12 +617,12 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         int labelW = Math.min(font.width(keyLabel) + 16, Math.max(46, w / 5));
         UITheme.fillRoundedRectFast(g, x + 7, y + 4, labelW, h - 8, 5,
                 UITheme.lerpColor(c.widgetBg(), statusAccentColor(scanner.getVirtualStatus(virtualKey)), 0.18f));
-        g.drawString(font, fitToWidth(font, keyLabel, labelW - 8), x + 11, textY, c.textPrimary(), false);
+        g.text(font, fitToWidth(font, keyLabel, labelW - 8), x + 11, textY, c.textPrimary(), false);
         int curX = x + labelW + 14;
         int right = x + w - 8;
         if (bindings.isEmpty()) {
             String empty = Component.translatable("screen.newvisualkeybing.viewer.unbound").getString();
-            g.drawString(font, fitToWidth(font, empty, right - curX), curX, textY, c.textMuted(), false);
+            g.text(font, fitToWidth(font, empty, right - curX), curX, textY, c.textMuted(), false);
             return;
         }
         int max = Math.min(3, bindings.size());
@@ -631,12 +631,12 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             int chunkW = Math.min(Math.max(78, w / 4), right - curX);
             UITheme.fillRoundedRectFast(g, curX, y + 4, chunkW, h - 8, 5, UITheme.withAlpha(c.widgetBg(), 0x90));
             String text = info.modName() + " / " + info.actionName();
-            g.drawString(font, fitToWidth(font, text, chunkW - 10), curX + 5, textY, c.textSecondary(), false);
+            g.text(font, fitToWidth(font, text, chunkW - 10), curX + 5, textY, c.textSecondary(), false);
             curX += chunkW + 5;
         }
         if (bindings.size() > max && curX < right - 16) {
             String more = "+" + (bindings.size() - max);
-            g.drawString(font, more, curX, textY, c.textMuted(), false);
+            g.text(font, more, curX, textY, c.textMuted(), false);
         }
     }
 
@@ -652,7 +652,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         };
     }
 
-    private void renderMousePanel(GuiGraphics g, int mouseX, int mouseY, long nowMs) {
+    private void renderMousePanel(GuiGraphicsExtractor g, int mouseX, int mouseY, long nowMs) {
         Integer hover = mouseRenderer.render(g, font, mousePanelX, mousePanelY, mousePanelW, mousePanelH,
                 selectedVirtualKey, this::isVisibleKey, this::isHiddenBySelectedMod,
                 this::isSearchMatch,
@@ -661,7 +661,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     }
 
 
-    private void renderDetailPanel(GuiGraphics g, Integer virtualKey, int mouseX, int mouseY) {
+    private void renderDetailPanel(GuiGraphicsExtractor g, Integer virtualKey, int mouseX, int mouseY) {
         detailPanel.render(g, font, detailPanelX, detailPanelY, detailPanelW, detailPanelH,
                 virtualKey, mouseX, mouseY);
     }
@@ -670,7 +670,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         return TextFitCache.fitByChars(font, text, maxW);
     }
 
-    static void renderActionButton(GuiGraphics g, net.minecraft.client.gui.Font font,
+    static void renderActionButton(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
                                    int x, int y, int w, int h, String label, int accent, boolean hovered) {
         var c = UITheme.colors();
         String fitted = fitToWidth(font, label, w - 10);
@@ -678,18 +678,18 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         UITheme.fillRoundedRectFast(g, x, y, w, h, h / 3, fill);
         UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 3, UITheme.withAlpha(accent, 0xC0));
         UITheme.fillRoundedRectFast(g, x + 1, y + 1, w - 2, 1, h / 3, UITheme.withAlpha(0xFFFFFF, hovered ? 0x18 : 0x10));
-        g.drawString(font, fitted,
+        g.text(font, fitted,
                 x + (w - font.width(fitted)) / 2,
                 y + (h - font.lineHeight) / 2,
                 c.textPrimary(), false);
     }
 
-    private void renderHoverTooltip(GuiGraphics g, int virtualKey, int mouseX, int mouseY) {
+    private void renderHoverTooltip(GuiGraphicsExtractor g, int virtualKey, int mouseX, int mouseY) {
         tooltipRenderer.render(g, font, width, height, virtualKey, mouseX, mouseY);
     }
 
 
-    private void renderNotice(GuiGraphics g, long nowMs) {
+    private void renderNotice(GuiGraphicsExtractor g, long nowMs) {
         if (noticeMsg == null) return;
         long elapsed = nowMs - noticeTime;
         if (elapsed > 2500) { noticeMsg = null; return; }
@@ -713,7 +713,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, boxH, 8, bgColor);
         UITheme.drawRoundedBorderFast(g, boxX, boxY, boxW, boxH, 8, accent);
         UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, 2, 2, accent);
-        g.drawString(font, noticeMsg, boxX + padX, boxY + padY, textColor, false);
+        g.text(font, noticeMsg, boxX + padX, boxY + padY, textColor, false);
     }
 
     private void showNotice(String msg) {

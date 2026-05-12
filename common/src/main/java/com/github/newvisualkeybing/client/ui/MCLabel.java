@@ -2,7 +2,7 @@ package com.github.newvisualkeybing.client.ui;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +37,7 @@ public class MCLabel {
     public MCLabel addLine(String line) { if (line != null) wrapText(line); return this; }
     public MCLabel clear() { lines.clear(); return this; }
 
-    public void render(GuiGraphics graphics) {
+    public void render(GuiGraphicsExtractor graphics) {
         if (lines.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
         Font font = mc.font;
@@ -52,9 +52,9 @@ public class MCLabel {
         for (String line : lines) {
             if (shadow) {
                 int shadowColor = UITheme.withAlpha(darkenForShadow(color), 0xAA);
-                graphics.drawString(font, line, drawX + 1, drawY + 1, shadowColor, false);
+                graphics.text(font, line, drawX + 1, drawY + 1, shadowColor, false);
             }
-            graphics.drawString(font, line, drawX, drawY, color, false);
+            graphics.text(font, line, drawX, drawY, color, false);
             drawY += lineHeight;
         }
         if (needsScale) graphics.pose().popMatrix();
