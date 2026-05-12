@@ -43,8 +43,8 @@ public class MCLabel {
         Font font = mc.font;
         boolean needsScale = scale != 1.0f;
         if (needsScale) {
-            graphics.pose().pushPose();
-            graphics.pose().scale(scale, scale, 1.0f);
+            graphics.pose().pushMatrix();
+            graphics.pose().scale(scale, scale);
         }
         int drawX = needsScale ? (int) (x / scale) : x;
         int drawY = needsScale ? (int) (y / scale) : y;
@@ -57,7 +57,7 @@ public class MCLabel {
             graphics.drawString(font, line, drawX, drawY, color, false);
             drawY += lineHeight;
         }
-        if (needsScale) graphics.pose().popPose();
+        if (needsScale) graphics.pose().popMatrix();
     }
 
     public int getHeight() { return (int) (lines.size() * 11 * scale); }
@@ -89,4 +89,3 @@ public class MCLabel {
         return (0xFF << 24) | (r << 16) | (g << 8) | b;
     }
 }
-

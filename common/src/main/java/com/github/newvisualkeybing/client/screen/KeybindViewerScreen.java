@@ -326,10 +326,10 @@ public class KeybindViewerScreen extends Screen {
                 float progress = Math.min(1f, (elapsed - TOOLTIP_DELAY_MS) / (float) TOOLTIP_FADE_MS);
                 progress = UITheme.easeOutCubic(progress);
                 float dy = (1f - progress) * 8f;
-                g.pose().pushPose();
-                g.pose().translate(0f, dy, 0f);
+                g.pose().pushMatrix();
+                g.pose().translate(0f, dy);
                 tooltipRenderer.render(g, font, width, height, hoveredVirtualKey, mouseX, mouseY);
-                g.pose().popPose();
+                g.pose().popMatrix();
             }
         } else {
             tooltipHoverKey = null;
