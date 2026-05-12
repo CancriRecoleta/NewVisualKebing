@@ -163,10 +163,13 @@ public class KeybindEditScreen extends Screen {
     private int listW() { return width - listX() - 8; }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics);
         var colors = UITheme.colors();
-        graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE4));
+        graphics.fill(0, 0, width, height, colors.panelBg() | 0xFF000000);
 
         renderHeader(graphics);
         profilePanel.render(graphics, font, 8, listTop(), listHeight(), mouseX, mouseY);
@@ -442,13 +445,13 @@ public class KeybindEditScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (waitingMapping != null) {
             
             showNotice(Component.translatable("screen.newvisualkeybing.viewer.wheel_unsupported").getString());
             return true;
         }
-        scrollOffset = Mth.clamp(scrollOffset - (int) (delta * ENTRY_H * 2), 0, Math.max(0, totalListH - listHeight()));
+        scrollOffset = Mth.clamp(scrollOffset - (int) (scrollY * ENTRY_H * 2), 0, Math.max(0, totalListH - listHeight()));
         return true;
     }
 

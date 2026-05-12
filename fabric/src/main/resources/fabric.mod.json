@@ -1,6 +1,6 @@
 {
     "schemaVersion": 1,
-    "id": "newvisualkeybing",
+    "id": "${mod_id}",
     "version": "${version}",
     "name": "${mod_name}",
     "description": "${description}",
@@ -27,10 +27,9 @@
         "newvisualkeybing.fabric.mixins.json"
     ],
     "depends": {
-        "fabricloader": ">=0.14",
-        "fabric": "*",
+        "fabricloader": ">=${fabric_loader_version}",
         "minecraft": "${minecraft_version}",
-        "java": ">=17"
+        "java": ">=${java_version}"
     },
     "suggests": {
         "another-mod": "*"

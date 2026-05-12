@@ -273,12 +273,15 @@ public class KeybindViewerScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
-        searchBox.tick();
         if (scanner.refreshIfNeeded()) {
             TextFitCache.clear();
             markFiltersDirty();
         }
         if (filtersDirty) refreshFilters();
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
@@ -1151,17 +1154,17 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (quickEdit.isOpen()) return quickEdit.mouseScrolled(mouseX, mouseY, delta);
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (quickEdit.isOpen()) return quickEdit.mouseScrolled(mouseX, mouseY, scrollY);
         if (selectedVirtualKey != null
                 && mouseX >= detailPanelX && mouseX <= detailPanelX + detailPanelW
                 && mouseY >= detailPanelY && mouseY <= detailPanelY + detailPanelH) {
-            detailPanel.scroll((int) Math.signum(delta));
+            detailPanel.scroll((int) Math.signum(scrollY));
             return true;
         }
         if (mouseX >= mousePanelX && mouseX <= mousePanelX + mousePanelW
                 && mouseY >= mousePanelY && mouseY <= mousePanelY + mousePanelH) {
-            selectedVirtualKey = delta > 0 ? KeyboardLayoutData.WHEEL_UP_VIRTUAL : KeyboardLayoutData.WHEEL_DOWN_VIRTUAL;
+            selectedVirtualKey = scrollY > 0 ? KeyboardLayoutData.WHEEL_UP_VIRTUAL : KeyboardLayoutData.WHEEL_DOWN_VIRTUAL;
             return true;
         }
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
@@ -1173,12 +1176,12 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
                 int searchY = contentTop + PANEL_CONTENT_TOP + 4;
                 int listY = searchY + 26;
                 int visibleRows = Math.max(1, (comboToggleY - ACTION_BTN_GAP - listY) / 18);
-                modScrollOffset = Mth.clamp(modScrollOffset - (int) Math.signum(delta), 0,
+                modScrollOffset = Mth.clamp(modScrollOffset - (int) Math.signum(scrollY), 0,
                         Math.max(0, filteredModEntries().size() - visibleRows));
                 return true;
             }
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     static boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {
