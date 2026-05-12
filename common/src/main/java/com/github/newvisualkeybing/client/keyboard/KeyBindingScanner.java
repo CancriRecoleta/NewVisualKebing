@@ -115,7 +115,7 @@ public class KeyBindingScanner {
 
         for (KeyMapping mapping : minecraft.options.keyMappings) {
             String actionKey = mapping.getName();
-            String categoryKey = mapping.getCategory();
+            String categoryKey = categoryKey(mapping);
             String modId = resolveModId(actionKey, categoryKey);
             String modName = resolveModName(modId, categoryKey);
             registeredMods.putIfAbsent(modId, modName);
@@ -132,7 +132,7 @@ public class KeyBindingScanner {
                     actionKey,
                     Component.translatable(actionKey).getString(),
                     categoryKey,
-                    Component.translatable(categoryKey).getString(),
+                    mapping.getCategory().label().getString(),
                     modId,
                     modName,
                     Constants.MOD_ID.equals(modId),
@@ -503,6 +503,10 @@ public class KeyBindingScanner {
         return modifier.displayName() + " + " + keyName;
     }
 
+    private static String categoryKey(KeyMapping mapping) {
+        return mapping.getCategory().id().toString();
+    }
+
     private static boolean isCombination(KeyBindingInfo info) {
         return info.modifier() != null && info.modifier().isCombination();
     }
@@ -518,8 +522,16 @@ public class KeyBindingScanner {
             }
         }
         
-        if (category != null && category.startsWith("key.categories.")) {
+        if (category != null && category.indexOf(':') > 0) {
+            String namespace = category.substring(0, category.indexOf(':'));
+            if (!"minecraft".equals(namespace) && Services.PLATFORM.isModLoaded(namespace)) return namespace;
+        }
+
+        if (category != null && (category.startsWith("key.categories.") || category.startsWith("key.category."))) {
             String suffix = category.substring("key.categories.".length());
+            if (category.startsWith("key.category.")) {
+                suffix = category.substring("key.category.".length());
+            }
             String suffixLower = suffix.toLowerCase(Locale.ROOT);
             if (!VANILLA_CATEGORIES.contains(suffixLower)) {
                 if (Services.PLATFORM.isModLoaded(suffix))      return suffix;

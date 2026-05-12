@@ -5,6 +5,9 @@ import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -105,7 +108,9 @@ final class KeybindProfilePanel {
                 colors.dangerColor(), inside(mouseX, mouseY, x + 8, buttonTop + (BUTTON_H + 5) * 4, WIDTH - 16, BUTTON_H));
     }
 
-    boolean mouseClicked(double mouseX, double mouseY, int x, int y, int h) {
+    boolean mouseClicked(MouseButtonEvent event, int x, int y, int h) {
+        double mouseX = event.x();
+        double mouseY = event.y();
         if (!inside(mouseX, mouseY, x, y, WIDTH, h)) return false;
 
         releaseExternalFocus.run();
@@ -115,7 +120,7 @@ final class KeybindProfilePanel {
         int nameY = contentY + 4;
         boolean inNameBg = inside(mouseX, mouseY, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4);
         if (nameBox != null && inNameBg) {
-            nameBox.mouseClicked(mouseX, mouseY, 0);
+            nameBox.mouseClicked(event, false);
             nameBox.setFocused(true);
             if (profileStore.selectedProfile() != null) renaming = true;
             return true;
@@ -214,11 +219,12 @@ final class KeybindProfilePanel {
         return true;
     }
 
-    boolean charTyped(char codePoint, int modifiers) {
-        return nameBox != null && nameBox.isFocused() && nameBox.charTyped(codePoint, modifiers);
+    boolean charTyped(CharacterEvent event) {
+        return nameBox != null && nameBox.isFocused() && nameBox.charTyped(event);
     }
 
-    boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    boolean keyPressed(KeyEvent event) {
+        int keyCode = event.key();
         if (nameBox == null || !nameBox.isFocused()) return false;
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             renaming = false;
@@ -238,7 +244,7 @@ final class KeybindProfilePanel {
             }
             return true;
         }
-        return nameBox.keyPressed(keyCode, scanCode, modifiers);
+        return nameBox.keyPressed(event);
     }
 
     private void beginRename() {

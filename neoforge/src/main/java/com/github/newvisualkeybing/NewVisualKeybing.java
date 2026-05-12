@@ -11,7 +11,7 @@ public class NewVisualKeybing {
 
     public NewVisualKeybing(IEventBus eventBus) {
 
-        if (FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
             NewVisualKeybingNeoForgeClient.register(eventBus);
         }
         CommonClass.init();

@@ -4,6 +4,7 @@ import com.github.newvisualkeybing.Constants;
 import com.github.newvisualkeybing.client.screen.KeybindViewerScreen;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.event.TickEvent;
@@ -14,10 +15,12 @@ import org.lwjgl.glfw.GLFW;
 @Mod.EventBusSubscriber(modid = Constants.MOD_ID, value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class NewVisualKeybingForgeClient {
 
+    private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(
+            ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, Constants.MOD_ID));
     private static final KeyMapping OPEN_VIEWER_KEY = new KeyMapping(
             "key.newvisualkeybing.open_viewer",
             GLFW.GLFW_KEY_K,
-            "key.categories.newvisualkeybing"
+            CATEGORY
     );
 
     private NewVisualKeybingForgeClient() {
@@ -35,11 +38,7 @@ public final class NewVisualKeybingForgeClient {
         }
 
         @SubscribeEvent
-        public static void onClientTick(TickEvent.ClientTickEvent event) {
-            if (event.phase != TickEvent.Phase.END) {
-                return;
-            }
-
+        public static void onClientTick(TickEvent.ClientTickEvent.Post event) {
             Minecraft minecraft = Minecraft.getInstance();
             while (OPEN_VIEWER_KEY.consumeClick()) {
                 minecraft.setScreen(new KeybindViewerScreen(minecraft.screen));

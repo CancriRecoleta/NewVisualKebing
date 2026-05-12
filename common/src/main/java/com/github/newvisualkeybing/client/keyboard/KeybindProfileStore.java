@@ -267,7 +267,7 @@ public final class KeybindProfileStore {
     public List<KeyMapping> sortedMappings(KeyMapping[] mappings) {
         List<KeyMapping> list = new ArrayList<>(List.of(mappings));
         list.sort(Comparator
-                .comparing(KeyMapping::getCategory)
+                .comparing((KeyMapping mapping) -> mapping.getCategory().id().toString())
                 .thenComparing((KeyMapping mapping) -> -priorityOf(mapping))
                 .thenComparing(mapping -> Component.translatable(mapping.getName()).getString(), String.CASE_INSENSITIVE_ORDER));
         return list;
@@ -284,8 +284,8 @@ public final class KeybindProfileStore {
             Binding binding = new Binding();
             binding.name = mapping.getName();
             binding.action = Component.translatable(mapping.getName()).getString();
-            binding.category = mapping.getCategory();
-            binding.categoryName = Component.translatable(mapping.getCategory()).getString();
+            binding.category = mapping.getCategory().id().toString();
+            binding.categoryName = mapping.getCategory().label().getString();
             binding.key = ((KeyMappingAccessor) (Object) mapping).newvisualkeybing$getKey().getName();
             binding.defaultKey = mapping.getDefaultKey().getName();
             binding.priority = priorityOf(mapping);

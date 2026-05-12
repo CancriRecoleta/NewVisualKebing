@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 public class MCButton extends AbstractWidget {
@@ -113,7 +114,7 @@ public class MCButton extends AbstractWidget {
     }
 
     @Override
-    public void onClick(double mouseX, double mouseY) {
+    public void onClick(MouseButtonEvent event, boolean doubleClick) {
         if (this.active) {
             pressAnimation = 1.0f;
             onPress.onPress(this);
@@ -125,4 +126,3 @@ public class MCButton extends AbstractWidget {
         this.defaultButtonNarrationText(output);
     }
 }
-

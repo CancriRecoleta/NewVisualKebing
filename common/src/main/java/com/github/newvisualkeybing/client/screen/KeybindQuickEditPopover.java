@@ -10,6 +10,8 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -181,7 +183,10 @@ final class KeybindQuickEditPopover {
                 c.textMuted(), false);
     }
 
-    boolean mouseClicked(double mx, double my, int button) {
+    boolean mouseClicked(MouseButtonEvent event) {
+        double mx = event.x();
+        double my = event.y();
+        int button = event.button();
         if (!open) return false;
 
         if (listenMapping != null) {
@@ -216,14 +221,15 @@ final class KeybindQuickEditPopover {
         return true;
     }
 
-    boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    boolean keyPressed(KeyEvent event) {
+        int keyCode = event.key();
         if (!open) return false;
         if (listenMapping != null) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
                 listenMapping = null;
                 return true;
             }
-            applyKey(InputConstants.getKey(keyCode, scanCode));
+            applyKey(InputConstants.getKey(event));
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {

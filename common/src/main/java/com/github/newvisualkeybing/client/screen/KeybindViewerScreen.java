@@ -7,9 +7,14 @@ import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.UITheme;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
@@ -174,7 +179,7 @@ public class KeybindViewerScreen extends Screen {
 
         layoutButton = MCButton.create(xLayout, btnY, btnLayoutW, btnH,
                 layoutLabel(currentStyle), button -> {
-            if (Screen.hasShiftDown()) {
+            if (hasShiftDown()) {
                 viewerConfig.setDefaultLayoutStyle(currentStyle);
                 showNotice(Component.translatable("screen.newvisualkeybing.viewer.layout.default_set",
                         layoutLabel(currentStyle).getString()).getString());
@@ -984,9 +989,12 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (quickEdit.isOpen()) return quickEdit.mouseClicked(mouseX, mouseY, button);
-        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
+        if (quickEdit.isOpen()) return quickEdit.mouseClicked(event);
+        if (super.mouseClicked(event, doubleClick)) return true;
         if (button != 0) return false;
 
         FilterTab[] tabs = FilterTab.values();
@@ -1010,7 +1018,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             int px = BODY_PAD;
             int py = contentTop;
             int ph = contentBottom - contentTop;
-            if (profilePanel.mouseClicked(mouseX, mouseY, px, py, ph)) return true;
+            if (profilePanel.mouseClicked(event, px, py, ph)) return true;
         }
 
         boolean wheelSelected = selectedVirtualKey != null && KeyboardLayoutData.isWheel(selectedVirtualKey);
@@ -1129,20 +1137,21 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     }
 
     @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.charTyped(codePoint, modifiers)) return true;
-        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused() && codePoint >= 32) {
-            modSearchQuery += codePoint;
+    public boolean charTyped(CharacterEvent event) {
+        if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.charTyped(event)) return true;
+        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused() && event.codepoint() >= 32) {
+            modSearchQuery += event.codepointAsString();
             modScrollOffset = 0;
             return true;
         }
-        return super.charTyped(codePoint, modifiers);
+        return super.charTyped(event);
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (quickEdit.isOpen()) return quickEdit.keyPressed(keyCode, scanCode, modifiers);
-        if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.keyPressed(keyCode, scanCode, modifiers)) return true;
+    public boolean keyPressed(KeyEvent event) {
+        int keyCode = event.key();
+        if (quickEdit.isOpen()) return quickEdit.keyPressed(event);
+        if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.keyPressed(event)) return true;
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused()) {
             if (keyCode == 259 && !modSearchQuery.isEmpty()) {
                 modSearchQuery = modSearchQuery.substring(0, modSearchQuery.length() - 1);
@@ -1150,7 +1159,14 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             }
             if (keyCode == 256) modSearchQuery = "";
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
+    }
+
+    private static boolean hasShiftDown() {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft == null || minecraft.getWindow() == null) return false;
+        return InputConstants.isKeyDown(minecraft.getWindow(), InputConstants.KEY_LSHIFT)
+                || InputConstants.isKeyDown(minecraft.getWindow(), InputConstants.KEY_RSHIFT);
     }
 
     @Override

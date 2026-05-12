@@ -15,6 +15,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
@@ -119,7 +122,7 @@ public class KeybindEditScreen extends Screen {
         entries.clear();
         Map<String, List<KeyMapping>> grouped = new LinkedHashMap<>();
         for (KeyMapping km : profileStore.sortedMappings(Minecraft.getInstance().options.keyMappings)) {
-            String cat = Component.translatable(km.getCategory()).getString();
+            String cat = km.getCategory().label().getString();
             grouped.computeIfAbsent(cat, k -> new ArrayList<>()).add(km);
         }
 
@@ -365,15 +368,18 @@ public class KeybindEditScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (waitingMapping != null) {
             if (button >= GLFW.GLFW_MOUSE_BUTTON_1 && button <= GLFW.GLFW_MOUSE_BUTTON_LAST) {
                 applyKey(waitingMapping, InputConstants.Type.MOUSE.getOrCreate(button));
             }
             return true;
         }
-        if (super.mouseClicked(mouseX, mouseY, button)) return true;
-        if (profilePanel.mouseClicked(mouseX, mouseY, 8, listTop(), listHeight())) return true;
+        if (super.mouseClicked(event, doubleClick)) return true;
+        if (profilePanel.mouseClicked(event, 8, listTop(), listHeight())) return true;
 
         int x = listX(), w = listW();
         int listTop = listTop();
@@ -424,24 +430,25 @@ public class KeybindEditScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
+        int keyCode = event.key();
         if (waitingMapping != null) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
                 applyKey(waitingMapping, InputConstants.UNKNOWN);
                 return true;
             }
-            applyKey(waitingMapping, InputConstants.getKey(keyCode, scanCode));
+            applyKey(waitingMapping, InputConstants.getKey(event));
             return true;
         }
-        if (profilePanel.keyPressed(keyCode, scanCode, modifiers)) return true;
+        if (profilePanel.keyPressed(event)) return true;
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) { onClose(); return true; }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        if (profilePanel.charTyped(codePoint, modifiers)) return true;
-        return super.charTyped(codePoint, modifiers);
+    public boolean charTyped(CharacterEvent event) {
+        if (profilePanel.charTyped(event)) return true;
+        return super.charTyped(event);
     }
 
     @Override
@@ -490,7 +497,7 @@ public class KeybindEditScreen extends Screen {
         if (KeyboardLayoutData.isMouse(focusVirtualKey)) {
             return InputConstants.Type.MOUSE.getOrCreate(KeyboardLayoutData.virtualToMouseBtn(focusVirtualKey));
         }
-        return InputConstants.getKey(focusVirtualKey, 0);
+        return InputConstants.Type.KEYSYM.getOrCreate(focusVirtualKey);
     }
 
     private String targetKeyName() {
