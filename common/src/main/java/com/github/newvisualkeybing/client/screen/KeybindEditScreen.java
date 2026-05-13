@@ -525,9 +525,9 @@ public class KeybindEditScreen extends Screen {
         for (KeyMapping other : all) {
             if (other == km) continue;
             if (other.isUnbound()) continue;
-            if (KeybindViewerConfig.global().comboKeysNonConflicting()
-                    && Services.PLATFORM.getKeyModifier(km) != Services.PLATFORM.getKeyModifier(other)) {
-                continue;
+            if (KeybindViewerConfig.global().comboKeysNonConflicting()) {
+                if (isComboBaseKey(km) || isComboBaseKey(other)) continue;
+                if (Services.PLATFORM.getKeyModifier(km) != Services.PLATFORM.getKeyModifier(other)) continue;
             }
             if (other.same(km)) return true;
         }
@@ -537,7 +537,12 @@ public class KeybindEditScreen extends Screen {
     private static boolean isCombination(KeyMapping km) {
         return !km.isUnbound()
                 && KeybindViewerConfig.global().comboKeysNonConflicting()
-                && Services.PLATFORM.getKeyModifier(km).isCombination();
+                && (isComboBaseKey(km) || Services.PLATFORM.getKeyModifier(km).isCombination());
+    }
+
+    private static boolean isComboBaseKey(KeyMapping km) {
+        InputConstants.Key key = ((KeyMappingAccessor) (Object) km).newvisualkeybing$getKey();
+        return key.getType() != InputConstants.Type.MOUSE && KeyboardLayoutData.isComboBaseKey(key.getValue());
     }
 
     

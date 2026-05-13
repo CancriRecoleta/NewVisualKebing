@@ -45,6 +45,7 @@ public class KeyBindingScanner {
             ConflictContext conflictContext,
             InputModifier modifier,
             InputModifier defaultModifier,
+            boolean comboBaseKey,
             String baseKeyName,
             String currentKeyName,
             String defaultKeyName
@@ -139,6 +140,7 @@ public class KeyBindingScanner {
                     ctx,
                     modifier,
                     defaultModifier,
+                    isComboBaseKey(key),
                     baseKeyName,
                     displayKeyName(modifier, baseKeyName),
                     displayKeyName(defaultModifier, defaultBaseKeyName)
@@ -474,6 +476,7 @@ public class KeyBindingScanner {
 
         for (int i = 0; i < infos.size(); i++) {
             for (int j = i + 1; j < infos.size(); j++) {
+                if (comboAware && (infos.get(i).comboBaseKey() || infos.get(j).comboBaseKey())) continue;
                 if (comboAware && infos.get(i).modifier() != infos.get(j).modifier()) continue;
                 ConflictContext ci = infos.get(i).conflictContext();
                 ConflictContext cj = infos.get(j).conflictContext();
@@ -508,7 +511,11 @@ public class KeyBindingScanner {
     }
 
     private static boolean isCombination(KeyBindingInfo info) {
-        return info.modifier() != null && info.modifier().isCombination();
+        return info.comboBaseKey() || info.modifier() != null && info.modifier().isCombination();
+    }
+
+    private static boolean isComboBaseKey(InputConstants.Key key) {
+        return key.getType() != InputConstants.Type.MOUSE && KeyboardLayoutData.isComboBaseKey(key.getValue());
     }
 
 
