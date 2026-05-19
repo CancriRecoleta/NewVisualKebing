@@ -2,6 +2,7 @@ package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
+import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.platform.services.IPlatformHelper.ConflictContext;
@@ -161,6 +162,8 @@ final class KeybindDetailPanel {
             lineY = renderInfoChips(g, font, innerX, lineY, innerW, bindings);
         }
 
+        lineY = renderComboSection(g, font, innerX, lineY, innerW, virtualKey);
+
         g.fill(innerX, lineY, innerX + innerW, lineY + 1, UITheme.withAlpha(c.divider(), 0x80));
         lineY += 4;
 
@@ -203,6 +206,30 @@ final class KeybindDetailPanel {
             statusLabels.put(status, Component.translatable(statusTranslation(status)).getString());
         }
         textCacheReady = true;
+    }
+
+    private static int renderComboSection(GuiGraphics g, Font font, int x, int y, int w, int virtualKey) {
+        List<KeybindComboStore.ComboBinding> combos =
+                KeybindComboStore.global().combosForVirtualKey(virtualKey);
+        if (combos.isEmpty()) return y;
+        int yellow = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
+        var c = UITheme.colors();
+        for (KeybindComboStore.ComboBinding combo : combos) {
+            String action = KeybindComboStore.describeMapping(combo.mappingName);
+            String combination = combo.comboLabel();
+            String row = action + " · " + combination;
+            int chipH = font.lineHeight + 4;
+            UITheme.fillRoundedRectFast(g, x, y, w, chipH, 4,
+                    UITheme.withAlpha(c.widgetBg(), 0xA0));
+            UITheme.drawRoundedBorderFast(g, x, y, w, chipH, 4,
+                    UITheme.withAlpha(yellow, 0xB0));
+            g.fill(x, y, x + 2, y + chipH, yellow);
+            String fit = KeybindViewerScreen.fitToWidth(font, row, w - 12);
+            g.drawString(font, fit, x + 7, y + (chipH - font.lineHeight) / 2 + 1,
+                    yellow, false);
+            y += chipH + 3;
+        }
+        return y;
     }
 
     private static void renderInfoBox(GuiGraphics g, Font font, int x, int y, int w, String text, int textColor) {
