@@ -196,9 +196,9 @@ public final class KeyboardLayoutData {
         keys.add(kd(GLFW.GLFW_KEY_F10, "F10", null, 11.00f, 0.00f, 1.00f, 1.0f));
         keys.add(kd(GLFW.GLFW_KEY_F11, "F11", null, 12.00f, 0.00f, 1.00f, 1.0f));
         keys.add(kd(GLFW.GLFW_KEY_F12, "F12", null, 13.00f, 0.00f, 1.00f, 1.0f));
-        keys.add(kd(GLFW.GLFW_KEY_PRINT_SCREEN, "Prt", null, 14.25f, 0.00f, 1.00f, 1.0f));
-        keys.add(kd(GLFW.GLFW_KEY_SCROLL_LOCK, "Scr", null, 15.25f, 0.00f, 1.00f, 1.0f));
-        keys.add(kd(GLFW.GLFW_KEY_PAUSE, "Pau", null, 16.25f, 0.00f, 1.00f, 1.0f));
+        keys.add(kd(GLFW.GLFW_KEY_PRINT_SCREEN, "Prt", null, 15.25f, 0.00f, 1.00f, 1.0f));
+        keys.add(kd(GLFW.GLFW_KEY_SCROLL_LOCK, "Scr", null, 16.25f, 0.00f, 1.00f, 1.0f));
+        keys.add(kd(GLFW.GLFW_KEY_PAUSE, "Pau", null, 17.25f, 0.00f, 1.00f, 1.0f));
 
         keys.add(kd(GLFW.GLFW_KEY_GRAVE_ACCENT, "`", "~", 0.00f, 1.10f, 1.00f, 1.0f));
         keys.add(kd(GLFW.GLFW_KEY_1, "1", "!", 1.00f, 1.10f, 1.00f, 1.0f));
@@ -346,7 +346,7 @@ public final class KeyboardLayoutData {
         keys.add(kd(GLFW.GLFW_KEY_F10,           "F10",  null, 11.00f, 0.00f, 1.00f, 1.0f));
         keys.add(kd(GLFW.GLFW_KEY_F11,           "F11",  null, 12.00f, 0.00f, 1.00f, 1.0f));
         keys.add(kd(GLFW.GLFW_KEY_F12,           "F12",  null, 13.00f, 0.00f, 1.00f, 1.0f));
-        keys.add(kd(GLFW.GLFW_KEY_PRINT_SCREEN,  "Prt",  null, 14.25f, 0.00f, 1.00f, 1.0f));
+        keys.add(kd(GLFW.GLFW_KEY_PRINT_SCREEN,  "Prt",  null, 15.25f, 0.00f, 1.00f, 1.0f));
 
         keys.add(kd(GLFW.GLFW_KEY_GRAVE_ACCENT,  "`",    "~",   0.00f, 1.10f, 1.00f, 1.0f));
         keys.add(kd(GLFW.GLFW_KEY_1,             "1",    "!",   1.00f, 1.10f, 1.00f, 1.0f));
