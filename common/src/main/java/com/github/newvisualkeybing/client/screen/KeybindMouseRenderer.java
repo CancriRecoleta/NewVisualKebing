@@ -1,6 +1,7 @@
 package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
+import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
@@ -191,7 +192,13 @@ final class KeybindMouseRenderer {
                         b.y + (b.h - font.lineHeight) / 2,
                         textColor, false);
             }
-            if (!hidden) renderBindingBadge(g, font, b, bindingCount, status);
+            boolean comboParticipant = !hidden && KeybindComboStore.global().isParticipant(key.glfwKey());
+            if (comboParticipant && b.w >= 10 && b.h >= 8) {
+                int comboColor = matched ? KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR
+                        : UITheme.withAlpha(KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0x70);
+                g.fill(b.x + 2, b.y + 1, b.x + b.w - 2, b.y + 3, comboColor);
+            }
+            if (!hidden) renderBindingBadge(g, font, b, bindingCount, status, comboParticipant);
         }
         return hovered;
     }
@@ -233,14 +240,15 @@ final class KeybindMouseRenderer {
     }
 
     private static void renderBindingBadge(GuiGraphics g, Font font, Rect b, int count,
-                                           KeyBindingScanner.KeyStatus status) {
+                                           KeyBindingScanner.KeyStatus status,
+                                           boolean comboTopBar) {
         if (count <= 1 || b.w < 16 || b.h < 14) return;
         var c = UITheme.colors();
         String text = String.valueOf(count);
         int bw = font.width(text) + 6;
         int bh = font.lineHeight;
         int bx = b.x + b.w - bw - 2;
-        int by = b.y + 2;
+        int by = b.y + (comboTopBar ? 5 : 2);
         int chipColor = status == KeyBindingScanner.KeyStatus.CONFLICT ? c.danger()
                 : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
                 : c.accent();

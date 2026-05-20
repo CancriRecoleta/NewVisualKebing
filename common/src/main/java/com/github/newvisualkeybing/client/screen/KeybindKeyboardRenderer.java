@@ -1,12 +1,14 @@
 package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
+import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.List;
+import java.util.Set;
 import java.util.function.IntPredicate;
 
 
@@ -15,6 +17,8 @@ import java.util.function.IntPredicate;
 
 final class KeybindKeyboardRenderer {
 
+    static final int COMBO_HIGHLIGHT_COLOR = 0xFFFFD500;
+
     private final KeyBindingScanner scanner;
     private KeyboardLayoutData.Style cachedStyle;
     private int cachedKeyboardX = Integer.MIN_VALUE;
@@ -22,6 +26,8 @@ final class KeybindKeyboardRenderer {
     private float cachedKeyScale = Float.NaN;
     private KeyDrawState[] drawStates = new KeyDrawState[0];
     private long lastFrameMs;
+    private long cachedComboVersion = Long.MIN_VALUE;
+    private Set<Integer> cachedComboKeys = java.util.Collections.emptySet();
 
     KeybindKeyboardRenderer(KeyBindingScanner scanner) {
         this.scanner = scanner;
@@ -42,6 +48,7 @@ final class KeybindKeyboardRenderer {
         long scannerVersion = scanner.version();
         float dt = lastFrameMs > 0 ? Math.min((nowMs - lastFrameMs) / 1000f, 0.05f) : 0.016f;
         lastFrameMs = nowMs;
+        Set<Integer> comboKeys = comboParticipantKeys();
 
         int pulseAccent = KeybindViewerScreen.pulseAccent(animTick);
         int searchPulseColor = KeybindViewerScreen.searchPulseColor(animTick);
@@ -60,6 +67,7 @@ final class KeybindKeyboardRenderer {
             state.searchMatch = isSearchMatch.test(state.glfwKey);
             state.hover = !state.hidden && KeybindViewerScreen.inside(mouseX, mouseY, state.x, state.y, state.w, state.h);
             state.selected = selectedVirtualKey != null && selectedVirtualKey == state.glfwKey;
+            state.comboParticipant = comboKeys.contains(state.glfwKey);
             if (state.cachedDataVersion != scannerVersion) {
                 state.cachedDataVersion = scannerVersion;
                 state.status = scanner.getStatus(state.glfwKey);
@@ -82,12 +90,34 @@ final class KeybindKeyboardRenderer {
             if (state.matched && !state.hidden) {
                 renderKeyLabels(g, font, state, KeybindViewerScreen.labelColorForStatus(state.status), true);
                 renderInlineBindings(g, font, state);
-                renderBindingBadge(g, font, state.x, state.y, state.w, state.h, state.bindingCount, state.status);
+                renderBindingBadge(g, font, state.x, state.y, state.w, state.h,
+                        state.bindingCount, state.status, state.comboParticipant);
             } else if (!state.hidden) {
                 renderKeyLabels(g, font, state, UITheme.withAlpha(c.textMuted(), 0x80), false);
             }
         }
         return hovered;
+    }
+
+    private Set<Integer> comboParticipantKeys() {
+        KeybindComboStore store = KeybindComboStore.global();
+        long v = store.version();
+        if (v != cachedComboVersion) {
+            cachedComboVersion = v;
+            cachedComboKeys = store.participantVirtualKeys();
+        }
+        return cachedComboKeys;
+    }
+
+    private static void renderComboTopBar(GuiGraphics g, KeyDrawState state, boolean dim) {
+        int x = state.x;
+        int y = state.y;
+        int w = state.w;
+        int faceH = state.h - 1;
+        if (w < 10 || faceH < 8) return;
+        int barH = 2;
+        int color = dim ? UITheme.withAlpha(COMBO_HIGHLIGHT_COLOR, 0x70) : COMBO_HIGHLIGHT_COLOR;
+        g.fill(x + 2, y + 1, x + w - 2, y + 1 + barH, color);
     }
 
     private void refreshDrawStates(Font font, KeyboardLayoutData.Style style,
@@ -178,6 +208,8 @@ final class KeybindKeyboardRenderer {
             g.fill(x + radius, y + 1, x + w - radius, y + half, UITheme.withAlpha(0xFFFFFF, hlAlpha));
             g.fill(x + radius, y + faceH - 1, x + w - radius, y + faceH, FACE_BOTTOM_TINT);
 
+            if (state.comboParticipant) renderComboTopBar(g, state, false);
+
             if (state.status != KeyBindingScanner.KeyStatus.FREE) {
                 int alpha = active ? 0xD0 : 0x86;
                 int edgeH = state.status == KeyBindingScanner.KeyStatus.CONFLICT ? 3 : 2;
@@ -197,6 +229,7 @@ final class KeybindKeyboardRenderer {
             int ghostFill = state.hidden ? hiddenGhost : state.cachedGhostFill;
             int faceH = h - 1;
             UITheme.fillRoundedRectFast(g, x, y, w, faceH, radius, ghostFill);
+            if (state.comboParticipant && !state.hidden) renderComboTopBar(g, state, true);
             if (!state.hidden && state.status != KeyBindingScanner.KeyStatus.FREE && w >= 10 && faceH >= 8) {
                 int edgeH = state.status == KeyBindingScanner.KeyStatus.CONFLICT ? 3 : 2;
                 g.fill(x + 2, y + faceH - edgeH - 1, x + w - 2, y + faceH - 1,
@@ -303,15 +336,17 @@ final class KeybindKeyboardRenderer {
 
     
     private static void renderBindingBadge(GuiGraphics g, Font font, int x, int y, int w, int h,
-                                           int count, KeyBindingScanner.KeyStatus status) {
+                                           int count, KeyBindingScanner.KeyStatus status,
+                                           boolean comboTopBar) {
         if (count <= 0 || h < 14) return;
         var c = UITheme.colors();
+        int topPad = comboTopBar ? 5 : 2;
         if (count >= 2) {
             String s = String.valueOf(count);
             int bw = font.width(s) + 6;
             int bh = font.lineHeight;
             int bx = x + w - bw - 2;
-            int by = y + 2;
+            int by = y + topPad;
             int chipColor = status == KeyBindingScanner.KeyStatus.CONFLICT ? c.danger()
                     : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
                     : c.accent();
@@ -321,7 +356,7 @@ final class KeybindKeyboardRenderer {
             int dotColor = status == KeyBindingScanner.KeyStatus.SELF ? c.accent()
                     : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
                     : c.success();
-            UITheme.fillRoundedRectFast(g, x + w - 5, y + 3, 3, 3, 1, dotColor);
+            UITheme.fillRoundedRectFast(g, x + w - 5, y + topPad + 1, 3, 3, 1, dotColor);
         }
     }
 
@@ -345,6 +380,7 @@ final class KeybindKeyboardRenderer {
         boolean hover;
         boolean selected;
         boolean searchMatch;
+        boolean comboParticipant;
         float hoverProgress;
         float selectProgress;
         long cachedDataVersion = Long.MIN_VALUE;
