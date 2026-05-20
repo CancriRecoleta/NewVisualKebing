@@ -59,6 +59,7 @@ public class KeybindViewerScreen extends Screen {
     private EditBox searchBox;
     private MCButton closeButton;
     private MCButton manageButton;
+    private MCButton comboButton;
     private MCButton modToggleButton;
     private MCButton profileToggleButton;
     private MCButton layoutButton;
@@ -155,13 +156,15 @@ public class KeybindViewerScreen extends Screen {
         int btnModsW = compact ? 38 : 56;
         int btnProfilesW = compact ? 52 : 68;
         int btnManageW = compact ? 48 : 64;
+        int btnComboW = compact ? 56 : 72;
         int btnLayoutW = compact ? 56 : 78;
 
         int xClose = width - 8 - btnCloseW;
         int xMods = xClose - btnGap - btnModsW;
         int xProfiles = xMods - btnGap - btnProfilesW;
         int xManage = xProfiles - btnGap - btnManageW;
-        int xLayout = xManage - btnGap - btnLayoutW;
+        int xCombo = xManage - btnGap - btnComboW;
+        int xLayout = xCombo - btnGap - btnLayoutW;
 
         computeToolbarGeometry(compact);
 
@@ -189,6 +192,11 @@ public class KeybindViewerScreen extends Screen {
                 Component.translatable("screen.newvisualkeybing.viewer.manage"),
                 button -> minecraft.setScreen(new KeybindEditScreen(this)));
         addRenderableWidget(manageButton);
+
+        comboButton = MCButton.create(xCombo, btnY, btnComboW, btnH,
+                Component.translatable("screen.newvisualkeybing.viewer.combo.open"),
+                button -> minecraft.setScreen(new KeybindComboManageScreen(this)));
+        addRenderableWidget(comboButton);
 
         profileToggleButton = MCButton.create(xProfiles, btnY, btnProfilesW, btnH,
                 Component.translatable("screen.newvisualkeybing.viewer.profiles"), button -> {
@@ -391,6 +399,37 @@ public class KeybindViewerScreen extends Screen {
         int sh = SEARCH_BH + 6;
         int focusColor = searchBox != null && searchBox.isFocused() ? c.accent() : UITheme.withAlpha(c.accent(), 0x40);
         UITheme.drawRoundedBorderFast(g, sx, sy, sw, sh, 6, focusColor);
+
+        if (searchBox != null && !searchBox.getValue().isEmpty()) {
+            int clearSize = 12;
+            int clearXLocal = sx + sw - clearSize - 4;
+            int clearYLocal = sy + (sh - clearSize) / 2;
+            UITheme.fillRoundedRectFast(g, clearXLocal, clearYLocal, clearSize, clearSize, 6,
+                    UITheme.withAlpha(c.widgetBg(), 0xC0));
+            int cx = clearXLocal + clearSize / 2;
+            int cy = clearYLocal + clearSize / 2;
+            g.fill(cx - 3, cy - 1, cx + 4, cy, c.textSecondary());
+            g.fill(cx - 1, cy - 3, cx, cy + 4, c.textSecondary());
+        }
+    }
+
+    private boolean handleSearchClearClick(double mouseX, double mouseY) {
+        if (searchBox == null || searchBox.getValue().isEmpty()) return false;
+        int sx = toolbarSearchX - 3;
+        int sy = HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2 - 3;
+        int sw = toolbarSearchW + 6;
+        int sh = SEARCH_BH + 6;
+        int clearSize = 12;
+        int clearXLocal = sx + sw - clearSize - 4;
+        int clearYLocal = sy + (sh - clearSize) / 2;
+        if (mouseX >= clearXLocal && mouseX < clearXLocal + clearSize
+                && mouseY >= clearYLocal && mouseY < clearYLocal + clearSize) {
+            searchBox.setValue("");
+            searchBox.setFocused(true);
+            this.setFocused(searchBox);
+            return true;
+        }
+        return false;
     }
 
     private void renderToolbarLegend(GuiGraphics g, int mouseX, int mouseY) {
@@ -986,6 +1025,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (quickEdit.isOpen()) return quickEdit.mouseClicked(mouseX, mouseY, button);
+        if (handleSearchClearClick(mouseX, mouseY)) return true;
         if (super.mouseClicked(mouseX, mouseY, button)) return true;
         if (button != 0) return false;
 
@@ -1149,6 +1189,15 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
                 return true;
             }
             if (keyCode == 256) modSearchQuery = "";
+        }
+        if (keyCode == 256 && searchBox != null && searchBox.isFocused()) {
+            if (!searchBox.getValue().isEmpty()) {
+                searchBox.setValue("");
+                return true;
+            }
+            searchBox.setFocused(false);
+            this.setFocused(null);
+            return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
