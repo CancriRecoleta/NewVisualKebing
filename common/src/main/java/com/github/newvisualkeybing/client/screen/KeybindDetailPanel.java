@@ -217,7 +217,7 @@ final class KeybindDetailPanel {
         for (KeybindComboStore.ComboBinding combo : combos) {
             String action = KeybindComboStore.describeMapping(combo.mappingName);
             String combination = combo.comboLabel();
-            String row = action + " · " + combination;
+            String row = action + " \u00b7 " + combination;
             int chipH = font.lineHeight + 4;
             UITheme.fillRoundedRectFast(g, x, y, w, chipH, 4,
                     UITheme.withAlpha(c.widgetBg(), 0xA0));

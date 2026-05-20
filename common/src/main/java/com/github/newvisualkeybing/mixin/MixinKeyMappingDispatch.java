@@ -10,11 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.Map;
 
-/**
- * Suppresses vanilla single-key dispatch when the mapping has a combo binding
- * whose modifier key is not currently held — so K alone won't trigger an
- * action that the user has remapped to Ctrl+K.
- */
+
 @Mixin(KeyMapping.class)
 public class MixinKeyMappingDispatch {
 

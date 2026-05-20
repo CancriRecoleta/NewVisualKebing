@@ -208,7 +208,7 @@ final class KeybindTooltipRenderer {
         String[] comboLines = new String[combos.size()];
         for (int i = 0; i < combos.size(); i++) {
             KeybindComboStore.ComboBinding cb = combos.get(i);
-            String line = "● " + cb.comboLabel() + " — " + KeybindComboStore.describeMapping(cb.mappingName);
+            String line = "\u25cf " + cb.comboLabel() + " \u2014 " + KeybindComboStore.describeMapping(cb.mappingName);
             innerW = Math.min(maxInnerW, Math.max(innerW, font.width(line)));
             comboLines[i] = line;
         }
