@@ -2,6 +2,7 @@ package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
+import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.platform.services.IPlatformHelper.ConflictContext;
 import net.minecraft.client.gui.Font;
@@ -133,15 +134,27 @@ final class KeybindTooltipRenderer {
             curY += font.lineHeight + 4;
         }
 
+        String[] comboLines = layout.comboLines();
+        if (comboLines.length > 0) {
+            int yellow = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
+            for (String line : comboLines) {
+                g.text(font, line, curX, curY, yellow, true);
+                curY += font.lineHeight + 2;
+            }
+            curY += 2;
+        }
+
         g.text(font, layout.clickFit(), curX, curY, c.textMuted(), true);
     }
 
     private TooltipLayout layout(Font font, int screenW, int virtualKey) {
         ensureCache();
         long version = scanner.version();
+        long comboVersion = KeybindComboStore.global().version();
         if (cachedLayout != null
                 && cachedLayout.virtualKey() == virtualKey
                 && cachedLayout.scannerVersion() == version
+                && cachedLayout.comboVersion() == comboVersion
                 && cachedLayout.screenW() == screenW) {
             return cachedLayout;
         }
@@ -180,8 +193,6 @@ final class KeybindTooltipRenderer {
                     + (ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 8);
             rowW = Math.max(rowW, 8 + font.width(info.categoryName() + " | " + contextName(info.conflictContext())));
             rowW = Math.max(rowW, 8 + font.width(info.translationKey() + " | "
-                    + Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key",
-                    info.currentKeyName()).getString() + " | "
                     + Component.translatable("screen.newvisualkeybing.viewer.tooltip.default_key",
                     info.defaultKeyName()).getString()));
             innerW = Math.min(maxInnerW, Math.max(innerW, rowW));
@@ -190,6 +201,15 @@ final class KeybindTooltipRenderer {
             innerW = Math.min(maxInnerW, Math.max(innerW, font.width(conflictWarningText)));
         }
         innerW = Math.min(maxInnerW, Math.max(innerW, font.width(clickHintText)));
+
+        List<KeybindComboStore.ComboBinding> combos = KeybindComboStore.global().combosForVirtualKey(virtualKey);
+        String[] comboLines = new String[combos.size()];
+        for (int i = 0; i < combos.size(); i++) {
+            KeybindComboStore.ComboBinding cb = combos.get(i);
+            String line = "鈼?" + cb.comboLabel() + " 鈥?" + KeybindComboStore.describeMapping(cb.mappingName);
+            innerW = Math.min(maxInnerW, Math.max(innerW, font.width(line)));
+            comboLines[i] = line;
+        }
 
         int titleH = Math.max(font.lineHeight, 12);
         int rowH = font.lineHeight * 3 + 7;
@@ -203,6 +223,7 @@ final class KeybindTooltipRenderer {
             if (bindings.size() > maxRows) contentH += font.lineHeight + 2;
         }
         if (status == KeyBindingScanner.KeyStatus.CONFLICT) contentH += font.lineHeight + 4;
+        if (comboLines.length > 0) contentH += comboLines.length * (font.lineHeight + 2) + 2;
         contentH += font.lineHeight + 6;
 
         int totalW = innerW + padX * 2;
@@ -228,8 +249,6 @@ final class KeybindTooltipRenderer {
                 String actionFit = fitToWidth(font, info.actionName(), Math.max(30, innerW - 10 - rightBlockW));
                 String meta = info.categoryName() + " | " + contextName(info.conflictContext());
                 String keyMeta = info.translationKey() + " | "
-                        + Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key",
-                        info.currentKeyName()).getString() + " | "
                         + Component.translatable("screen.newvisualkeybing.viewer.tooltip.default_key",
                         info.defaultKeyName()).getString();
                 rows[i] = new BindingRowLayout(info, ctxTag, ctxTagW, actionFit, modText, modW,
@@ -241,10 +260,14 @@ final class KeybindTooltipRenderer {
             }
         }
 
-        cachedLayout = new TooltipLayout(virtualKey, version, screenW, isWheel, bindings, status,
+        String[] comboLinesFit = new String[comboLines.length];
+        for (int i = 0; i < comboLines.length; i++) {
+            comboLinesFit[i] = fitToWidth(font, comboLines[i], innerW);
+        }
+        cachedLayout = new TooltipLayout(virtualKey, version, comboVersion, screenW, isWheel, bindings, status,
                 keyNameFit, statusLineFit, summaryFit, moreText,
                 fitToWidth(font, conflictWarningText, innerW), fitToWidth(font, clickHintText, innerW),
-                innerW, totalW, totalH, chipW, titleH, rowH, rows);
+                innerW, totalW, totalH, chipW, titleH, rowH, rows, comboLinesFit);
         return cachedLayout;
     }
 
@@ -256,7 +279,7 @@ final class KeybindTooltipRenderer {
             case FREE -> c.textSecondary();
             case SELF -> c.accent();
             case OTHER_SINGLE, BOUND -> c.success();
-            case COMBO -> c.warning();
+            case COMBO -> KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
             case CONFLICT -> c.danger();
         };
         String label = statusLabels.get(status);
@@ -349,7 +372,7 @@ final class KeybindTooltipRenderer {
             case FREE -> c.widgetBorder();
             case SELF -> c.accent();
             case OTHER_SINGLE, BOUND -> c.success();
-            case COMBO -> c.warning();
+            case COMBO -> KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
             case CONFLICT -> c.danger();
         };
     }
@@ -380,14 +403,16 @@ final class KeybindTooltipRenderer {
         return name != null ? name : unknownContextText;
     }
 
-    private record TooltipLayout(int virtualKey, long scannerVersion, int screenW, boolean isWheel,
+    private record TooltipLayout(int virtualKey, long scannerVersion, long comboVersion,
+                                 int screenW, boolean isWheel,
                                  List<KeyBindingScanner.KeyBindingInfo> bindings,
                                  KeyBindingScanner.KeyStatus status,
                                  String keyNameFit, String statusLineFit,
                                  String summaryFit, String moreText,
                                  String conflictFit, String clickFit,
                                  int innerW, int totalW, int totalH, int chipW,
-                                 int titleH, int rowH, BindingRowLayout[] rows) {}
+                                 int titleH, int rowH, BindingRowLayout[] rows,
+                                 String[] comboLines) {}
 
     private record BindingRowLayout(KeyBindingScanner.KeyBindingInfo info, String ctxTag, int ctxTagW,
                                     String actionFit, String modText, int modW,
