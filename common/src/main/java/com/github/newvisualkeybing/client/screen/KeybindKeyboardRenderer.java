@@ -5,7 +5,7 @@ import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
-import com.github.newvisualkeybing.client.ui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.List;
 import java.util.Set;

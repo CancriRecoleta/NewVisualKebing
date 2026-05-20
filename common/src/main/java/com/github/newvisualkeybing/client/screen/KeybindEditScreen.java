@@ -9,10 +9,9 @@ import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.mixin.KeyMappingAccessor;
 import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import com.github.newvisualkeybing.client.ui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -176,9 +175,11 @@ public class KeybindEditScreen extends Screen {
     private int listW() { return width - listX() - 8; }
 
     @Override
-    public void render(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
-        GuiGraphics graphics = new GuiGraphics(poseStack);
-        renderBackground(poseStack);
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         var colors = UITheme.colors();
         graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE4));
 
@@ -186,7 +187,7 @@ public class KeybindEditScreen extends Screen {
         profilePanel.render(graphics, font, 8, listTop(), listHeight(), mouseX, mouseY);
         renderEntries(graphics, mouseX, mouseY);
         renderFooter(graphics);
-        super.render(poseStack, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
 
         if (waitingMapping != null) renderWaitingOverlay(graphics);
         renderNotice(graphics);
@@ -235,7 +236,7 @@ public class KeybindEditScreen extends Screen {
         if (mouseX >= clearXLocal && mouseX < clearXLocal + clearSize
                 && mouseY >= clearYLocal && mouseY < clearYLocal + clearSize) {
             searchBox.setValue("");
-            searchBox.setFocus(true);
+            searchBox.setFocused(true);
             this.setFocused(searchBox);
             return true;
         }
@@ -511,7 +512,7 @@ public class KeybindEditScreen extends Screen {
                     searchBox.setValue("");
                     return true;
                 }
-                searchBox.setFocus(false);
+                searchBox.setFocused(false);
                 this.setFocused(null);
                 return true;
             }
@@ -547,13 +548,13 @@ public class KeybindEditScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (waitingMapping != null) {
 
             showNotice(Component.translatable("screen.newvisualkeybing.viewer.wheel_unsupported").getString());
             return true;
         }
-        scrollOffset = Mth.clamp(scrollOffset - (int) (delta * ENTRY_H * 2), 0, Math.max(0, totalListH - listHeight()));
+        scrollOffset = Mth.clamp(scrollOffset - (int) (scrollY * ENTRY_H * 2), 0, Math.max(0, totalListH - listHeight()));
         return true;
     }
 

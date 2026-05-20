@@ -425,7 +425,7 @@ public class KeybindViewerScreen extends Screen {
         if (mouseX >= clearXLocal && mouseX < clearXLocal + clearSize
                 && mouseY >= clearYLocal && mouseY < clearYLocal + clearSize) {
             searchBox.setValue("");
-            searchBox.setFocus(true);
+            searchBox.setFocused(true);
             this.setFocused(searchBox);
             return true;
         }
@@ -1195,7 +1195,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
                 searchBox.setValue("");
                 return true;
             }
-            searchBox.setFocus(false);
+            searchBox.setFocused(false);
             this.setFocused(null);
             return true;
         }
