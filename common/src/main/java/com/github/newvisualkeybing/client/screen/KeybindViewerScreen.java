@@ -7,9 +7,11 @@ import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.MCButton;
+import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -61,7 +63,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private final KeybindDetailPanel detailPanel = new KeybindDetailPanel(scanner, profileStore);
     private final KeybindQuickEditPopover quickEdit = new KeybindQuickEditPopover(scanner, this::showNotice, this::onPriorityMutation);
 
-    private EditBox searchBox;
+    private MCEditBox searchBox;
     private MCButton closeButton;
     private MCButton manageButton;
     private MCButton comboButton;
@@ -119,7 +121,6 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private int toolbarTabsW;
     private int toolbarSearchX;
     private int toolbarSearchW;
-    private int toolbarLegendX;
     private long cachedModEntriesVersion = -1L;
     private String cachedModEntriesQuery;
     private List<Map.Entry<String, String>> cachedModEntries = List.of();
@@ -158,12 +159,12 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         int btnH = 22;
         int btnGap = 4;
         int btnY = (HEADER_H - btnH) / 2;
-        int btnCloseW = 50;
-        int btnModsW = compact ? 38 : 56;
-        int btnProfilesW = compact ? 52 : 68;
-        int btnManageW = compact ? 48 : 64;
-        int btnComboW = compact ? 56 : 72;
-        int btnLayoutW = compact ? 56 : 78;
+        int btnCloseW = fitButtonWidth(Component.translatable("gui.done"), compact ? 44 : 50, compact ? 56 : 68);
+        int btnModsW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.mods"), compact ? 38 : 56, compact ? 64 : 78);
+        int btnProfilesW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.profiles"), compact ? 52 : 68, compact ? 78 : 94);
+        int btnManageW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.manage"), compact ? 48 : 64, compact ? 74 : 86);
+        int btnComboW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.combo.open"), compact ? 56 : 72, compact ? 82 : 96);
+        int btnLayoutW = fitButtonWidth(layoutLabel(currentStyle), compact ? 56 : 78, compact ? 86 : 104);
 
         int xClose = width - 8 - btnCloseW;
         int xMods = xClose - btnGap - btnModsW;
@@ -175,9 +176,10 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         computeToolbarGeometry(compact);
 
         int searchBoxY = HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2;
-        searchBox = new EditBox(font, toolbarSearchX, searchBoxY, toolbarSearchW, SEARCH_BH,
-                Component.translatable("screen.newvisualkeybing.viewer.search"));
-        searchBox.setSuggestion(Component.translatable("screen.newvisualkeybing.viewer.search").getString());
+        searchBox = new MCEditBox(font, toolbarSearchX, searchBoxY, toolbarSearchW, SEARCH_BH,
+                Component.translatable("screen.newvisualkeybing.viewer.search"))
+                .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.search"))
+                .withClearAffordance(true);
         searchBox.setResponder(value -> markFiltersDirty());
         addRenderableWidget(searchBox);
 
@@ -232,35 +234,30 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         for (int w : tabWidths) tabsW += w;
         tabsW += (tabWidths.length - 1) * 4;
 
-        int legendW = compact
-                ? 4 * 14 + 3 * 4               
-                : measureLegendWidth();
-        int searchW = SEARCH_W_DEFAULT;
         int outerPad = 12;
         int innerGap = 12;
         int totalAvail = width - outerPad * 2;
+        int headerButtonLeft = layoutButton == null ? width - 8 : layoutButton.getX();
+        int titleReservedRight = Math.max(170, Math.min(headerButtonLeft - 12, width / 3));
+        int searchW = Math.min(SEARCH_W_DEFAULT, Math.max(140, width - titleReservedRight - outerPad * 2));
 
-        if (tabsW + searchW + legendW + innerGap * 2 > totalAvail) {
-            searchW = Math.max(140, totalAvail - tabsW - legendW - innerGap * 2);
+        if (tabsW + searchW + innerGap > totalAvail) {
+            searchW = Math.max(140, totalAvail - tabsW - innerGap);
         }
 
         toolbarTabsX = outerPad;
         toolbarTabsW = tabsW;
-        toolbarSearchX = (width - searchW) / 2;
-        toolbarSearchW = searchW;
-        toolbarLegendX = width - outerPad - legendW;
-
         int afterTabs = toolbarTabsX + tabsW + innerGap;
-        if (toolbarSearchX < afterTabs) toolbarSearchX = afterTabs;
+        toolbarSearchX = Math.max(afterTabs, (width - searchW) / 2);
+        toolbarSearchW = searchW;
+        int maxRight = width - outerPad;
+        if (toolbarSearchX + toolbarSearchW > maxRight) {
+            toolbarSearchW = Math.max(120, maxRight - toolbarSearchX);
+        }
     }
 
-    private int measureLegendWidth() {
-        int total = 0;
-        for (int i = 0; i < legendLabels.length; i++) {
-            total += 8 + 4 + legendLabelWidths[i];
-            if (i < legendLabels.length - 1) total += 10;
-        }
-        return total;
+    private int fitButtonWidth(Component text, int minW, int maxW) {
+        return Mth.clamp(font.width(text) + 18, minW, maxW);
     }
 
     private void refreshTextCache() {
@@ -363,7 +360,9 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         g.fill(0, HEADER_H - 1, width, HEADER_H, c.divider());
         g.fill(0, HEADER_H, width, HEADER_H + 1, UITheme.withAlpha(c.accent(), 0x70));
 
-        g.text(font, title, 12, (HEADER_H - font.lineHeight) / 2, c.textPrimary(), true);
+        int titleRight = layoutButton == null ? width - 10 : layoutButton.getX() - 10;
+        String fittedTitle = fitToWidth(font, title.getString(), Math.max(40, titleRight - 12));
+        g.text(font, fittedTitle, 12, (HEADER_H - font.lineHeight) / 2, c.textPrimary(), true);
     }
 
     private void renderToolbar(GuiGraphicsExtractor g, int mouseX, int mouseY) {
@@ -374,7 +373,6 @@ public class KeybindViewerScreen extends FixedScaleScreen {
 
         renderToolbarTabs(g, mouseX, mouseY);
         renderToolbarSearchFrame(g);
-        renderToolbarLegend(g, mouseX, mouseY);
     }
 
     private void renderToolbarTabs(GuiGraphicsExtractor g, int mouseX, int mouseY) {
@@ -401,38 +399,17 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     }
 
     private void renderToolbarSearchFrame(GuiGraphicsExtractor g) {
-        var c = UITheme.colors();
-        int sx = toolbarSearchX - 3;
-        int sy = HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2 - 3;
-        int sw = toolbarSearchW + 6;
-        int sh = SEARCH_BH + 6;
-        int focusColor = searchBox != null && searchBox.isFocused() ? c.accent() : UITheme.withAlpha(c.accent(), 0x40);
-        UITheme.drawRoundedBorderFast(g, sx, sy, sw, sh, 6, focusColor);
-
-        if (searchBox != null && !searchBox.getValue().isEmpty()) {
-            int clearSize = 12;
-            int clearXLocal = sx + sw - clearSize - 4;
-            int clearYLocal = sy + (sh - clearSize) / 2;
-            UITheme.fillRoundedRectFast(g, clearXLocal, clearYLocal, clearSize, clearSize, 6,
-                    UITheme.withAlpha(c.widgetBg(), 0xC0));
-            int cx = clearXLocal + clearSize / 2;
-            int cy = clearYLocal + clearSize / 2;
-            g.fill(cx - 3, cy - 1, cx + 4, cy, c.textSecondary());
-            g.fill(cx - 1, cy - 3, cx, cy + 4, c.textSecondary());
+        if (searchBox != null) {
+            searchBox.setX(toolbarSearchX);
+            searchBox.setY(HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2);
+            searchBox.setWidth(toolbarSearchW);
+            searchBox.setHeight(SEARCH_BH);
         }
     }
 
     private boolean handleSearchClearClick(double mouseX, double mouseY) {
         if (searchBox == null || searchBox.getValue().isEmpty()) return false;
-        int sx = toolbarSearchX - 3;
-        int sy = HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2 - 3;
-        int sw = toolbarSearchW + 6;
-        int sh = SEARCH_BH + 6;
-        int clearSize = 12;
-        int clearXLocal = sx + sw - clearSize - 4;
-        int clearYLocal = sy + (sh - clearSize) / 2;
-        if (mouseX >= clearXLocal && mouseX < clearXLocal + clearSize
-                && mouseY >= clearYLocal && mouseY < clearYLocal + clearSize) {
+        if (searchBox.clearAffordanceClicked(mouseX, mouseY)) {
             searchBox.setValue("");
             searchBox.setFocused(true);
             this.setFocused(searchBox);
@@ -441,35 +418,12 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         return false;
     }
 
-    private void renderToolbarLegend(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        var c = UITheme.colors();
-        boolean compact = width < COMPACT_WIDTH_THRESHOLD;
-        int x = toolbarLegendX;
-        int y = HEADER_H + (TOOLBAR_H - 12) / 2;
-
-        int[] colors = { c.widgetBorder(), c.accent(), c.success(), c.danger() };
-
-        for (int i = 0; i < legendLabels.length; i++) {
-            UITheme.fillRoundedRectFast(g, x, y + 2, 8, 8, 4, colors[i]);
-            UITheme.drawRoundedBorderFast(g, x, y + 2, 8, 8, 4, UITheme.withAlpha(0xFFFFFF, 0x30));
-            x += 8;
-            if (!compact) {
-                x += 4;
-                g.text(font, legendLabels[i], x, y + 2, c.textSecondary(), false);
-                x += legendLabelWidths[i];
-            }
-            if (i < legendLabels.length - 1) x += 10;
-        }
-    }
-
     private void renderStatusBar(GuiGraphicsExtractor g) {
         var c = UITheme.colors();
         int y = height - STATUS_H;
         g.fill(0, y, width, height, c.headerBg());
         g.fill(0, y, width, y + 1, c.divider());
 
-        KeyBindingScanner.ScanStats stats = scanner.getStats();
-        int chipY = y + (STATUS_H - 14) / 2;
         int textY = y + (STATUS_H - font.lineHeight) / 2;
         String scale = Component.translatable("screen.newvisualkeybing.viewer.scale", Math.round(keyScale)).getString();
         String layoutName = layoutLabel(currentStyle).getString();
@@ -479,6 +433,8 @@ public class KeybindViewerScreen extends FixedScaleScreen {
 
         int hintW = font.width(hintLabel);
         int hintX = width - hintW - 10;
+        KeyBindingScanner.ScanStats stats = scanner.getStats();
+        int chipY = y + (STATUS_H - 14) / 2;
         int leftLimit = Math.max(10, Math.min(middleX - 8, hintX - 8));
         int x = 10;
 
@@ -862,7 +818,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         float heightU = currentStyle.heightU();
         float gapW = (widthU - 1.0f) * KeyboardLayoutData.BASE_GAP;
         float gapH = (heightU - 1.0f) * KeyboardLayoutData.BASE_GAP;
-        keyScale = FIXED_KEY_UNIT;
+        keyScale = fitKeyboardScale(keyboardSpaceW, keyboardSpaceH, widthU, heightU, gapW, gapH);
 
         int kbW = KeyboardLayoutData.totalWidthPx(currentStyle, keyScale);
         int kbH = KeyboardLayoutData.totalHeightPx(currentStyle, keyScale);
@@ -872,6 +828,14 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         keyboardInfoTopH = infoH;
         keyboardInfoBottomY = contentBottom - infoH;
         keyboardInfoBottomH = infoH;
+    }
+
+    private float fitKeyboardScale(int keyboardSpaceW, int keyboardSpaceH,
+                                   float widthU, float heightU, float gapW, float gapH) {
+        float widthScale = (keyboardSpaceW - gapW) / widthU;
+        float heightScale = (keyboardSpaceH - gapH) / heightU;
+        float fittedScale = Math.min(FIXED_KEY_UNIT, Math.min(widthScale, heightScale));
+        return Math.max(1.0f, fittedScale);
     }
 
     private void refreshFilters() {

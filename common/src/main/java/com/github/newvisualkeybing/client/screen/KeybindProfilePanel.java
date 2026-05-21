@@ -1,10 +1,10 @@
 package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
+import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -25,7 +25,7 @@ final class KeybindProfilePanel {
     private final Runnable rebuildEntries;
     private final NoticeSink noticeSink;
     private final Runnable releaseExternalFocus;
-    private EditBox nameBox;
+    private MCEditBox nameBox;
     private int lastNameSelection = Integer.MIN_VALUE;
     private boolean renaming;
 
@@ -281,15 +281,15 @@ final class KeybindProfilePanel {
     private void ensureNameBox(Font font, int x, int y) {
         int textY = y + (NAME_BOX_H + 4 - font.lineHeight) / 2 - 2;
         if (nameBox == null) {
-            nameBox = new EditBox(font, x, textY, WIDTH - 20, font.lineHeight + 2,
-                    Component.translatable("screen.newvisualkeybing.viewer.profile.name"));
-            nameBox.setHint(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder"));
-            nameBox.setBordered(false);
+            nameBox = new MCEditBox(font, x, textY, WIDTH - 20, NAME_BOX_H,
+                    Component.translatable("screen.newvisualkeybing.viewer.profile.name"))
+                    .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder"));
             nameBox.setMaxLength(48);
             syncNameBox(true);
         }
         nameBox.setX(x);
         nameBox.setY(textY);
+        nameBox.setHeight(NAME_BOX_H);
     }
 
     private void syncNameBox() {

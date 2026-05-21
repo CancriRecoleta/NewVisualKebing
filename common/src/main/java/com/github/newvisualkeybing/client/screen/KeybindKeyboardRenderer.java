@@ -243,7 +243,7 @@ final class KeybindKeyboardRenderer {
         }
     }
 
-    private static void renderStatusEdge(GuiGraphics g, int x, int y, int w, int faceH,
+    private static void renderStatusEdge(GuiGraphicsExtractor g, int x, int y, int w, int faceH,
                                          int edgeH, int radius, int color) {
         UITheme.fillRoundedRectEx(g, x + 3, y + faceH - edgeH - 1, w - 6, edgeH,
                 Math.max(1, edgeH / 2), Math.max(1, edgeH / 2),

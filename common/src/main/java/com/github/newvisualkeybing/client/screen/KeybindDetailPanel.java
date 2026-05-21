@@ -236,8 +236,8 @@ final class KeybindDetailPanel {
     private static void renderInfoBox(GuiGraphicsExtractor g, Font font, int x, int y, int w, String text, int textColor) {
         var c = UITheme.colors();
         int h = font.lineHeight + 12;
-        UITheme.fillRoundedRectFast(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
+        UITheme.fillSoftRoundedRect(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
+        UITheme.drawSoftRoundedBorder(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
         String fit = KeybindViewerScreen.fitToWidth(font, text, w - 16);
         g.text(font, fit, x + 8, y + (h - font.lineHeight) / 2, textColor, false);
     }
@@ -258,9 +258,9 @@ final class KeybindDetailPanel {
         int chipW = font.width(label) + 16;
         if (measureOnly) return chipW;
         int chipFill = UITheme.lerpColor(c.widgetBg(), dot, 0.18f);
-        UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, chipH / 2, chipFill);
-        UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xC0));
-        UITheme.fillRoundedRectFast(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
+        UITheme.fillSoftRoundedRect(g, x, y, chipW, chipH, chipH / 2, chipFill);
+        UITheme.drawSoftRoundedBorder(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xD0));
+        UITheme.fillSoftRoundedRect(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
         g.text(font, label, x + 11, y + (chipH - font.lineHeight) / 2 + 1, textColor, false);
         return chipW;
     }
@@ -284,9 +284,9 @@ final class KeybindDetailPanel {
 
     private static void renderInfoChip(GuiGraphicsExtractor g, Font font, UITheme.ColorPalette c,
                                        int x, int y, int w, int h, String label) {
-        UITheme.fillRoundedRectFast(g, x, y, w, h, 5,
+        UITheme.fillSoftRoundedRect(g, x, y, w, h, 5,
                 UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.12f));
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, 5,
+        UITheme.drawSoftRoundedBorder(g, x, y, w, h, 5,
                 UITheme.withAlpha(c.widgetBorder(), 0x70));
         g.text(font, KeybindViewerScreen.fitToWidth(font, label, w - 8),
                 x + 5, y + (h - font.lineHeight) / 2 + 1, c.textMuted(), false);
@@ -423,11 +423,11 @@ final class KeybindDetailPanel {
         boolean rowHovered = KeybindViewerScreen.inside(mouseX, mouseY, x, y, w, rowH);
 
         if (info.self()) {
-            UITheme.fillRoundedRectFast(g, x, y, textW, rowH, 4,
+            UITheme.fillSoftRoundedRect(g, x, y, textW, rowH, 5,
                     UITheme.lerpColor(c.widgetBg(), c.accent(), 0.10f));
         }
         int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
-        UITheme.fillRoundedRectFast(g, x, y + 2, 2, rowH - 4, 1, sideColor);
+        UITheme.fillSoftRoundedRect(g, x, y + 2, 2, rowH - 4, 1, sideColor);
 
         int actionColor = info.self() ? c.accent() : c.textPrimary();
         String ctxTag = contextTag(info.conflictContext());
@@ -446,7 +446,7 @@ final class KeybindDetailPanel {
                 int tagX = rightX - font.width(ctxTag) - 6;
                 int tagBgW = font.width(ctxTag) + 4;
                 int tagBgH = font.lineHeight + 1;
-                UITheme.fillRoundedRectFast(g, tagX - 2, line2Y - 1, tagBgW, tagBgH, 3,
+                UITheme.fillSoftRoundedRect(g, tagX - 2, line2Y - 1, tagBgW, tagBgH, 4,
                         UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
                 g.text(font, ctxTag, tagX, line2Y, c.accentAlt(), false);
             }
@@ -466,7 +466,7 @@ final class KeybindDetailPanel {
                 int tagX = rightX - font.width(ctxTag) - 6;
                 int tagBgW = font.width(ctxTag) + 4;
                 int tagBgH = font.lineHeight + 1;
-                UITheme.fillRoundedRectFast(g, tagX - 2, textY - 1, tagBgW, tagBgH, 3,
+                UITheme.fillSoftRoundedRect(g, tagX - 2, textY - 1, tagBgW, tagBgH, 4,
                         UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
                 g.text(font, ctxTag, tagX, textY, c.accentAlt(), false);
             }

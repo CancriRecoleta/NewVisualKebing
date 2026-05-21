@@ -79,7 +79,7 @@ public class MCButton extends AbstractWidget {
         graphics.text(mc.font, getMessage(), textX, textY, cachedTextColor, true);
     }
 
-    private void renderSurface(GuiGraphics graphics, int x, int y, int w, int h, int radius,
+    private void renderSurface(GuiGraphicsExtractor graphics, int x, int y, int w, int h, int radius,
                                float easedHover, float easedPress) {
         UITheme.fillRoundedRectFast(graphics, x, y, w, h, radius, cachedBgBottom);
 
