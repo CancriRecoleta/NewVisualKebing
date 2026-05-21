@@ -164,7 +164,7 @@ final class KeybindDetailPanel {
 
         lineY = renderComboSection(g, font, innerX, lineY, innerW, virtualKey);
 
-        g.fill(innerX, lineY, innerX + innerW, lineY + 1, UITheme.withAlpha(c.divider(), 0x80));
+        UITheme.fillRoundedRectFast(g, innerX, lineY, innerW, 1, 1, UITheme.withAlpha(c.divider(), 0x80));
         lineY += 4;
 
         boolean canEdit = !isWheel;
@@ -223,7 +223,7 @@ final class KeybindDetailPanel {
                     UITheme.withAlpha(c.widgetBg(), 0xA0));
             UITheme.drawRoundedBorderFast(g, x, y, w, chipH, 4,
                     UITheme.withAlpha(yellow, 0xB0));
-            g.fill(x, y, x + 2, y + chipH, yellow);
+            UITheme.fillRoundedRectFast(g, x, y + 2, 2, chipH - 4, 1, yellow);
             String fit = KeybindViewerScreen.fitToWidth(font, row, w - 12);
             g.drawString(font, fit, x + 7, y + (chipH - font.lineHeight) / 2 + 1,
                     yellow, false);
@@ -420,7 +420,7 @@ final class KeybindDetailPanel {
                     UITheme.lerpColor(c.widgetBg(), c.accent(), 0.10f));
         }
         int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
-        g.fill(x, y + 2, x + 2, y + rowH - 2, sideColor);
+        UITheme.fillRoundedRectFast(g, x, y + 2, 2, rowH - 4, 1, sideColor);
 
         int actionColor = info.self() ? c.accent() : c.textPrimary();
         String ctxTag = bindingTag(info);
