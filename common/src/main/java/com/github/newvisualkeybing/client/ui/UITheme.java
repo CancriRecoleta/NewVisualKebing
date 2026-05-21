@@ -122,6 +122,21 @@ public final class UITheme {
         }
     }
 
+    public static void fillSoftRoundedRect(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+        fillRoundedRect(g, x, y, w, h, radius, color);
+    }
+
+    public static void drawSoftRoundedBorder(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
+        drawRoundedBorder(g, x, y, w, h, radius, color);
+    }
+
+    public static void drawSoftGlow(GuiGraphics g, int x, int y, int w, int h, int radius, int color, int maxAlpha) {
+        for (int i = 3; i >= 1; i--) {
+            int alpha = Math.max(1, maxAlpha / (i + 1));
+            fillSoftRoundedRect(g, x - i, y - i, w + i * 2, h + i * 2, radius + i, withAlpha(color, alpha));
+        }
+    }
+
     public static void drawRoundedBorderFast(GuiGraphics g, int x, int y, int w, int h, int radius, int color) {
         if (radius <= 0 || w < radius * 2 || h < radius * 2) {
             g.fill(x, y, x + w, y + 1, color);
@@ -458,8 +473,8 @@ public final class UITheme {
     public static void drawGlassPanel(GuiGraphics g, int x, int y, int w, int h, int radius) {
         var c = colors();
         drawCardShadow(g, x - 2, y - 2, w + 4, h + 4, radius + 2);
-        fillRoundedRectFast(g, x, y, w, h, radius, c.panelBg());
-        drawRoundedBorderFast(g, x, y, w, h, radius, c.widgetBorder());
+        fillSoftRoundedRect(g, x, y, w, h, radius, c.panelBg());
+        drawSoftRoundedBorder(g, x, y, w, h, radius, c.widgetBorder());
     }
 
     public static void drawGradientButton(GuiGraphics g, int x, int y, int w, int h, int radius,
@@ -474,16 +489,17 @@ public final class UITheme {
 
     public static void renderTooltipBackground(GuiGraphics g, int x, int y, int w, int h) {
         var c = colors();
-        for (int i = 5; i >= 1; i--) {
-            int alpha = Math.max(2, 14 - i * 2);
-            fillRoundedRect(g, x - i, y - i + 2, w + i * 2, h + i * 2, 6 + i, withAlpha(c.shadow(), alpha));
+        for (int i = 7; i >= 1; i--) {
+            int alpha = Math.max(2, 18 - i * 2);
+            fillSoftRoundedRect(g, x - i, y - i + 2, w + i * 2, h + i * 2, 9 + i, withAlpha(c.shadow(), alpha));
         }
-        fillRoundedRect(g, x + 1, y + 1, w, h, 6, withAlpha(0x000000, 0x60));
-        fillRoundedRect(g, x, y, w, h, 6, withAlpha(c.headerBg(), 0xC2));
-        fillRoundedRect(g, x + 1, y + 1, w - 2, Math.max(4, h / 4), 6, withAlpha(0xFFFFFF, 0x10));
-        drawRoundedBorder(g, x, y, w, h, 6, withAlpha(c.widgetBorderHover(), 0xB0));
-        drawRoundedBorder(g, x + 1, y + 1, w - 2, h - 2, 5, withAlpha(0xFFFFFF, 0x10));
-        fillRoundedRect(g, x, y, w, 3, 3, withAlpha(0xFFFFFF, 0x28));
+        fillSoftRoundedRect(g, x + 1, y + 2, w, h, 9, withAlpha(0x000000, 0x70));
+        fillSoftRoundedRect(g, x, y, w, h, 9, withAlpha(c.headerBg(), 0xEA));
+        fillRoundedRectEx(g, x + 1, y + 1, w - 2, Math.max(6, h / 5),
+                8, 8, 2, 2, withAlpha(0xFFFFFF, 0x12));
+        drawSoftRoundedBorder(g, x, y, w, h, 9, withAlpha(c.widgetBorderHover(), 0xC8));
+        drawSoftRoundedBorder(g, x + 1, y + 1, w - 2, h - 2, 8, withAlpha(0xFFFFFF, 0x12));
+        fillSoftRoundedRect(g, x + 8, y, w - 16, 2, 1, withAlpha(0xFFFFFF, 0x28));
     }
 
     public static void drawHLine(GuiGraphics g, int x, int y, int width, int color) {
@@ -576,4 +592,3 @@ public final class UITheme {
         public int dimOverlay() { return widgetBorderHover; }
     }
 }
-
