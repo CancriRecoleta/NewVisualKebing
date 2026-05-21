@@ -1,21 +1,24 @@
 package com.github.newvisualkeybing;
 
 import com.github.newvisualkeybing.platform.Services;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.world.item.Items;
 
-public class CommonClass {
+/**
+ * Shared loader-independent initialization entry point.
+ */
+public final class CommonClass {
 
+    private CommonClass() {
+    }
+
+    /**
+     * Runs common mod initialization for every supported loader.
+     */
     public static void init() {
         Constants.LOG.info(
-                "Hello from Common init on {}! we are currently in a {} environment!",
+                "{} initialized on {} in a {} environment",
+                Constants.MOD_NAME,
                 Services.PLATFORM.getPlatformName(),
                 Services.PLATFORM.getEnvironmentName()
         );
-        Constants.LOG.info("The ID for diamonds is {}", BuiltInRegistries.ITEM.getKey(Items.DIAMOND));
-
-        if (Services.PLATFORM.isModLoaded(Constants.MOD_ID)) {
-            Constants.LOG.info("Hello to {}", Constants.MOD_ID);
-        }
     }
 }
