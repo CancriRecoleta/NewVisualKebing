@@ -65,7 +65,9 @@ final class KeybindProfilePanel {
                     : hovered ? UITheme.withAlpha(colors.widgetBg(), 0xB0)
                     : UITheme.withAlpha(colors.widgetBg(), 0x66);
             UITheme.fillRoundedRectFast(graphics, x + 8, rowY, WIDTH - 16, ROW_H - 2, 5, fill);
-            if (active) graphics.fill(x + 10, rowY + 3, x + 12, rowY + ROW_H - 5, colors.accent());
+            if (active) {
+                UITheme.fillRoundedRectFast(graphics, x + 10, rowY + 3, 2, ROW_H - 8, 1, colors.accent());
+            }
             String label = fit(font, profileStore.compactProfileLabel(profile), WIDTH - 30);
             int labelX = x + 8 + (WIDTH - 16 - font.width(label)) / 2;
             graphics.drawString(font, label, labelX, textY(font, rowY, ROW_H - 2),

@@ -59,8 +59,12 @@ public class MCButton extends AbstractWidget {
             x += shrink; y += shrink; w -= shrink * 2; h -= shrink * 2;
         }
 
-        UITheme.fillRoundedRectFast(graphics, x, y, w, h, CORNER_RADIUS, cachedBgBottom);
-        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, CORNER_RADIUS, cachedBorderColor);
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+
+        int radius = Math.min(CORNER_RADIUS, Math.max(2, Math.min(w, h) / 2));
+        renderSurface(graphics, x, y, w, h, radius, easedHover, easedPress);
 
         Minecraft mc = Minecraft.getInstance();
         int textWidth = mc.font.width(getMessage());
@@ -74,9 +78,35 @@ public class MCButton extends AbstractWidget {
         graphics.drawString(mc.font, getMessage(), textX, textY, cachedTextColor, true);
     }
 
+    private void renderSurface(GuiGraphics graphics, int x, int y, int w, int h, int radius,
+                               float easedHover, float easedPress) {
+        UITheme.fillRoundedRectFast(graphics, x, y, w, h, radius, cachedBgBottom);
+
+        int topBandH = Math.min(h, Math.max(3, (int) (h * 0.55f)));
+        UITheme.fillRoundedRectEx(graphics, x, y, w, topBandH,
+                radius, radius, Math.max(1, radius - 2), Math.max(1, radius - 2), cachedBgTop);
+
+        if (w > 4 && h > 4) {
+            int glossAlpha = this.active ? 0x12 + (int) (0x0A * easedHover) : 0x08;
+            int shadeAlpha = this.active ? 0x0A + (int) (0x08 * easedPress) : 0x06;
+            int innerRadius = Math.max(1, radius - 1);
+            UITheme.fillRoundedRectEx(graphics, x + 1, y + 1, w - 2, Math.min(3, topBandH),
+                    innerRadius, innerRadius, 0, 0, UITheme.withAlpha(0xFFFFFF, glossAlpha));
+            UITheme.fillRoundedRectEx(graphics, x + 1, y + h - Math.min(3, h / 3) - 1, w - 2,
+                    Math.min(3, h / 3), 0, 0, innerRadius, innerRadius, UITheme.withAlpha(0x000000, shadeAlpha));
+        }
+
+        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, radius, cachedBorderColor);
+        if (this.active && w > 4 && h > 4) {
+            UITheme.drawRoundedBorderFast(graphics, x + 1, y + 1, w - 2, h - 2, Math.max(1, radius - 1),
+                    UITheme.withAlpha(0xFFFFFF, 0x08));
+        }
+    }
+
     private void updateRenderCache(UITheme.ColorPalette colors, float easedHover) {
         if (!this.active) {
-            cachedBgTop = cachedBgBottom = UITheme.withAlpha(colors.widgetBg(), 0x60);
+            cachedBgTop = UITheme.withAlpha(UITheme.lerpColor(colors.widgetBg(), colors.panelBg(), 0.12f), 0x60);
+            cachedBgBottom = UITheme.withAlpha(colors.widgetBg(), 0x60);
         } else {
             int normalTop = UITheme.brighten(colors.widgetBg(), 0.05f);
             int normalBottom = colors.widgetBg();
@@ -125,4 +155,3 @@ public class MCButton extends AbstractWidget {
         this.defaultButtonNarrationText(output);
     }
 }
-

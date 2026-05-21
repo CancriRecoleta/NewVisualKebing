@@ -4,10 +4,12 @@ import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer;
 import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
+import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.mixin.KeyMappingAccessor;
+import com.github.newvisualkeybing.platform.Services;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -22,6 +24,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 
 
@@ -38,7 +41,7 @@ import java.util.Map;
 
 
 
-public class KeybindEditScreen extends Screen {
+public class KeybindEditScreen extends FixedScaleScreen {
 
     private static final int HEADER_H = 40;
     private static final int FOOTER_H = 24;
@@ -84,6 +87,7 @@ public class KeybindEditScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        applyFixedScaleMetrics();
 
         searchX = KeybindProfilePanel.WIDTH + 22;
         searchW = Mth.clamp(width - searchX - 410, 150, 360);
@@ -176,18 +180,25 @@ public class KeybindEditScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+        applyFixedScaleMetrics();
+        int fixedMouseX = fixedMouseX(mouseX);
+        int fixedMouseY = fixedMouseY(mouseY);
+        pushFixedScale(graphics);
+        try {
         var colors = UITheme.colors();
         graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE4));
 
         renderHeader(graphics);
-        profilePanel.render(graphics, font, 8, listTop(), listHeight(), mouseX, mouseY);
-        renderEntries(graphics, mouseX, mouseY);
+        profilePanel.render(graphics, font, 8, listTop(), listHeight(), fixedMouseX, fixedMouseY);
+        renderEntries(graphics, fixedMouseX, fixedMouseY);
         renderFooter(graphics);
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, fixedMouseX, fixedMouseY, partialTick);
 
         if (waitingMapping != null) renderWaitingOverlay(graphics);
         renderNotice(graphics);
+        } finally {
+            popFixedScale(graphics);
+        }
     }
 
     private void renderHeader(GuiGraphics graphics) {
@@ -250,7 +261,7 @@ public class KeybindEditScreen extends Screen {
         UITheme.fillRoundedRectFast(graphics, x, listTop, w, listH, 8, UITheme.withAlpha(colors.headerBg(), 0xC0));
         UITheme.drawRoundedBorderFast(graphics, x, listTop, w, listH, 8, colors.widgetBorder());
 
-        graphics.enableScissor(x + 1, listTop + 1, x + w - 1, listTop + listH - 1);
+        enableFixedScissor(graphics, x + 1, listTop + 1, x + w - 1, listTop + listH - 1);
         int drawY = listTop + 4 - scrollOffset;
         KeyMapping[] all = Minecraft.getInstance().options.keyMappings;
 
@@ -281,7 +292,7 @@ public class KeybindEditScreen extends Screen {
     private void renderCategory(GuiGraphics graphics, CategoryEntry ce, int x, int y, int w) {
         var colors = UITheme.colors();
         UITheme.fillRoundedRectFast(graphics, x, y, w, CATEGORY_H, 4, UITheme.withAlpha(colors.accent(), 0x22));
-        graphics.fill(x, y, x + 3, y + CATEGORY_H, colors.accent());
+        UITheme.fillRoundedRectFast(graphics, x, y + 2, 3, CATEGORY_H - 4, 1, colors.accent());
         graphics.drawString(font, ce.name, x + 10, y + (CATEGORY_H - font.lineHeight) / 2, colors.accentLight(), false);
     }
 
@@ -292,15 +303,14 @@ public class KeybindEditScreen extends Screen {
         boolean isUnbound = ke.mapping.isUnbound();
         boolean conflict = isConflicting(ke.mapping, all);
         boolean focusedTarget = focusVirtualKey != null && matchesFocus(ke.mapping);
+        boolean comboAware = KeybindViewerConfig.global().comboKeysNonConflicting();
         KeybindComboStore.ComboBinding combo = KeybindComboStore.global().findByMapping(ke.mapping.getName());
-        boolean hasCombo = combo != null
-                && combo.secondKey != null
-                && combo.secondKey.equals(KeybindComboStore.currentKey(ke.mapping).getName());
+        boolean hasCombo = comboAware && KeybindComboStore.global().matchesCurrentCombo(ke.mapping);
         int yellow = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
 
         if (focusedTarget) {
             UITheme.fillRoundedRectFast(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.accent(), 0x36));
-            graphics.fill(x, y + 2, x + 3, y + ENTRY_H - 4, colors.accent());
+            UITheme.fillRoundedRectFast(graphics, x, y + 2, 3, ENTRY_H - 6, 1, colors.accent());
         } else if (isWaiting) {
             UITheme.fillRoundedRectFast(graphics, x, y, w, ENTRY_H - 2, 5, UITheme.withAlpha(colors.accent(), 0x55));
         } else if (hovered) {
@@ -344,7 +354,7 @@ public class KeybindEditScreen extends Screen {
                 : colors.accentLight();
         UITheme.fillRoundedRectFast(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, chBg);
         UITheme.drawRoundedBorderFast(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, UITheme.withAlpha(statusColor, 0xB0));
-        graphics.fill(changeX + 3, y + 1, changeX + CHANGE_BTN_W - 3, y + 2, statusColor);
+        UITheme.fillRoundedRectFast(graphics, changeX + 4, y + 1, CHANGE_BTN_W - 8, 2, 1, statusColor);
         int chTextX = changeX + (CHANGE_BTN_W - font.width(changeLabel)) / 2;
         int chTextY = y + (ENTRY_H - font.lineHeight) / 2;
         int chTextColor = focusedTarget ? colors.accentLight()
@@ -391,7 +401,7 @@ public class KeybindEditScreen extends Screen {
         int bw = 320, bh = 80;
         int bx = (width - bw) / 2, by = (height - bh) / 2;
         UITheme.drawGlassPanel(graphics, bx, by, bw, bh, 10);
-        graphics.fill(bx + 8, by, bx + bw - 8, by + 1, colors.accent());
+        UITheme.fillRoundedRectFast(graphics, bx + 8, by, bw - 16, 1, 1, colors.accent());
         String l1 = Component.translatable("screen.newvisualkeybing.viewer.waiting").getString();
         String l2 = Component.translatable(waitingMapping.getName()).getString();
         String l3 = Component.translatable("screen.newvisualkeybing.viewer.waiting_hint").getString();
@@ -420,6 +430,9 @@ public class KeybindEditScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        applyFixedScaleMetrics();
+        mouseX = fixedMouseX(mouseX);
+        mouseY = fixedMouseY(mouseY);
         if (waitingMapping != null) {
             if (button >= GLFW.GLFW_MOUSE_BUTTON_1 && button <= GLFW.GLFW_MOUSE_BUTTON_LAST) {
                 handleCapturePress(InputConstants.Type.MOUSE.getOrCreate(button));
@@ -494,6 +507,7 @@ public class KeybindEditScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        applyFixedScaleMetrics();
         if (waitingMapping != null) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
                 handleCapturePress(InputConstants.UNKNOWN);
@@ -521,6 +535,7 @@ public class KeybindEditScreen extends Screen {
 
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        applyFixedScaleMetrics();
         if (waitingMapping != null && keyCode != GLFW.GLFW_KEY_ESCAPE) {
             handleCaptureRelease(InputConstants.getKey(keyCode, scanCode));
             return true;
@@ -530,27 +545,35 @@ public class KeybindEditScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        applyFixedScaleMetrics();
+        mouseX = fixedMouseX(mouseX);
+        mouseY = fixedMouseY(mouseY);
         if (waitingMapping != null && button >= GLFW.GLFW_MOUSE_BUTTON_1
                 && button <= GLFW.GLFW_MOUSE_BUTTON_LAST) {
             handleCaptureRelease(InputConstants.Type.MOUSE.getOrCreate(button));
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, button);
+        return releaseLogicalMouse(mouseX, mouseY, button);
     }
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
+        applyFixedScaleMetrics();
         if (profilePanel.charTyped(codePoint, modifiers)) return true;
         return super.charTyped(codePoint, modifiers);
     }
 
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        applyFixedScaleMetrics();
+        mouseX = fixedMouseX(mouseX);
+        mouseY = fixedMouseY(mouseY);
         if (waitingMapping != null) {
 
             showNotice(Component.translatable("screen.newvisualkeybing.viewer.wheel_unsupported").getString());
             return true;
         }
-        scrollOffset = Mth.clamp(scrollOffset - (int) (delta * ENTRY_H * 2), 0, Math.max(0, totalListH - listHeight()));
+        scrollOffset = Mth.clamp(scrollOffset - (int) (scrollY * ENTRY_H * 2), 0, Math.max(0, totalListH - listHeight()));
         return true;
     }
 
@@ -657,12 +680,36 @@ public class KeybindEditScreen extends Screen {
 
     private static boolean isConflicting(KeyMapping km, KeyMapping[] all) {
         if (km.isUnbound()) return false;
+        boolean comboAware = KeybindViewerConfig.global().comboKeysNonConflicting();
+        if (!comboAware) {
+            for (KeyMapping other : all) {
+                if (other == km) continue;
+                if (other.isUnbound()) continue;
+                if (other.same(km)) return true;
+            }
+            return false;
+        }
+        KeybindComboStore store = KeybindComboStore.global();
+        String currentActivator = store.activatorSignature(km, Services.PLATFORM.getKeyModifier(km));
         for (KeyMapping other : all) {
             if (other == km) continue;
             if (other.isUnbound()) continue;
-            if (other.same(km)) return true;
+            if (!sameInputKey(km, other)) continue;
+            String otherActivator = store.activatorSignature(other, Services.PLATFORM.getKeyModifier(other));
+            if (!Objects.equals(currentActivator, otherActivator)) continue;
+            var currentContext = Services.PLATFORM.getConflictContext(km);
+            var otherContext = Services.PLATFORM.getConflictContext(other);
+            if (currentContext != null && otherContext != null && currentContext.conflicts(otherContext)) {
+                return true;
+            }
         }
         return false;
+    }
+
+    private static boolean sameInputKey(KeyMapping a, KeyMapping b) {
+        InputConstants.Key ak = KeybindComboStore.currentKey(a);
+        InputConstants.Key bk = KeybindComboStore.currentKey(b);
+        return ak != null && bk != null && ak.getType() == bk.getType() && ak.getValue() == bk.getValue();
     }
 
     

@@ -87,7 +87,7 @@ final class KeybindTooltipRenderer {
         g.drawString(font, layout.keyNameFit(), curX, curY + 1, c.textPrimary(), true);
         curY += titleH + 4;
 
-        g.fill(curX, curY, curX + innerW, curY + 1, UITheme.withAlpha(c.divider(), 0x90));
+        UITheme.fillRoundedRectFast(g, curX, curY, innerW, 1, 1, UITheme.withAlpha(c.divider(), 0x90));
         curY += 4;
         g.drawString(font, layout.statusLineFit(), curX, curY, c.textSecondary(), true);
         curY += font.lineHeight + 5;
@@ -106,7 +106,7 @@ final class KeybindTooltipRenderer {
                 int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
                 UITheme.fillRoundedRectFast(g, curX, curY, innerW, rowH - 1, 4,
                         UITheme.withAlpha(c.widgetBg(), info.self() ? 0xA0 : 0x70));
-                g.fill(curX, curY + 2, curX + 2, curY + rowH - 2, sideColor);
+                UITheme.fillRoundedRectFast(g, curX, curY + 3, 2, rowH - 6, 1, sideColor);
 
                 int textY = curY + 2;
                 g.drawString(font, row.actionFit(), curX + 6, textY,
