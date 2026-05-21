@@ -236,8 +236,8 @@ final class KeybindDetailPanel {
     private static void renderInfoBox(GuiGraphics g, Font font, int x, int y, int w, String text, int textColor) {
         var c = UITheme.colors();
         int h = font.lineHeight + 12;
-        UITheme.fillRoundedRectFast(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
+        UITheme.fillSoftRoundedRect(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
+        UITheme.drawSoftRoundedBorder(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
         String fit = KeybindViewerScreen.fitToWidth(font, text, w - 16);
         g.drawString(font, fit, x + 8, y + (h - font.lineHeight) / 2, textColor, false);
     }
@@ -258,10 +258,10 @@ final class KeybindDetailPanel {
         int chipW = font.width(label) + 16;
         if (measureOnly) return chipW;
         int chipFill = UITheme.lerpColor(c.widgetBg(), dot, 0.18f);
-        UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, chipH / 2, chipFill);
-        UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xC0));
-        UITheme.fillRoundedRectFast(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
-        g.drawString(font, label, x + 11, y + (chipH - font.lineHeight) / 2 + 1, textColor, false);
+        UITheme.fillSoftRoundedRect(g, x, y, chipW, chipH, chipH / 2, chipFill);
+        UITheme.drawSoftRoundedBorder(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xD0));
+        UITheme.fillSoftRoundedRect(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
+        g.drawString(font, label, x + 11, textY(font, y, chipH), textColor, false);
         return chipW;
     }
 
@@ -284,9 +284,9 @@ final class KeybindDetailPanel {
 
     private static void renderInfoChip(GuiGraphics g, Font font, UITheme.ColorPalette c,
                                        int x, int y, int w, int h, String label) {
-        UITheme.fillRoundedRectFast(g, x, y, w, h, 5,
+        UITheme.fillSoftRoundedRect(g, x, y, w, h, 5,
                 UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.12f));
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, 5,
+        UITheme.drawSoftRoundedBorder(g, x, y, w, h, 5,
                 UITheme.withAlpha(c.widgetBorder(), 0x70));
         g.drawString(font, KeybindViewerScreen.fitToWidth(font, label, w - 8),
                 x + 5, y + (h - font.lineHeight) / 2 + 1, c.textMuted(), false);
@@ -423,53 +423,34 @@ final class KeybindDetailPanel {
         boolean rowHovered = KeybindViewerScreen.inside(mouseX, mouseY, x, y, w, rowH);
 
         if (info.self()) {
-            UITheme.fillRoundedRectFast(g, x, y, textW, rowH, 4,
+            UITheme.fillSoftRoundedRect(g, x, y, textW, rowH, 5,
                     UITheme.lerpColor(c.widgetBg(), c.accent(), 0.10f));
         }
         int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
-        UITheme.fillRoundedRectFast(g, x, y + 2, 2, rowH - 4, 1, sideColor);
+        UITheme.fillSoftRoundedRect(g, x, y + 2, 2, rowH - 4, 1, sideColor);
 
         int actionColor = info.self() ? c.accent() : c.textPrimary();
         String ctxTag = contextTag(info.conflictContext());
         String modText = info.modName();
 
-        if (twoLines) {
-            String actionFit = KeybindViewerScreen.fitToWidth(font, info.actionName(), Math.max(24, textW - 8));
-            g.drawString(font, actionFit, x + 6, y + 2, actionColor, false);
-            int ctxW = ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 6;
-            int modMaxW = Math.max(36, textW - 10 - ctxW);
-            String modFit = KeybindViewerScreen.fitToWidth(font, modText, modMaxW);
-            int rightX = x + textW - font.width(modFit);
-            int line2Y = y + font.lineHeight + 3;
-            g.drawString(font, modFit, rightX, line2Y, c.textMuted(), false);
-            if (!ctxTag.isEmpty()) {
-                int tagX = rightX - font.width(ctxTag) - 6;
-                int tagBgW = font.width(ctxTag) + 4;
-                int tagBgH = font.lineHeight + 1;
-                UITheme.fillRoundedRectFast(g, tagX - 2, line2Y - 1, tagBgW, tagBgH, 3,
-                        UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
-                g.drawString(font, ctxTag, tagX, line2Y, c.accentAlt(), false);
-            }
-        } else {
-            int ctxW = ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 6;
-            int modMaxW = Math.max(32, Math.min(textW / 3, textW - 44 - ctxW));
-            String modFit = KeybindViewerScreen.fitToWidth(font, modText, modMaxW);
-            int modW = font.width(modFit);
-            int rightBlockW = modW + ctxW;
-            int actionMaxW = Math.max(24, textW - 8 - rightBlockW - 4);
-            String actionText = KeybindViewerScreen.fitToWidth(font, info.actionName(), actionMaxW);
-            int textY = y + (rowH - font.lineHeight) / 2;
-            g.drawString(font, actionText, x + 6, textY, actionColor, false);
-            int rightX = x + textW - modW;
-            g.drawString(font, modFit, rightX, textY, c.textMuted(), false);
-            if (!ctxTag.isEmpty()) {
-                int tagX = rightX - font.width(ctxTag) - 6;
-                int tagBgW = font.width(ctxTag) + 4;
-                int tagBgH = font.lineHeight + 1;
-                UITheme.fillRoundedRectFast(g, tagX - 2, textY - 1, tagBgW, tagBgH, 3,
-                        UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
-                g.drawString(font, ctxTag, tagX, textY, c.accentAlt(), false);
-            }
+        int ctxW = ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 6;
+        int modMaxW = Math.max(32, Math.min(textW / 3, textW - 44 - ctxW));
+        String modFit = KeybindViewerScreen.fitToWidth(font, modText, modMaxW);
+        int modW = font.width(modFit);
+        int rightBlockW = modW + ctxW;
+        int actionMaxW = Math.max(24, textW - 8 - rightBlockW - 4);
+        String actionText = KeybindViewerScreen.fitToWidth(font, info.actionName(), actionMaxW);
+        int rowTextY = textY(font, y, rowH);
+        g.drawString(font, actionText, x + 6, rowTextY, actionColor, false);
+        int rightX = x + textW - modW;
+        g.drawString(font, modFit, rightX, rowTextY, c.textMuted(), false);
+        if (!ctxTag.isEmpty()) {
+            int tagX = rightX - font.width(ctxTag) - 6;
+            int tagBgW = font.width(ctxTag) + 4;
+            int tagBgH = font.lineHeight + 1;
+            UITheme.fillSoftRoundedRect(g, tagX - 2, rowTextY - 1, tagBgW, tagBgH, 4,
+                    UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
+            g.drawString(font, ctxTag, tagX, rowTextY, c.accentAlt(), false);
         }
 
         int xButtonX = x + w - ROW_UNBIND_W;
@@ -533,6 +514,10 @@ final class KeybindDetailPanel {
             case GUI       -> "G";
             case UNKNOWN   -> "";
         };
+    }
+
+    private static int textY(Font font, int y, int h) {
+        return y + (h - font.lineHeight) / 2 + 1;
     }
 
     private static String statusTranslation(KeyBindingScanner.KeyStatus status) {
