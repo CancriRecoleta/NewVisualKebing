@@ -466,7 +466,7 @@ public class KeyBindingScanner {
     private static KeyStatus computeStatus(List<KeyBindingInfo> infos) {
         if (infos.isEmpty()) return KeyStatus.FREE;
         boolean comboAware = KeybindViewerConfig.global().comboKeysNonConflicting();
-        boolean hasCombo = infos.stream().anyMatch(KeyBindingScanner::isCombination);
+        boolean hasCombo = infos.stream().anyMatch(info -> isCombination(info) || hasStoredCombo(info));
         if (infos.size() == 1) {
             if (comboAware && hasCombo) return KeyStatus.COMBO;
             return infos.get(0).self() ? KeyStatus.SELF : KeyStatus.OTHER_SINGLE;
@@ -474,7 +474,7 @@ public class KeyBindingScanner {
 
         for (int i = 0; i < infos.size(); i++) {
             for (int j = i + 1; j < infos.size(); j++) {
-                if (comboAware && infos.get(i).modifier() != infos.get(j).modifier()) continue;
+                if (comboAware && !sameActivator(infos.get(i), infos.get(j))) continue;
                 ConflictContext ci = infos.get(i).conflictContext();
                 ConflictContext cj = infos.get(j).conflictContext();
                 if (ci != null && cj != null && ci.conflicts(cj)) return KeyStatus.CONFLICT;
@@ -485,6 +485,16 @@ public class KeyBindingScanner {
         boolean hasOther = infos.stream().anyMatch(info -> !info.self());
         if (hasSelf && hasOther) return KeyStatus.CONFLICT;
         return hasSelf ? KeyStatus.SELF : KeyStatus.OTHER_SINGLE;
+    }
+
+    private static boolean hasStoredCombo(KeyBindingInfo info) {
+        return KeybindComboStore.global().hasCurrentCombo(info.translationKey());
+    }
+
+    private static boolean sameActivator(KeyBindingInfo a, KeyBindingInfo b) {
+        KeybindComboStore store = KeybindComboStore.global();
+        return store.activatorSignature(a.translationKey(), a.modifier())
+                .equals(store.activatorSignature(b.translationKey(), b.modifier()));
     }
 
     private static boolean matchesStatus(KeyStatus status, FilterTab tab) {
