@@ -7,6 +7,7 @@ import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.MCButton;
+import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.github.newvisualkeybing.mixin.KeyMappingAccessor;
 import com.github.newvisualkeybing.platform.Services;
@@ -14,7 +15,6 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -54,7 +54,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
     private final Screen parent;
     private final Integer focusVirtualKey; 
 
-    private EditBox searchBox;
+    private MCEditBox searchBox;
     private MCButton resetAllButton;
     private MCButton viewerButton;
     private MCButton comboButton;
@@ -90,17 +90,6 @@ public class KeybindEditScreen extends FixedScaleScreen {
         applyFixedScaleMetrics();
 
         searchX = KeybindProfilePanel.WIDTH + 22;
-        searchW = Mth.clamp(width - searchX - 410, 150, 360);
-        int editH = font.lineHeight + 2;
-        int editY = 8 + (20 - editH) / 2;
-        searchBox = new EditBox(font, searchX + 4, editY, searchW - 24, editH,
-                Component.translatable("screen.newvisualkeybing.viewer.search"));
-        searchBox.setSuggestion(Component.translatable("screen.newvisualkeybing.viewer.search").getString());
-        searchBox.setResponder(value -> rebuildEntries());
-        searchBox.setBordered(false);
-        searchBox.setTextColor(0xFFFFFFFF);
-        addRenderableWidget(searchBox);
-
         int btnGap = 6;
         int backW = 60;
         int viewerW = 96;
@@ -110,6 +99,16 @@ public class KeybindEditScreen extends FixedScaleScreen {
         int xViewer = xReset - btnGap - viewerW;
         int xCombo = xViewer - btnGap - comboW;
         int xBack = xCombo - btnGap - backW;
+        searchW = Mth.clamp(xBack - searchX - 14, 130, 330);
+        int searchH = 22;
+        int editY = 7;
+        searchBox = new MCEditBox(font, searchX, editY, searchW, searchH,
+                Component.translatable("screen.newvisualkeybing.viewer.search"))
+                .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.search"))
+                .withClearAffordance(true);
+        searchBox.setResponder(value -> rebuildEntries());
+        addRenderableWidget(searchBox);
+
         backButton = MCButton.create(xBack, 8, backW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.back"), b -> onClose());
         addRenderableWidget(backButton);
@@ -210,43 +209,20 @@ public class KeybindEditScreen extends FixedScaleScreen {
         UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4, 8);
 
 
-        int frameX = searchX - 4;
-        int frameY = 8;
-        int frameW = searchW + 8;
-        int frameH = 20;
-        UITheme.fillRoundedRectFast(graphics, frameX, frameY, frameW, frameH, 6, colors.inputBg());
-        UITheme.drawRoundedBorderFast(graphics, frameX, frameY, frameW, frameH, 6,
-                searchBox != null && searchBox.isFocused() ? colors.accent() : colors.widgetBorder());
-
-        if (searchBox != null && !searchBox.getValue().isEmpty()) {
-            int clearSize = 12;
-            int clearXLocal = frameX + frameW - clearSize - 4;
-            int clearYLocal = frameY + (frameH - clearSize) / 2;
-            UITheme.fillRoundedRectFast(graphics, clearXLocal, clearYLocal, clearSize, clearSize, 6,
-                    UITheme.withAlpha(colors.widgetBg(), 0xC0));
-            int cx = clearXLocal + clearSize / 2;
-            int cy = clearYLocal + clearSize / 2;
-            graphics.fill(cx - 3, cy - 1, cx + 4, cy, colors.textSecondary());
-            graphics.fill(cx - 1, cy - 3, cx, cy + 4, colors.textSecondary());
-        }
-
         String title = focusVirtualKey != null
                 ? Component.translatable("screen.newvisualkeybing.viewer.edit_title_focused",
                     targetKeyName()).getString()
                 : Component.translatable("screen.newvisualkeybing.viewer.edit_title").getString();
         int titleY = 8 + (20 - font.lineHeight) / 2 + 1;
-        graphics.drawString(font, title, searchX + searchW + 14, titleY, colors.textPrimary(), false);
+        int titleX = searchX + searchW + 12;
+        int titleRight = backButton == null ? width - 12 : backButton.getX() - 8;
+        graphics.drawString(font, KeybindViewerScreen.fitToWidth(font, title, Math.max(40, titleRight - titleX)),
+                titleX, titleY, colors.textPrimary(), false);
     }
 
     private boolean handleSearchClearClick(double mouseX, double mouseY) {
         if (searchBox == null || searchBox.getValue().isEmpty()) return false;
-        int frameX = searchX - 4;
-        int frameW = searchW + 8;
-        int clearSize = 12;
-        int clearXLocal = frameX + frameW - clearSize - 4;
-        int clearYLocal = 8 + (20 - clearSize) / 2;
-        if (mouseX >= clearXLocal && mouseX < clearXLocal + clearSize
-                && mouseY >= clearYLocal && mouseY < clearYLocal + clearSize) {
+        if (searchBox.clearAffordanceClicked(mouseX, mouseY)) {
             searchBox.setValue("");
             searchBox.setFocused(true);
             this.setFocused(searchBox);

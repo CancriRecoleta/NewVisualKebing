@@ -2,12 +2,12 @@ package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.ui.MCButton;
+import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
@@ -32,7 +32,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private final Screen parent;
     private final KeybindComboStore store = KeybindComboStore.global();
 
-    private EditBox mappingSearchBox;
+    private MCEditBox mappingSearchBox;
     private MCButton backButton;
     private MCButton addButton;
     private MCButton clearAllButton;
@@ -58,16 +58,13 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
 
         int searchX = 12;
         int searchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 20;
+        int searchH = 22;
         int searchY = (HEADER_H - searchH) / 2;
-        int editH = font.lineHeight + 2;
-        int editY = searchY + (searchH - editH) / 2;
-        mappingSearchBox = new EditBox(font, searchX + 8, editY, searchW - 28, editH,
-                Component.translatable("screen.newvisualkeybing.viewer.combo.search"));
-        mappingSearchBox.setBordered(false);
-        mappingSearchBox.setSuggestion(Component.translatable("screen.newvisualkeybing.viewer.combo.search").getString());
+        mappingSearchBox = new MCEditBox(font, searchX, searchY, searchW, searchH,
+                Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
+                .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
+                .withClearAffordance(true);
         mappingSearchBox.setResponder(value -> rebuildRows());
-        mappingSearchBox.setTextColor(0xFFFFFFFF);
         addRenderableWidget(mappingSearchBox);
 
         int btnGap = 6;
@@ -160,25 +157,13 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
 
         int searchX = 12;
         int searchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 20;
+        int searchH = 22;
         int searchY = (HEADER_H - searchH) / 2;
-        boolean focused = mappingSearchBox != null && mappingSearchBox.isFocused();
-        UITheme.fillRoundedRectFast(graphics, searchX, searchY, searchW, searchH, 6, colors.inputBg());
-        UITheme.drawRoundedBorderFast(graphics, searchX, searchY, searchW, searchH, 6,
-                focused ? colors.accent() : colors.widgetBorder());
-
-        boolean hasText = mappingSearchBox != null && !mappingSearchBox.getValue().isEmpty();
-        if (hasText) {
-            int clearSize = 12;
-            int clearX = searchX + searchW - clearSize - 4;
-            int clearY = searchY + (searchH - clearSize) / 2;
-            UITheme.fillRoundedRectFast(graphics, clearX, clearY, clearSize, clearSize, 6,
-                    UITheme.withAlpha(colors.widgetBg(), 0xC0));
-            int mid = clearSize / 2;
-            int cx = clearX + mid;
-            int cy = clearY + mid;
-            graphics.fill(cx - 3, cy - 1, cx + 4, cy, colors.textSecondary());
-            graphics.fill(cx - 1, cy - 3, cx, cy + 4, colors.textSecondary());
+        if (mappingSearchBox != null) {
+            mappingSearchBox.setX(searchX);
+            mappingSearchBox.setY(searchY);
+            mappingSearchBox.setWidth(searchW);
+            mappingSearchBox.setHeight(searchH);
         }
 
         String title = Component.translatable("screen.newvisualkeybing.viewer.combo.title").getString();
@@ -186,21 +171,16 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int titleX = searchX + searchW + 16;
         int textBlockH = font.lineHeight * 2 + 3;
         int titleY = (HEADER_H - textBlockH) / 2;
-        graphics.drawString(font, title, titleX, titleY, colors.textPrimary(), false);
-        graphics.drawString(font, count, titleX, titleY + font.lineHeight + 3, HIGHLIGHT_COLOR, false);
+        int titleRight = backButton == null ? width - 12 : backButton.getX() - 8;
+        graphics.drawString(font, KeybindViewerScreen.fitToWidth(font, title, Math.max(40, titleRight - titleX)),
+                titleX, titleY, colors.textPrimary(), false);
+        graphics.drawString(font, KeybindViewerScreen.fitToWidth(font, count, Math.max(40, titleRight - titleX)),
+                titleX, titleY + font.lineHeight + 3, HIGHLIGHT_COLOR, false);
     }
 
     private boolean handleSearchClearClick(double mouseX, double mouseY) {
         if (mappingSearchBox == null || mappingSearchBox.getValue().isEmpty()) return false;
-        int searchX = 12;
-        int searchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 20;
-        int searchY = (HEADER_H - searchH) / 2;
-        int clearSize = 12;
-        int clearX = searchX + searchW - clearSize - 4;
-        int clearY = searchY + (searchH - clearSize) / 2;
-        if (mouseX >= clearX && mouseX < clearX + clearSize
-                && mouseY >= clearY && mouseY < clearY + clearSize) {
+        if (mappingSearchBox.clearAffordanceClicked(mouseX, mouseY)) {
             mappingSearchBox.setValue("");
             mappingSearchBox.setFocused(true);
             this.setFocused(mappingSearchBox);
