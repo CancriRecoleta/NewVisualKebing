@@ -115,9 +115,9 @@ final class KeybindKeyboardRenderer {
         int w = state.w;
         int faceH = state.h - 1;
         if (w < 10 || faceH < 8) return;
-        int barH = 2;
+        int barH = Math.min(3, Math.max(2, faceH / 5));
         int color = dim ? UITheme.withAlpha(COMBO_HIGHLIGHT_COLOR, 0x70) : COMBO_HIGHLIGHT_COLOR;
-        g.fill(x + 2, y + 1, x + w - 2, y + 1 + barH, color);
+        UITheme.fillRoundedRectFast(g, x + 3, y + 1, w - 6, barH, Math.max(1, barH / 2), color);
     }
 
     private void refreshDrawStates(Font font, KeyboardLayoutData.Style style,
@@ -205,8 +205,11 @@ final class KeybindKeyboardRenderer {
 
             int hlAlpha = state.hover ? 0x18 : 0x10;
             int half = faceH / 2;
-            g.fill(x + radius, y + 1, x + w - radius, y + half, UITheme.withAlpha(0xFFFFFF, hlAlpha));
-            g.fill(x + radius, y + faceH - 1, x + w - radius, y + faceH, FACE_BOTTOM_TINT);
+            UITheme.fillRoundedRectEx(g, x + 1, y + 1, w - 2, Math.max(2, half - 1),
+                    Math.max(1, radius - 1), Math.max(1, radius - 1), 1, 1,
+                    UITheme.withAlpha(0xFFFFFF, hlAlpha));
+            UITheme.fillRoundedRectEx(g, x + 1, y + faceH - 2, w - 2, 2,
+                    1, 1, Math.max(1, radius - 1), Math.max(1, radius - 1), FACE_BOTTOM_TINT);
 
             if (state.comboParticipant) renderComboTopBar(g, state, false);
 
@@ -214,7 +217,7 @@ final class KeybindKeyboardRenderer {
                 int alpha = active ? 0xD0 : 0x86;
                 int edgeH = state.status == KeyBindingScanner.KeyStatus.CONFLICT ? 3 : 2;
                 if (w >= 10 && faceH >= 8) {
-                    g.fill(x + 2, y + faceH - edgeH - 1, x + w - 2, y + faceH - 1,
+                    renderStatusEdge(g, x, y, w, faceH, edgeH, radius,
                             UITheme.withAlpha(state.cachedStatusEdgeColor, alpha));
                 }
             }
@@ -232,12 +235,20 @@ final class KeybindKeyboardRenderer {
             if (state.comboParticipant && !state.hidden) renderComboTopBar(g, state, true);
             if (!state.hidden && state.status != KeyBindingScanner.KeyStatus.FREE && w >= 10 && faceH >= 8) {
                 int edgeH = state.status == KeyBindingScanner.KeyStatus.CONFLICT ? 3 : 2;
-                g.fill(x + 2, y + faceH - edgeH - 1, x + w - 2, y + faceH - 1,
+                renderStatusEdge(g, x, y, w, faceH, edgeH, radius,
                         UITheme.withAlpha(state.cachedStatusEdgeColor, 0x86));
             }
             UITheme.drawRoundedBorderFast(g, x, y, w, faceH, radius,
                     state.hidden ? hiddenBorder : normalBorder);
         }
+    }
+
+    private static void renderStatusEdge(GuiGraphics g, int x, int y, int w, int faceH,
+                                         int edgeH, int radius, int color) {
+        UITheme.fillRoundedRectEx(g, x + 3, y + faceH - edgeH - 1, w - 6, edgeH,
+                Math.max(1, edgeH / 2), Math.max(1, edgeH / 2),
+                Math.max(1, Math.min(radius - 1, edgeH)),
+                Math.max(1, Math.min(radius - 1, edgeH)), color);
     }
 
     private static final int FACE_BOTTOM_TINT = UITheme.withAlpha(0x000000, 0x18);
