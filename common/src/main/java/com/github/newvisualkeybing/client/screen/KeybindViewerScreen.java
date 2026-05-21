@@ -2,6 +2,7 @@ package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.FilterTab;
 import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
+import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
@@ -22,7 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-public class KeybindViewerScreen extends Screen {
+public class KeybindViewerScreen extends FixedScaleScreen {
 
     private static final int HEADER_H = 36;
     private static final int TOOLBAR_H = 32;
@@ -39,6 +40,7 @@ public class KeybindViewerScreen extends Screen {
     private static final int COMPACT_WIDTH_THRESHOLD = 760;
     private static final int RIGHT_RAIL_STACK_THRESHOLD = 980;
     private static final int MOUSE_PANEL_STACK_H = 160;
+    private static final float FIXED_KEY_UNIT = 30.0f;
 
     private static final int PANEL_PAD = 12;
     private static final int PANEL_RADIUS = 8;
@@ -142,6 +144,7 @@ public class KeybindViewerScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        applyFixedScaleMetrics();
         UITheme.setMode(UITheme.Mode.DARK);
         scanner.scan();
         refreshTextCache();
@@ -292,34 +295,39 @@ public class KeybindViewerScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
+        applyFixedScaleMetrics();
+        int fixedMouseX = fixedMouseX(mouseX);
+        int fixedMouseY = fixedMouseY(mouseY);
         long nowMs = System.currentTimeMillis();
         if (filtersDirty) refreshFilters();
         animTick += partialTick;
         layoutPanels();
         hoveredVirtualKey = null;
 
+        pushFixedScale(g);
+        try {
         var c = UITheme.colors();
         g.fill(0, 0, width, height, c.panelBg() | 0xFF000000);
 
         renderHeaderBar(g);
-        renderToolbar(g, mouseX, mouseY);
+        renderToolbar(g, fixedMouseX, fixedMouseY);
 
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
-            renderModPanel(g, mouseX, mouseY);
+            renderModPanel(g, fixedMouseX, fixedMouseY);
         } else if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
             int x = BODY_PAD;
             int y = contentTop;
             int h = contentBottom - contentTop;
-            profilePanel.render(g, font, x, y, h, mouseX, mouseY);
+            profilePanel.render(g, font, x, y, h, fixedMouseX, fixedMouseY);
         }
 
-        renderKeyboard(g, mouseX, mouseY, nowMs);
-        renderKeyboardInfoBands(g, mouseX, mouseY);
-        renderMousePanel(g, mouseX, mouseY, nowMs);
-        renderDetailPanel(g, selectedVirtualKey != null ? selectedVirtualKey : hoveredVirtualKey, mouseX, mouseY);
+        renderKeyboard(g, fixedMouseX, fixedMouseY, nowMs);
+        renderKeyboardInfoBands(g, fixedMouseX, fixedMouseY);
+        renderMousePanel(g, fixedMouseX, fixedMouseY, nowMs);
+        renderDetailPanel(g, selectedVirtualKey != null ? selectedVirtualKey : hoveredVirtualKey, fixedMouseX, fixedMouseY);
         renderStatusBar(g);
 
-        super.extractRenderState(g, mouseX, mouseY, partialTick);
+        super.extractRenderState(g, fixedMouseX, fixedMouseY, partialTick);
 
         if (hoveredVirtualKey != null
                 && (selectedVirtualKey == null || hoveredVirtualKey.intValue() != selectedVirtualKey.intValue())) {
@@ -332,7 +340,10 @@ public class KeybindViewerScreen extends Screen {
                 float progress = Math.min(1f, (elapsed - TOOLTIP_DELAY_MS) / (float) TOOLTIP_FADE_MS);
                 progress = UITheme.easeOutCubic(progress);
                 float dy = (1f - progress) * 8f;
-                tooltipRenderer.render(g, font, width, height, hoveredVirtualKey, mouseX, mouseY);
+                g.pose().pushMatrix();
+                g.pose().translate(0f, dy);
+                tooltipRenderer.render(g, font, width, height, hoveredVirtualKey, fixedMouseX, fixedMouseY);
+                g.pose().popMatrix();
             }
         } else {
             tooltipHoverKey = null;
@@ -340,7 +351,10 @@ public class KeybindViewerScreen extends Screen {
 
         renderNotice(g, nowMs);
 
-        quickEdit.render(g, font, width, height, mouseX, mouseY);
+        quickEdit.render(g, font, width, height, fixedMouseX, fixedMouseY);
+        } finally {
+            popFixedScale(g);
+        }
     }
 
     private void renderHeaderBar(GuiGraphicsExtractor g) {
@@ -511,7 +525,8 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         UITheme.drawGlassPanel(g, x, y, w, h, PANEL_RADIUS);
         g.text(font, title, x + PANEL_PAD, y + PANEL_TITLE_Y, c.textPrimary(), false);
         int divY = y + PANEL_TITLE_Y + font.lineHeight + 4;
-        g.fill(x + PANEL_PAD, divY, x + w - PANEL_PAD, divY + 1, UITheme.withAlpha(c.divider(), 0xA0));
+        UITheme.fillRoundedRectFast(g, x + PANEL_PAD, divY, w - PANEL_PAD * 2, 1, 1,
+                UITheme.withAlpha(c.divider(), 0xA0));
         return y + PANEL_CONTENT_TOP;
     }
 
@@ -553,7 +568,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             UITheme.fillRoundedRectFast(g, fieldX, rowY, fieldW, rowH - 1, 5, fill);
             if (!selected && !hovered && i < mods.size() - 1
                     && i < modScrollOffset + visibleRows - 1) {
-                g.fill(fieldX + 6, rowY + rowH - 2, fieldX + fieldW - 6, rowY + rowH - 1,
+                UITheme.fillRoundedRectFast(g, fieldX + 6, rowY + rowH - 2, fieldW - 12, 1, 1,
                         UITheme.withAlpha(c.divider(), 0x30));
             }
             int textY = rowY + (rowH - 1 - font.lineHeight) / 2;
@@ -764,6 +779,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             if (km.getName().equals(info.translationKey())) { target = km; break; }
         }
         if (target == null) return;
+        KeybindComboStore.global().removeCombo(target.getName());
         target.setKey(com.mojang.blaze3d.platform.InputConstants.UNKNOWN);
         com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer.resetAndEnforce();
         minecraft.options.save();
@@ -846,9 +862,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         float heightU = currentStyle.heightU();
         float gapW = (widthU - 1.0f) * KeyboardLayoutData.BASE_GAP;
         float gapH = (heightU - 1.0f) * KeyboardLayoutData.BASE_GAP;
-        float scaleByW = (keyboardSpaceW - gapW) / widthU;
-        float scaleByH = (keyboardSpaceH - gapH) / heightU;
-        keyScale = Mth.clamp(Math.min(scaleByW, scaleByH), 6.0f, 30.0f);
+        keyScale = FIXED_KEY_UNIT;
 
         int kbW = KeyboardLayoutData.totalWidthPx(currentStyle, keyScale);
         int kbH = KeyboardLayoutData.totalHeightPx(currentStyle, keyScale);
@@ -1008,8 +1022,9 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        double mouseX = event.x();
-        double mouseY = event.y();
+        applyFixedScaleMetrics();
+        double mouseX = fixedMouseX(event.x());
+        double mouseY = fixedMouseY(event.y());
         int button = event.button();
         if (quickEdit.isOpen()) return quickEdit.mouseClicked(event);
         if (handleSearchClearClick(mouseX, mouseY)) return true;
@@ -1147,6 +1162,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     @Override
     public boolean charTyped(CharacterEvent event) {
         int codePoint = event.codepoint();
+        applyFixedScaleMetrics();
         if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.charTyped(event)) return true;
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused() && codePoint >= 32) {
             modSearchQuery += event.codepointAsString();
@@ -1158,6 +1174,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        applyFixedScaleMetrics();
         int keyCode = event.key();
         if (quickEdit.isOpen()) return quickEdit.keyPressed(event);
         if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.keyPressed(event)) return true;
@@ -1181,17 +1198,20 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
-        if (quickEdit.isOpen()) return quickEdit.mouseScrolled(mouseX, mouseY, delta);
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        applyFixedScaleMetrics();
+        mouseX = fixedMouseX(mouseX);
+        mouseY = fixedMouseY(mouseY);
+        if (quickEdit.isOpen()) return quickEdit.mouseScrolled(mouseX, mouseY, scrollY);
         if (selectedVirtualKey != null
                 && mouseX >= detailPanelX && mouseX <= detailPanelX + detailPanelW
                 && mouseY >= detailPanelY && mouseY <= detailPanelY + detailPanelH) {
-            detailPanel.scroll((int) Math.signum(delta));
+            detailPanel.scroll((int) Math.signum(scrollY));
             return true;
         }
         if (mouseX >= mousePanelX && mouseX <= mousePanelX + mousePanelW
                 && mouseY >= mousePanelY && mouseY <= mousePanelY + mousePanelH) {
-            selectedVirtualKey = delta > 0 ? KeyboardLayoutData.WHEEL_UP_VIRTUAL : KeyboardLayoutData.WHEEL_DOWN_VIRTUAL;
+            selectedVirtualKey = scrollY > 0 ? KeyboardLayoutData.WHEEL_UP_VIRTUAL : KeyboardLayoutData.WHEEL_DOWN_VIRTUAL;
             return true;
         }
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
@@ -1202,12 +1222,12 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
                 int searchY = contentTop + PANEL_CONTENT_TOP + 4;
                 int listY = searchY + 26;
                 int visibleRows = Math.max(1, (toggleY - ACTION_BTN_GAP - listY) / 18);
-                modScrollOffset = Mth.clamp(modScrollOffset - (int) Math.signum(delta), 0,
+                modScrollOffset = Mth.clamp(modScrollOffset - (int) Math.signum(scrollY), 0,
                         Math.max(0, filteredModEntries().size() - visibleRows));
                 return true;
             }
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, delta);
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     static boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {

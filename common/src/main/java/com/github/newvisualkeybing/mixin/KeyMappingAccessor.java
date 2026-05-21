@@ -10,4 +10,10 @@ public interface KeyMappingAccessor {
 
     @Accessor("key")
     InputConstants.Key newvisualkeybing$getKey();
+
+    @Accessor("clickCount")
+    int newvisualkeybing$getClickCount();
+
+    @Accessor("clickCount")
+    void newvisualkeybing$setClickCount(int clickCount);
 }
