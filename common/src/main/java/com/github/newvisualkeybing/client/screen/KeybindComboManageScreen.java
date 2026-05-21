@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Locale;
 
 
-public class KeybindComboManageScreen extends Screen {
+public class KeybindComboManageScreen extends FixedScaleScreen {
 
     static final int HIGHLIGHT_COLOR = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
 
@@ -53,6 +53,7 @@ public class KeybindComboManageScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        applyFixedScaleMetrics();
         UITheme.setMode(UITheme.Mode.DARK);
 
         int searchX = 12;
@@ -128,18 +129,25 @@ public class KeybindComboManageScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+        applyFixedScaleMetrics();
+        int fixedMouseX = fixedMouseX(mouseX);
+        int fixedMouseY = fixedMouseY(mouseY);
+        pushFixedScale(graphics);
+        try {
         var colors = UITheme.colors();
         graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE6));
 
         renderHeader(graphics);
-        renderList(graphics, mouseX, mouseY);
+        renderList(graphics, fixedMouseX, fixedMouseY);
         renderFooter(graphics);
 
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, fixedMouseX, fixedMouseY, partialTick);
 
         if (capture != null) renderCaptureOverlay(graphics);
         renderNotice(graphics);
+        } finally {
+            popFixedScale(graphics);
+        }
     }
 
     private void renderHeader(GuiGraphics graphics) {
@@ -216,7 +224,7 @@ public class KeybindComboManageScreen extends Screen {
             return;
         }
 
-        graphics.enableScissor(x + 1, listTop + 1, x + w - 1, listTop + listH - 1);
+        enableFixedScissor(graphics, x + 1, listTop + 1, x + w - 1, listTop + listH - 1);
         int drawY = listTop + 4 - scrollOffset;
         for (int i = 0; i < rows.size(); i++) {
             if (drawY + ROW_H >= listTop && drawY <= listTop + listH) {
@@ -248,7 +256,7 @@ public class KeybindComboManageScreen extends Screen {
         UITheme.drawRoundedBorderFast(graphics, x, rowTop, w, rowH, 6,
                 UITheme.withAlpha(HIGHLIGHT_COLOR, 0xA0));
 
-        graphics.fill(x + 3, rowTop + 3, x + 5, rowTop + rowH - 3, HIGHLIGHT_COLOR);
+        UITheme.fillRoundedRectFast(graphics, x + 3, rowTop + 3, 2, rowH - 6, 1, HIGHLIGHT_COLOR);
 
         int textColX = x + 10;
         int btnAreaW = RECORD_BTN_W + DELETE_BTN_W + COL_GAP * 2;
@@ -334,7 +342,7 @@ public class KeybindComboManageScreen extends Screen {
         int bx = (width - bw) / 2;
         int by = (height - bh) / 2;
         UITheme.drawGlassPanel(graphics, bx, by, bw, bh, 10);
-        graphics.fill(bx + 8, by, bx + bw - 8, by + 1, HIGHLIGHT_COLOR);
+        UITheme.fillRoundedRectFast(graphics, bx + 8, by, bw - 16, 1, 1, HIGHLIGHT_COLOR);
 
         String title = capture.titleMessage();
         graphics.drawString(font, title, bx + (bw - font.width(title)) / 2, by + 10,
@@ -375,7 +383,7 @@ public class KeybindComboManageScreen extends Screen {
         int visible = Math.max(1, (listH - 6) / rowH);
         capture.scrollOffset = Mth.clamp(capture.scrollOffset, 0, Math.max(0, mappings.size() - visible));
 
-        graphics.enableScissor(listX + 1, listY + 1, listX + listW - 1, listY + listH - 1);
+        enableFixedScissor(graphics, listX + 1, listY + 1, listX + listW - 1, listY + listH - 1);
         int drawY = listY + 4;
         for (int i = capture.scrollOffset; i < mappings.size() && i < capture.scrollOffset + visible; i++) {
             KeyMapping km = mappings.get(i);
@@ -412,6 +420,9 @@ public class KeybindComboManageScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        applyFixedScaleMetrics();
+        mouseX = fixedMouseX(mouseX);
+        mouseY = fixedMouseY(mouseY);
         if (capture != null) {
             if (capture.stage == CaptureStage.SELECT_MAPPING) {
                 if (handleMappingPickerClick(mouseX, mouseY)) return true;
@@ -490,6 +501,7 @@ public class KeybindComboManageScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        applyFixedScaleMetrics();
         if (capture != null) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
                 capture = null;
@@ -526,6 +538,7 @@ public class KeybindComboManageScreen extends Screen {
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
+        applyFixedScaleMetrics();
         if (capture != null) {
             if (capture.stage == CaptureStage.SELECT_MAPPING && codePoint >= 32) {
                 capture.search += codePoint;
@@ -538,6 +551,9 @@ public class KeybindComboManageScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        applyFixedScaleMetrics();
+        mouseX = fixedMouseX(mouseX);
+        mouseY = fixedMouseY(mouseY);
         if (capture != null && capture.stage == CaptureStage.SELECT_MAPPING) {
             capture.scrollOffset = Math.max(0, capture.scrollOffset - (int) Math.signum(scrollY));
             return true;

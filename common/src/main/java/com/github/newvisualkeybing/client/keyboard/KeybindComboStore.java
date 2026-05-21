@@ -2,6 +2,7 @@ package com.github.newvisualkeybing.client.keyboard;
 
 import com.github.newvisualkeybing.Constants;
 import com.github.newvisualkeybing.mixin.KeyMappingAccessor;
+import com.github.newvisualkeybing.platform.services.IPlatformHelper.InputModifier;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
@@ -23,6 +24,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 
@@ -239,6 +241,158 @@ public final class KeybindComboStore {
         return ((KeyMappingAccessor) (Object) mapping).newvisualkeybing$getKey();
     }
 
+    public synchronized boolean hasCompleteCombo(String mappingName) {
+        ComboBinding combo = findByMapping(mappingName);
+        return isComplete(combo);
+    }
+
+    public synchronized boolean hasCurrentCombo(String mappingName) {
+        KeyMapping mapping = findMapping(mappingName);
+        return mapping != null && matchesCurrentCombo(mapping);
+    }
+
+    public synchronized boolean sameCombo(String mappingA, String mappingB) {
+        if (Objects.equals(mappingA, mappingB)) return true;
+        ComboBinding a = findByMapping(mappingA);
+        ComboBinding b = findByMapping(mappingB);
+        if (!isComplete(a) || !isComplete(b)) return false;
+        return Objects.equals(a.firstKey, b.firstKey) && Objects.equals(a.secondKey, b.secondKey);
+    }
+
+    public synchronized boolean combosConflict(String mappingA, String mappingB) {
+        ComboBinding a = findByMapping(mappingA);
+        ComboBinding b = findByMapping(mappingB);
+        if (!isComplete(a) || !isComplete(b)) return true;
+        return sameInput(a.secondKey, b.secondKey) && sameInput(a.firstKey, b.firstKey);
+    }
+
+    public synchronized boolean matchesCurrentCombo(KeyMapping mapping) {
+        if (mapping == null) return false;
+        ComboBinding combo = findByMapping(mapping.getName());
+        if (!isComplete(combo)) return false;
+        return Objects.equals(combo.secondKey, currentKey(mapping).getName());
+    }
+
+    public synchronized boolean isComboTarget(KeyMapping mapping, InputConstants.Key triggerKey) {
+        if (mapping == null || triggerKey == null || triggerKey == InputConstants.UNKNOWN) return false;
+        ComboBinding combo = findByMapping(mapping.getName());
+        if (!isComplete(combo)) return false;
+        return sameInput(combo.secondKey, triggerKey.getName())
+                && sameInput(currentKey(mapping).getName(), triggerKey.getName());
+    }
+
+    public synchronized String activatorSignature(String mappingName, InputModifier modifier) {
+        KeyMapping mapping = findMapping(mappingName);
+        if (mapping != null) return activatorSignature(mapping, modifier);
+        ComboBinding combo = findByMapping(mappingName);
+        if (isComplete(combo)) return activatorSignature(combo.firstKey);
+        return modifierSignature(modifier);
+    }
+
+    public synchronized String activatorSignature(KeyMapping mapping, InputModifier modifier) {
+        if (mapping != null) {
+            ComboBinding combo = findByMapping(mapping.getName());
+            if (isComplete(combo) && sameInput(combo.secondKey, currentKey(mapping).getName())) {
+                return activatorSignature(combo.firstKey);
+            }
+        }
+        return modifierSignature(modifier);
+    }
+
+    public synchronized Match findMatchingCombo(InputConstants.Key triggerKey) {
+        if (triggerKey == null || triggerKey == InputConstants.UNKNOWN) return null;
+        String triggerName = triggerKey.getName();
+        Match fallback = null;
+        for (ComboBinding combo : data.combos) {
+            if (!isComplete(combo)) continue;
+            if (!Objects.equals(combo.secondKey, triggerName)) continue;
+            KeyMapping mapping = findMapping(combo.mappingName);
+            if (mapping == null) continue;
+            if (!Objects.equals(currentKey(mapping).getName(), triggerName)) continue;
+            Match match = new Match(combo, mapping, isKeyHeld(combo.firstKey));
+            if (match.active()) return match;
+            if (fallback == null) fallback = match;
+        }
+        return fallback;
+    }
+
+    public synchronized List<Match> triggerMatches(InputConstants.Key triggerKey) {
+        if (triggerKey == null || triggerKey == InputConstants.UNKNOWN) return Collections.emptyList();
+        String triggerName = triggerKey.getName();
+        List<Match> result = new ArrayList<>();
+        for (ComboBinding combo : data.combos) {
+            if (!isComplete(combo)) continue;
+            if (!sameInput(combo.secondKey, triggerName)) continue;
+            KeyMapping mapping = findMapping(combo.mappingName);
+            if (mapping == null) continue;
+            if (!sameInput(currentKey(mapping).getName(), triggerName)) continue;
+            result.add(new Match(combo, mapping, isKeyHeld(combo.firstKey)));
+        }
+        return result;
+    }
+
+    public synchronized void syncComboStates() {
+        for (ComboBinding combo : data.combos) {
+            if (!isComplete(combo)) continue;
+            KeyMapping mapping = findMapping(combo.mappingName);
+            if (mapping == null) continue;
+            if (!sameInput(combo.secondKey, currentKey(mapping).getName())) continue;
+            mapping.setDown(isKeyHeld(combo.firstKey) && isKeyHeld(combo.secondKey));
+        }
+    }
+
+    private static boolean isComplete(ComboBinding combo) {
+        return combo != null
+                && combo.firstKey != null && !combo.firstKey.isBlank()
+                && combo.secondKey != null && !combo.secondKey.isBlank()
+                && !sameInput(combo.firstKey, combo.secondKey);
+    }
+
+    private static boolean sameInput(String a, String b) {
+        if (Objects.equals(a, b)) return true;
+        Optional<InputConstants.Key> ka = parseInput(a);
+        Optional<InputConstants.Key> kb = parseInput(b);
+        return ka.isPresent() && kb.isPresent() && sameKey(ka.get(), kb.get());
+    }
+
+    private static Optional<InputConstants.Key> parseInput(String inputName) {
+        if (inputName == null || inputName.isBlank()) return Optional.empty();
+        try {
+            InputConstants.Key key = InputConstants.getKey(inputName);
+            return key == InputConstants.UNKNOWN ? Optional.empty() : Optional.of(key);
+        } catch (IllegalArgumentException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private static String activatorSignature(String inputName) {
+        Optional<InputConstants.Key> parsed = parseInput(inputName);
+        if (parsed.isEmpty()) return "key:" + String.valueOf(inputName);
+        InputConstants.Key key = parsed.get();
+        if (key.getType() == InputConstants.Type.KEYSYM) {
+            return switch (key.getValue()) {
+                case GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL -> "modifier:control";
+                case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> "modifier:shift";
+                case GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT -> "modifier:alt";
+                default -> "key:" + key.getType() + ":" + key.getValue();
+            };
+        }
+        return "key:" + key.getType() + ":" + key.getValue();
+    }
+
+    private static String modifierSignature(InputModifier modifier) {
+        if (modifier == null || !modifier.isCombination()) return "none";
+        return switch (modifier) {
+            case CONTROL -> "modifier:control";
+            case SHIFT -> "modifier:shift";
+            case ALT -> "modifier:alt";
+            default -> "modifier:" + modifier.name().toLowerCase(java.util.Locale.ROOT);
+        };
+    }
+
+    private static boolean sameKey(InputConstants.Key a, InputConstants.Key b) {
+        return a != null && b != null && a.getType() == b.getType() && a.getValue() == b.getValue();
+    }
 
     /**
      * Whether the modifier key of a combo bound to the same trigger as {@code triggerKey}
@@ -295,4 +449,6 @@ public final class KeybindComboStore {
             return displayFirst() + " + " + displaySecond();
         }
     }
+
+    public record Match(ComboBinding combo, KeyMapping mapping, boolean active) {}
 }

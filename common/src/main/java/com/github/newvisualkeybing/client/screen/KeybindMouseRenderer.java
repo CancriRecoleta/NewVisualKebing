@@ -196,7 +196,9 @@ final class KeybindMouseRenderer {
             if (comboParticipant && b.w >= 10 && b.h >= 8) {
                 int comboColor = matched ? KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR
                         : UITheme.withAlpha(KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0x70);
-                g.fill(b.x + 2, b.y + 1, b.x + b.w - 2, b.y + 3, comboColor);
+                int barH = Math.min(3, Math.max(2, b.h / 5));
+                UITheme.fillRoundedRectFast(g, b.x + 3, b.y + 1, b.w - 6, barH,
+                        Math.max(1, barH / 2), comboColor);
             }
             if (!hidden) renderBindingBadge(g, font, b, bindingCount, status, comboParticipant);
         }
@@ -225,11 +227,14 @@ final class KeybindMouseRenderer {
                                                  boolean wheel, boolean hidden) {
         var c = UITheme.colors();
         if (hidden) return;
-        g.fill(b.x + 1, b.y + 1, b.x + b.w - 1, Math.max(b.y + 2, b.y + b.h / 2),
+        UITheme.fillRoundedRectEx(g, b.x + 1, b.y + 1, b.w - 2,
+                Math.max(2, b.h / 2 - 1),
+                Math.max(1, radius - 1), Math.max(1, radius - 1), 1, 1,
                 UITheme.withAlpha(0xFFFFFF, active ? 0x18 : 0x0E));
         if (wheel) {
             int midX = b.x + b.w / 2;
-            g.fill(midX - 1, b.y + 2, midX, b.y + b.h - 2, UITheme.withAlpha(c.divider(), 0x80));
+            UITheme.fillRoundedRectFast(g, midX - 1, b.y + 3, 1, b.h - 6, 1,
+                    UITheme.withAlpha(c.divider(), 0x80));
             return;
         }
         if (status != KeyBindingScanner.KeyStatus.FREE) {
