@@ -40,12 +40,12 @@ abstract class FixedScaleScreen extends Screen {
     }
 
     protected final void pushFixedScale(GuiGraphics graphics) {
-        graphics.pose().pushPose();
-        graphics.pose().scale(fixedRenderScale, fixedRenderScale, 1.0f);
+        graphics.pose().pushMatrix();
+        graphics.pose().scale(fixedRenderScale, fixedRenderScale);
     }
 
     protected final void popFixedScale(GuiGraphics graphics) {
-        graphics.pose().popPose();
+        graphics.pose().popMatrix();
     }
 
     protected final void enableFixedScissor(GuiGraphics graphics, int minX, int minY, int maxX, int maxY) {
