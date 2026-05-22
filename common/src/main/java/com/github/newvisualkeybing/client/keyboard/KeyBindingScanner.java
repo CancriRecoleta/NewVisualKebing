@@ -28,6 +28,7 @@ public class KeyBindingScanner {
         FREE,
         SELF,
         OTHER_SINGLE,
+        COMBO,
         BOUND,
         CONFLICT
     }
@@ -41,6 +42,7 @@ public class KeyBindingScanner {
             String modName,
             boolean self,
             ConflictContext conflictContext,
+            com.github.newvisualkeybing.platform.services.IPlatformHelper.InputModifier modifier,
             String currentKeyName,
             String defaultKeyName
     ) {
@@ -128,6 +130,7 @@ public class KeyBindingScanner {
                     modName,
                     Constants.MOD_ID.equals(modId),
                     ctx,
+                    Services.PLATFORM.getKeyModifier(mapping),
                     key.getDisplayName().getString(),
                     mapping.getDefaultKey().getDisplayName().getString()
             );
@@ -334,6 +337,7 @@ public class KeyBindingScanner {
             switch (getStatus(key.glfwKey())) {
                 case FREE -> free++;
                 case SELF -> self++;
+                case COMBO -> bound++;
                 case OTHER_SINGLE -> other++;
                 case BOUND -> bound++;
                 case CONFLICT -> conflict++;
@@ -343,6 +347,7 @@ public class KeyBindingScanner {
             switch (getMouseStatus(KeyboardLayoutData.virtualToMouseBtn(key.glfwKey()))) {
                 case FREE -> free++;
                 case SELF -> self++;
+                case COMBO -> bound++;
                 case OTHER_SINGLE -> other++;
                 case BOUND -> bound++;
                 case CONFLICT -> conflict++;
@@ -473,6 +478,10 @@ public class KeyBindingScanner {
 
     private static boolean hasStoredCombo(KeyBindingInfo info) {
         return KeybindComboStore.global().hasCurrentCombo(info.translationKey());
+    }
+
+    private static boolean isCombination(KeyBindingInfo info) {
+        return info.modifier() != null && info.modifier().isCombination();
     }
 
     private static boolean sameActivator(KeyBindingInfo a, KeyBindingInfo b) {

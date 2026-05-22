@@ -38,6 +38,10 @@ public class MCButton extends AbstractWidget {
         return new MCButton(x, y, w, h, text, onPress);
     }
 
+    public int getX() {
+        return x;
+    }
+
     @Override
     public void renderButton(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
         renderWidget(new GuiGraphics(poseStack), mouseX, mouseY, partialTick);

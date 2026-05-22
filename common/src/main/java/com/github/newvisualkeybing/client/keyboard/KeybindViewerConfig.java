@@ -75,6 +75,16 @@ public final class KeybindViewerConfig {
         return data.hideNonSelectedMod;
     }
 
+    public boolean comboKeysNonConflicting() {
+        return data.comboKeysNonConflicting == null || data.comboKeysNonConflicting;
+    }
+
+    public boolean toggleComboKeysNonConflicting() {
+        data.comboKeysNonConflicting = !comboKeysNonConflicting();
+        save();
+        return data.comboKeysNonConflicting;
+    }
+
     public KeyboardLayoutData.Style defaultLayoutStyle() {
         if (data.defaultLayout == null || data.defaultLayout.isBlank()) {
             return KeyboardLayoutData.Style.ANSI_104;
@@ -93,6 +103,7 @@ public final class KeybindViewerConfig {
 
     private static final class Data {
         boolean hideNonSelectedMod;
+        Boolean comboKeysNonConflicting = Boolean.TRUE;
         String defaultLayout;
     }
 }

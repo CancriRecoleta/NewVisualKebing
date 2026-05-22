@@ -833,6 +833,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             case FREE -> c.widgetBorder();
             case SELF -> c.accent();
             case OTHER_SINGLE, BOUND -> c.success();
+            case COMBO -> c.warning();
             case CONFLICT -> c.danger();
         };
     }
@@ -843,6 +844,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         return switch (status) {
             case CONFLICT -> 0xFFFFFFFF;
             case SELF -> 0xFFFFFFFF;
+            case COMBO -> c.textPrimary();
             case OTHER_SINGLE, BOUND -> c.textPrimary();
             case FREE -> c.textSecondary();
         };
@@ -854,6 +856,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             case FREE -> c.widgetBg();
             case SELF -> UITheme.lerpColor(c.widgetBg(), c.accent(), 0.68f);
             case OTHER_SINGLE, BOUND -> UITheme.lerpColor(c.widgetBg(), c.success(), 0.62f);
+            case COMBO -> UITheme.lerpColor(c.widgetBg(), c.warning(), 0.68f);
             case CONFLICT -> UITheme.lerpColor(c.widgetBg(), c.danger(), 0.82f);
         };
     }
@@ -1117,7 +1120,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
         applyFixedScaleMetrics();
         mouseX = fixedMouseX(mouseX);
         mouseY = fixedMouseY(mouseY);
@@ -1146,7 +1149,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
                 return true;
             }
         }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        return super.mouseScrolled(mouseX, mouseY, scrollY);
     }
 
     static boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {

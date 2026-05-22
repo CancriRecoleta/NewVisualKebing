@@ -297,6 +297,7 @@ final class KeybindTooltipRenderer {
             case FREE -> c.textSecondary();
             case SELF -> c.accent();
             case OTHER_SINGLE, BOUND -> c.success();
+            case COMBO -> c.warning();
             case CONFLICT -> c.danger();
         };
         String label = statusLabels.get(status);
@@ -389,6 +390,7 @@ final class KeybindTooltipRenderer {
             case FREE -> c.widgetBorder();
             case SELF -> c.accent();
             case OTHER_SINGLE, BOUND -> c.success();
+            case COMBO -> c.warning();
             case CONFLICT -> c.danger();
         };
     }
@@ -397,7 +399,8 @@ final class KeybindTooltipRenderer {
         return switch (status) {
             case FREE -> "screen.newvisualkeybing.viewer.legend.free";
             case SELF -> "screen.newvisualkeybing.viewer.legend.self";
-            case OTHER_SINGLE, BOUND -> "screen.newvisualkeybing.viewer.legend.other";
+            case OTHER_SINGLE -> "screen.newvisualkeybing.viewer.legend.other";
+            case BOUND, COMBO -> "screen.newvisualkeybing.viewer.legend.bound";
             case CONFLICT -> "screen.newvisualkeybing.viewer.legend.conflict";
         };
     }

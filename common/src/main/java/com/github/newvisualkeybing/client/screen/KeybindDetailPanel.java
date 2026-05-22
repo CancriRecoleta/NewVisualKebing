@@ -524,7 +524,8 @@ final class KeybindDetailPanel {
         return switch (status) {
             case FREE -> "screen.newvisualkeybing.viewer.legend.free";
             case SELF -> "screen.newvisualkeybing.viewer.legend.self";
-            case OTHER_SINGLE, BOUND -> "screen.newvisualkeybing.viewer.legend.other";
+            case OTHER_SINGLE -> "screen.newvisualkeybing.viewer.legend.other";
+            case BOUND, COMBO -> "screen.newvisualkeybing.viewer.legend.bound";
             case CONFLICT -> "screen.newvisualkeybing.viewer.legend.conflict";
         };
     }

@@ -22,12 +22,42 @@ public interface IPlatformHelper {
         return ConflictContext.UNIVERSAL;
     }
 
+    default InputModifier getKeyModifier(KeyMapping mapping) {
+        return InputModifier.NONE;
+    }
+
+    default InputModifier getDefaultKeyModifier(KeyMapping mapping) {
+        return InputModifier.NONE;
+    }
+
     enum ConflictContext {
         UNIVERSAL, IN_GAME, GUI, UNKNOWN;
 
         public boolean conflicts(ConflictContext other) {
             if (this == UNIVERSAL || other == UNIVERSAL) return true;
             return this == other;
+        }
+    }
+
+    enum InputModifier {
+        NONE(""),
+        CONTROL("Ctrl"),
+        SHIFT("Shift"),
+        ALT("Alt"),
+        UNKNOWN("");
+
+        private final String displayName;
+
+        InputModifier(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public boolean isCombination() {
+            return this != NONE && this != UNKNOWN;
+        }
+
+        public String displayName() {
+            return displayName;
         }
     }
 }

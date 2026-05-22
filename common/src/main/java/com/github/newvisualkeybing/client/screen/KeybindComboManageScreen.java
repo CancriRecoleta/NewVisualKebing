@@ -532,7 +532,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
         applyFixedScaleMetrics();
         mouseX = fixedMouseX(mouseX);
         mouseY = fixedMouseY(mouseY);
