@@ -18,6 +18,17 @@ abstract class FixedScaleScreen extends Screen {
         super(title);
     }
 
+    @Override
+    protected void init() {
+        applyFixedScaleMetrics();
+    }
+
+    @Override
+    protected void repositionElements() {
+        applyFixedScaleMetrics();
+        super.repositionElements();
+    }
+
     protected final void applyFixedScaleMetrics() {
         Window window = Minecraft.getInstance().getWindow();
         if (window == null) {
@@ -50,11 +61,7 @@ abstract class FixedScaleScreen extends Screen {
     }
 
     protected final void enableFixedScissor(GuiGraphicsExtractor graphics, int minX, int minY, int maxX, int maxY) {
-        graphics.enableScissor(
-                (int) Math.floor(minX * fixedRenderScale),
-                (int) Math.floor(minY * fixedRenderScale),
-                (int) Math.ceil(maxX * fixedRenderScale),
-                (int) Math.ceil(maxY * fixedRenderScale));
+        graphics.enableScissor(minX, minY, maxX, maxY);
     }
 
     @Override
@@ -64,9 +71,19 @@ abstract class FixedScaleScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        applyFixedScaleMetrics();
+        return super.mouseClicked(fixedMouseEvent(event), doubleClick);
+    }
+
+    @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         applyFixedScaleMetrics();
-        return super.mouseReleased(event);
+        return super.mouseReleased(fixedMouseEvent(event));
+    }
+
+    protected final MouseButtonEvent fixedMouseEvent(MouseButtonEvent event) {
+        return new MouseButtonEvent(fixedMouseX(event.x()), fixedMouseY(event.y()), event.buttonInfo());
     }
 
     protected final int fixedMouseX(int mouseX) {

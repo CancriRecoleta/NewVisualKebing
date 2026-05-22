@@ -250,6 +250,7 @@ final class KeybindDetailPanel {
             case FREE -> { dot = c.widgetBorder(); textColor = c.textSecondary(); }
             case SELF -> { dot = c.accent(); textColor = c.accent(); }
             case OTHER_SINGLE, BOUND -> { dot = c.success(); textColor = c.success(); }
+            case COMBO -> { dot = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR; textColor = dot; }
             case CONFLICT -> { dot = c.danger(); textColor = c.danger(); }
             default -> { dot = c.widgetBorder(); textColor = c.textSecondary(); }
         }
@@ -482,8 +483,9 @@ final class KeybindDetailPanel {
         boolean xHovered = KeybindViewerScreen.inside(mouseX, mouseY, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W);
         int fill = xHovered ? UITheme.lerpColor(c.widgetBg(), c.danger(), 0.55f)
                             : UITheme.lerpColor(c.widgetBg(), c.danger(), rowHovered ? 0.18f : 0.10f);
-        UITheme.fillRoundedRectFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3, fill);
-        UITheme.drawRoundedBorderFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3,
+        int xRadius = ROW_UNBIND_W / 2;
+        UITheme.fillRoundedRectFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, xRadius, fill);
+        UITheme.drawRoundedBorderFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, xRadius,
                 UITheme.withAlpha(c.danger(), xHovered ? 0xC0 : 0x78));
         int cx = xButtonX + ROW_UNBIND_W / 2;
         int cy = xButtonY + ROW_UNBIND_W / 2;
@@ -505,13 +507,14 @@ final class KeybindDetailPanel {
         priorityHits.add(new PriorityHit(plusX, y, ROW_PRIORITY_BTN_W, h, 1, info));
         priorityHits.add(new PriorityHit(minusX, y, ROW_PRIORITY_BTN_W, h, -1, info));
 
-        UITheme.fillRoundedRectFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        int buttonRadius = Math.min(ROW_PRIORITY_BTN_W, h) / 2;
+        UITheme.fillRoundedRectFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, buttonRadius,
                 UITheme.lerpColor(c.widgetBg(), c.accent(), plusHover ? 0.48f : 0.18f));
-        UITheme.drawRoundedBorderFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.drawRoundedBorderFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, buttonRadius,
                 UITheme.withAlpha(c.accent(), plusHover ? 0xC0 : 0x80));
-        UITheme.fillRoundedRectFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.fillRoundedRectFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, buttonRadius,
                 UITheme.lerpColor(c.widgetBg(), c.warningColor(), minusHover ? 0.48f : 0.18f));
-        UITheme.drawRoundedBorderFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.drawRoundedBorderFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, buttonRadius,
                 UITheme.withAlpha(c.warningColor(), minusHover ? 0xC0 : 0x80));
 
         g.text(font, "+", plusX + 4, y + (h - font.lineHeight) / 2, c.textPrimary(), false);

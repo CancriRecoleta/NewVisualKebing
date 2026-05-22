@@ -227,9 +227,10 @@ final class KeybindMouseRenderer {
                                                  boolean wheel, boolean hidden) {
         var c = UITheme.colors();
         if (hidden) return;
-        UITheme.fillRoundedRectEx(g, b.x + 1, b.y + 1, b.w - 2,
-                Math.max(2, b.h / 2 - 1),
-                Math.max(1, radius - 1), Math.max(1, radius - 1), 1, 1,
+        int highlightH = Math.max(2, b.h / 2 - 1);
+        UITheme.fillRoundedRectFast(g, b.x + 1, b.y + 1, b.w - 2,
+                highlightH,
+                Math.max(1, Math.min(radius - 1, highlightH / 2)),
                 UITheme.withAlpha(0xFFFFFF, active ? 0x18 : 0x0E));
         if (wheel) {
             int midX = b.x + b.w / 2;

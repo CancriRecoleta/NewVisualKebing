@@ -148,11 +148,11 @@ public final class UITheme {
     }
 
     public static void fillSoftRoundedRect(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius, int color) {
-        fillRoundedRect(g, x, y, w, h, radius, color);
+        fillRoundedRectFast(g, x, y, w, h, radius, color);
     }
 
     public static void drawSoftRoundedBorder(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius, int color) {
-        drawRoundedBorder(g, x, y, w, h, radius, color);
+        drawRoundedBorderFast(g, x, y, w, h, radius, color);
     }
 
     public static void drawSoftGlow(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius, int color, int maxAlpha) {
@@ -464,9 +464,9 @@ public final class UITheme {
 
     public static void drawGlassBackground(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius) {
         var c = colors();
-        fillRoundedRect(g, x, y, w, h, radius, c.glassBg());
-        fillRoundedRect(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, 0x08));
-        drawRoundedBorder(g, x, y, w, h, radius, withAlpha(c.widgetBorder(), 0x60));
+        fillRoundedRectFast(g, x, y, w, h, radius, c.glassBg());
+        fillRoundedRectFast(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, 0x08));
+        drawRoundedBorderFast(g, x, y, w, h, radius, withAlpha(c.widgetBorder(), 0x60));
     }
 
 
@@ -480,10 +480,10 @@ public final class UITheme {
     public static void drawGradientButton(GuiGraphicsExtractor g, int x, int y, int w, int h, int radius,
                                           int colorTop, int colorBottom, float hoverProgress) {
         fillGradient(g, x, y, w, h, colorTop, colorBottom);
-        drawRoundedBorder(g, x, y, w, h, radius, withAlpha(0xFFFFFF, 0x20));
+        drawRoundedBorderFast(g, x, y, w, h, radius, withAlpha(0xFFFFFF, 0x20));
         if (hoverProgress > 0.01f) {
             int glowAlpha = (int) (30 * hoverProgress);
-            fillRoundedRect(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, glowAlpha));
+            fillRoundedRectFast(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, glowAlpha));
         }
     }
 

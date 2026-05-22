@@ -295,6 +295,9 @@ public final class KeybindComboStore {
             if (isComplete(combo) && sameInput(combo.secondKey, currentKey(mapping).getName())) {
                 return activatorSignature(combo.firstKey);
             }
+            if (VanillaDebugKeybinds.isDebugCombination(mapping)) {
+                return activatorSignature(VanillaDebugKeybinds.modifierInputName());
+            }
         }
         return modifierSignature(modifier);
     }

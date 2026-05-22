@@ -129,6 +129,7 @@ public class KeyBindingScanner {
             InputModifier defaultModifier = Services.PLATFORM.getDefaultKeyModifier(mapping);
             String baseKeyName = key.getDisplayName().getString();
             String defaultBaseKeyName = mapping.getDefaultKey().getDisplayName().getString();
+            boolean vanillaDebugCombo = VanillaDebugKeybinds.isDebugCombination(mapping);
             KeyBindingInfo info = new KeyBindingInfo(
                     actionKey,
                     Component.translatable(actionKey).getString(),
@@ -142,8 +143,10 @@ public class KeyBindingScanner {
                     defaultModifier,
                     isComboBaseKey(key),
                     baseKeyName,
-                    displayKeyName(modifier, baseKeyName),
-                    displayKeyName(defaultModifier, defaultBaseKeyName)
+                    vanillaDebugCombo ? VanillaDebugKeybinds.displayCurrentCombo(key)
+                            : displayKeyName(modifier, baseKeyName),
+                    vanillaDebugCombo ? VanillaDebugKeybinds.displayDefaultCombo(mapping.getDefaultKey())
+                            : displayKeyName(defaultModifier, defaultBaseKeyName)
             );
 
             if (key.getType() == InputConstants.Type.MOUSE) {
@@ -476,6 +479,7 @@ public class KeyBindingScanner {
 
         for (int i = 0; i < infos.size(); i++) {
             for (int j = i + 1; j < infos.size(); j++) {
+                if (comboAware && sameVanillaDebugComboFamily(infos.get(i), infos.get(j))) continue;
                 if (comboAware && !sameActivator(infos.get(i), infos.get(j))) continue;
                 ConflictContext ci = infos.get(i).conflictContext();
                 ConflictContext cj = infos.get(j).conflictContext();
@@ -491,6 +495,11 @@ public class KeyBindingScanner {
 
     private static boolean hasStoredCombo(KeyBindingInfo info) {
         return KeybindComboStore.global().hasCurrentCombo(info.translationKey());
+    }
+
+    private static boolean sameVanillaDebugComboFamily(KeyBindingInfo a, KeyBindingInfo b) {
+        return VanillaDebugKeybinds.isDebugCombination(a.translationKey(), a.categoryKey())
+                && VanillaDebugKeybinds.isDebugCombination(b.translationKey(), b.categoryKey());
     }
 
     private static boolean sameActivator(KeyBindingInfo a, KeyBindingInfo b) {
@@ -520,7 +529,9 @@ public class KeyBindingScanner {
     }
 
     private static boolean isCombination(KeyBindingInfo info) {
-        return info.comboBaseKey() || info.modifier() != null && info.modifier().isCombination();
+        return info.comboBaseKey()
+                || VanillaDebugKeybinds.isDebugCombination(info.translationKey(), info.categoryKey())
+                || info.modifier() != null && info.modifier().isCombination();
     }
 
     private static boolean isComboBaseKey(InputConstants.Key key) {

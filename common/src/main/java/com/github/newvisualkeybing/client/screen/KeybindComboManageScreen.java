@@ -47,6 +47,8 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private CaptureState capture = null;
     private String noticeMessage;
     private long noticeUntil;
+    private int headerSearchX;
+    private int headerSearchW;
 
     public KeybindComboManageScreen(Screen parent) {
         super(Component.translatable("screen.newvisualkeybing.viewer.combo.title"));
@@ -56,38 +58,25 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     @Override
     protected void init() {
         super.init();
-        applyFixedScaleMetrics();
         UITheme.setMode(UITheme.Mode.DARK);
 
-        int searchX = 12;
-        int searchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 22;
-        int searchY = (HEADER_H - searchH) / 2;
-        mappingSearchBox = new MCEditBox(font, searchX, searchY, searchW, searchH,
+        mappingSearchBox = new MCEditBox(font, 0, 0, 1, 1,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
                 .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
                 .withClearAffordance(true);
         mappingSearchBox.setResponder(value -> rebuildRows());
         addRenderableWidget(mappingSearchBox);
 
-        int btnGap = 6;
-        int backW = 60;
-        int addW = 110;
-        int clearW = 110;
-        int xClear = width - 12 - clearW;
-        int xAdd = xClear - btnGap - addW;
-        int xBack = xAdd - btnGap - backW;
-
-        backButton = MCButton.create(xBack, 10, backW, 20,
+        backButton = MCButton.create(0, 0, 60, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.back"), b -> onClose());
         addRenderableWidget(backButton);
 
-        addButton = MCButton.create(xAdd, 10, addW, 20,
+        addButton = MCButton.create(0, 0, 110, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.add"),
                 b -> beginAddCombo());
         addRenderableWidget(addButton);
 
-        clearAllButton = MCButton.create(xClear, 10, clearW, 20,
+        clearAllButton = MCButton.create(0, 0, 110, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.clear_all"),
                 b -> {
                     store.clear();
@@ -96,7 +85,53 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 });
         addRenderableWidget(clearAllButton);
 
+        layoutHeaderControls();
         rebuildRows();
+    }
+
+    @Override
+    protected void onFixedScaleMetricsChanged() {
+        layoutHeaderControls();
+        scrollOffset = Mth.clamp(scrollOffset, 0, Math.max(0, totalListH - listHeight()));
+    }
+
+    private void layoutHeaderControls() {
+        headerSearchX = 12;
+        headerSearchW = Mth.clamp(width / 3, 180, 320);
+        int searchH = 22;
+        int searchY = (HEADER_H - searchH) / 2;
+        if (mappingSearchBox != null) {
+            mappingSearchBox.setX(headerSearchX);
+            mappingSearchBox.setY(searchY);
+            mappingSearchBox.setWidth(headerSearchW);
+            mappingSearchBox.setHeight(searchH);
+        }
+
+        int btnGap = 6;
+        int backW = 60;
+        int addW = 110;
+        int clearW = 110;
+        int xClear = width - 12 - clearW;
+        int xAdd = xClear - btnGap - addW;
+        int xBack = xAdd - btnGap - backW;
+        if (backButton != null) {
+            backButton.setX(xBack);
+            backButton.setY(10);
+            backButton.setWidth(backW);
+            backButton.setHeight(20);
+        }
+        if (addButton != null) {
+            addButton.setX(xAdd);
+            addButton.setY(10);
+            addButton.setWidth(addW);
+            addButton.setHeight(20);
+        }
+        if (clearAllButton != null) {
+            clearAllButton.setX(xClear);
+            clearAllButton.setY(10);
+            clearAllButton.setWidth(clearW);
+            clearAllButton.setHeight(20);
+        }
     }
 
     private void rebuildRows() {
@@ -134,7 +169,6 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int fixedMouseY = fixedMouseY(mouseY);
         pushFixedScale(graphics);
         try {
-        extractBackground(graphics, fixedMouseX, fixedMouseY, partialTick);
         var colors = UITheme.colors();
         graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE6));
 
@@ -154,21 +188,11 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private void renderHeader(GuiGraphicsExtractor graphics) {
         var colors = UITheme.colors();
         UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4, 8);
-
-        int searchX = 12;
-        int searchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 22;
-        int searchY = (HEADER_H - searchH) / 2;
-        if (mappingSearchBox != null) {
-            mappingSearchBox.setX(searchX);
-            mappingSearchBox.setY(searchY);
-            mappingSearchBox.setWidth(searchW);
-            mappingSearchBox.setHeight(searchH);
-        }
+        layoutHeaderControls();
 
         String title = Component.translatable("screen.newvisualkeybing.viewer.combo.title").getString();
         String count = Component.translatable("screen.newvisualkeybing.viewer.combo.count", store.size()).getString();
-        int titleX = searchX + searchW + 16;
+        int titleX = headerSearchX + headerSearchW + 16;
         int textBlockH = font.lineHeight * 2 + 3;
         int titleY = (HEADER_H - textBlockH) / 2;
         int titleRight = backButton == null ? width - 12 : backButton.getX() - 8;
@@ -278,31 +302,33 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         graphics.text(font, statusText, statusX + dotR + 4, comboY, statusColor, false);
 
         int recordX = x + w - RECORD_BTN_W - DELETE_BTN_W - COL_GAP * 2;
-        int btnTop = rowTop + (rowH - 16) / 2;
+        int btnH = 16;
+        int btnRadius = btnH / 2;
+        int btnTop = rowTop + (rowH - btnH) / 2;
         boolean rcHover = hovered && mouseX >= recordX && mouseX < recordX + RECORD_BTN_W
-                && mouseY >= btnTop && mouseY < btnTop + 16;
+                && mouseY >= btnTop && mouseY < btnTop + btnH;
         int rcFill = rcHover ? UITheme.lerpColor(colors.widgetBg(), HIGHLIGHT_COLOR, 0.40f) : colors.widgetBg();
-        UITheme.fillRoundedRectFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, 4, rcFill);
-        UITheme.drawRoundedBorderFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, 4,
+        UITheme.fillRoundedRectFast(graphics, recordX, btnTop, RECORD_BTN_W, btnH, btnRadius, rcFill);
+        UITheme.drawRoundedBorderFast(graphics, recordX, btnTop, RECORD_BTN_W, btnH, btnRadius,
                 UITheme.withAlpha(HIGHLIGHT_COLOR, 0xC0));
         String reLabel = Component.translatable("screen.newvisualkeybing.viewer.combo.rerecord").getString();
         graphics.text(font, reLabel,
                 recordX + (RECORD_BTN_W - font.width(reLabel)) / 2,
-                btnTop + (16 - font.lineHeight) / 2 + 1,
+                btnTop + (btnH - font.lineHeight) / 2 + 1,
                 colors.textPrimary(), false);
 
         int deleteX = recordX + RECORD_BTN_W + COL_GAP;
         boolean delHover = hovered && mouseX >= deleteX && mouseX < deleteX + DELETE_BTN_W
-                && mouseY >= btnTop && mouseY < btnTop + 16;
+                && mouseY >= btnTop && mouseY < btnTop + btnH;
         int delFill = delHover ? UITheme.lerpColor(colors.widgetBg(), colors.dangerColor(), 0.50f)
                 : colors.widgetBg();
-        UITheme.fillRoundedRectFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, 4, delFill);
-        UITheme.drawRoundedBorderFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, 4,
+        UITheme.fillRoundedRectFast(graphics, deleteX, btnTop, DELETE_BTN_W, btnH, btnRadius, delFill);
+        UITheme.drawRoundedBorderFast(graphics, deleteX, btnTop, DELETE_BTN_W, btnH, btnRadius,
                 UITheme.withAlpha(colors.dangerColor(), 0xB0));
         String del = Component.translatable("screen.newvisualkeybing.viewer.combo.delete").getString();
         graphics.text(font, del,
                 deleteX + (DELETE_BTN_W - font.width(del)) / 2,
-                btnTop + (16 - font.lineHeight) / 2 + 1,
+                btnTop + (btnH - font.lineHeight) / 2 + 1,
                 delHover ? colors.dangerColor() : colors.textSecondary(), false);
     }
 
@@ -405,8 +431,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         applyFixedScaleMetrics();
-        double mouseX = fixedMouseX(event.x());
-        double mouseY = fixedMouseY(event.y());
+        MouseButtonEvent fixedEvent = fixedMouseEvent(event);
+        double mouseX = fixedEvent.x();
+        double mouseY = fixedEvent.y();
         int button = event.button();
         if (capture != null) {
             if (capture.stage == CaptureStage.SELECT_MAPPING) {

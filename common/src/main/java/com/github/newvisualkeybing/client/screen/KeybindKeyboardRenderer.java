@@ -205,11 +205,12 @@ final class KeybindKeyboardRenderer {
 
             int hlAlpha = state.hover ? 0x18 : 0x10;
             int half = faceH / 2;
-            UITheme.fillRoundedRectEx(g, x + 1, y + 1, w - 2, Math.max(2, half - 1),
-                    Math.max(1, radius - 1), Math.max(1, radius - 1), 1, 1,
+            int highlightH = Math.max(2, half - 1);
+            UITheme.fillRoundedRectFast(g, x + 1, y + 1, w - 2, highlightH,
+                    Math.max(1, Math.min(radius - 1, highlightH / 2)),
                     UITheme.withAlpha(0xFFFFFF, hlAlpha));
-            UITheme.fillRoundedRectEx(g, x + 1, y + faceH - 2, w - 2, 2,
-                    1, 1, Math.max(1, radius - 1), Math.max(1, radius - 1), FACE_BOTTOM_TINT);
+            UITheme.fillRoundedRectFast(g, x + 1, y + faceH - 2, w - 2, 2,
+                    1, FACE_BOTTOM_TINT);
 
             if (state.comboParticipant) renderComboTopBar(g, state, false);
 
@@ -245,9 +246,7 @@ final class KeybindKeyboardRenderer {
 
     private static void renderStatusEdge(GuiGraphicsExtractor g, int x, int y, int w, int faceH,
                                          int edgeH, int radius, int color) {
-        UITheme.fillRoundedRectEx(g, x + 3, y + faceH - edgeH - 1, w - 6, edgeH,
-                Math.max(1, edgeH / 2), Math.max(1, edgeH / 2),
-                Math.max(1, Math.min(radius - 1, edgeH)),
+        UITheme.fillRoundedRectFast(g, x + 3, y + faceH - edgeH - 1, w - 6, edgeH,
                 Math.max(1, Math.min(radius - 1, edgeH)), color);
     }
 

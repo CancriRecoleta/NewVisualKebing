@@ -300,9 +300,10 @@ final class KeybindQuickEditPopover {
                                       boolean hovered, int idleColor, int hoverColor) {
         var c = UITheme.colors();
         if (hovered) {
-            UITheme.fillRoundedRectFast(g, x, y, size, size, 3,
+            int radius = size / 2;
+            UITheme.fillRoundedRectFast(g, x, y, size, size, radius,
                     UITheme.lerpColor(c.widgetBg(), hoverColor, 0.55f));
-            UITheme.drawRoundedBorderFast(g, x, y, size, size, 3, UITheme.withAlpha(hoverColor, 0xC0));
+            UITheme.drawRoundedBorderFast(g, x, y, size, size, radius, UITheme.withAlpha(hoverColor, 0xC0));
         }
         int cx = x + size / 2;
         int cy = y + size / 2;

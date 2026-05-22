@@ -987,10 +987,11 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         applyFixedScaleMetrics();
-        double mouseX = fixedMouseX(event.x());
-        double mouseY = fixedMouseY(event.y());
+        MouseButtonEvent fixedEvent = fixedMouseEvent(event);
+        double mouseX = fixedEvent.x();
+        double mouseY = fixedEvent.y();
         int button = event.button();
-        if (quickEdit.isOpen()) return quickEdit.mouseClicked(event);
+        if (quickEdit.isOpen()) return quickEdit.mouseClicked(fixedEvent);
         if (handleSearchClearClick(mouseX, mouseY)) return true;
         if (super.mouseClicked(event, doubleClick)) return true;
         if (button != 0) return false;
@@ -1016,7 +1017,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             int px = BODY_PAD;
             int py = contentTop;
             int ph = contentBottom - contentTop;
-            if (profilePanel.mouseClicked(event, px, py, ph)) return true;
+            if (profilePanel.mouseClicked(fixedEvent, px, py, ph)) return true;
         }
 
         boolean wheelSelected = selectedVirtualKey != null && KeyboardLayoutData.isWheel(selectedVirtualKey);
