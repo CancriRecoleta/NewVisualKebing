@@ -709,7 +709,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         }
         if (target == null) return;
         KeybindComboStore.global().removeCombo(target.getName());
-        minecraft.options.setKey(target, com.mojang.blaze3d.platform.InputConstants.UNKNOWN);
+        target.setKey(com.mojang.blaze3d.platform.InputConstants.UNKNOWN);
         com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer.resetAndEnforce();
         minecraft.options.save();
         scanner.scan();
