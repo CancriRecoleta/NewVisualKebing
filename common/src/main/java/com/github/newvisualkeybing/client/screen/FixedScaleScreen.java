@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 abstract class FixedScaleScreen extends Screen {
@@ -15,6 +16,16 @@ abstract class FixedScaleScreen extends Screen {
 
     protected FixedScaleScreen(Component title) {
         super(title);
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        applyFixedScaleMetrics();
+    }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
     }
 
     protected final void applyFixedScaleMetrics() {
@@ -49,11 +60,11 @@ abstract class FixedScaleScreen extends Screen {
     }
 
     protected final void enableFixedScissor(GuiGraphics graphics, int minX, int minY, int maxX, int maxY) {
-        graphics.enableScissor(
-                (int) Math.floor(minX * fixedRenderScale),
-                (int) Math.floor(minY * fixedRenderScale),
-                (int) Math.ceil(maxX * fixedRenderScale),
-                (int) Math.ceil(maxY * fixedRenderScale));
+        graphics.enableScissor(minX, minY, maxX, maxY);
+    }
+
+    protected final MouseButtonEvent fixedMouseEvent(MouseButtonEvent event) {
+        return new MouseButtonEvent(fixedMouseX(event.x()), fixedMouseY(event.y()), event.buttonInfo());
     }
 
     @Override

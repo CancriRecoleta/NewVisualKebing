@@ -8,7 +8,11 @@ import net.minecraft.client.Minecraft;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 
@@ -42,28 +46,44 @@ public final class KeybindPriorityEnforcer {
 
         try {
             @SuppressWarnings("unchecked")
-            Map<InputConstants.Key, KeyMapping> liveMap = (Map<InputConstants.Key, KeyMapping>) field.get(null);
+            Map<InputConstants.Key, Object> liveMap = (Map<InputConstants.Key, Object>) field.get(null);
             if (liveMap == null) return;
 
-            Map<InputConstants.Key, KeyMapping> winners = new HashMap<>();
+            boolean listBacked = isListBacked(field, liveMap);
+            Map<InputConstants.Key, List<KeyMapping>> grouped = new HashMap<>();
             for (KeyMapping mapping : mc.options.keyMappings) {
                 InputConstants.Key key = ((KeyMappingAccessor) (Object) mapping).newvisualkeybing$getKey();
                 if (key == null || key == InputConstants.UNKNOWN) continue;
-                KeyMapping current = winners.get(key);
-                if (current == null
-                        || KeybindProfileStore.globalPriorityOf(mapping.getName())
-                            > KeybindProfileStore.globalPriorityOf(current.getName())) {
-                    winners.put(key, mapping);
+                grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(mapping);
+            }
+            for (Map.Entry<InputConstants.Key, List<KeyMapping>> entry : grouped.entrySet()) {
+                List<KeyMapping> mappings = entry.getValue();
+                mappings.sort(PRIORITY_ORDER);
+                KeyMapping winner = mappings.getFirst();
+                if (listBacked) {
+                    liveMap.put(entry.getKey(), new ArrayList<>(List.of(winner)));
+                } else {
+                    liveMap.put(entry.getKey(), winner);
                 }
             }
-            for (Map.Entry<InputConstants.Key, KeyMapping> entry : winners.entrySet()) {
-                liveMap.put(entry.getKey(), entry.getValue());
-            }
-        } catch (IllegalAccessException ignored) {
+        } catch (ClassCastException | IllegalAccessException ignored) {
             lookupFailed = true;
         }
     }
 
+    private static final Comparator<KeyMapping> PRIORITY_ORDER =
+            Comparator.comparingInt((KeyMapping mapping) -> KeybindProfileStore.globalPriorityOf(mapping.getName()))
+                    .reversed()
+                    .thenComparing(KeyMapping::getName);
+
+    private static boolean isListBacked(Field field, Map<InputConstants.Key, Object> liveMap) {
+        for (Object value : liveMap.values()) {
+            if (value == null) continue;
+            return value instanceof List<?>;
+        }
+        Type genericType = field.getGenericType();
+        return genericType != null && genericType.getTypeName().contains("java.util.List");
+    }
 
     private static Field locateMapField() {
         String[] candidates = { "MAP", "f_90810_", "field_1665" };

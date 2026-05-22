@@ -1013,10 +1013,11 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         applyFixedScaleMetrics();
         double mouseX = fixedMouseX(event.x());
         double mouseY = fixedMouseY(event.y());
+        MouseButtonEvent fixedEvent = fixedMouseEvent(event);
         int button = event.button();
-        if (quickEdit.isOpen()) return quickEdit.mouseClicked(event);
+        if (quickEdit.isOpen()) return quickEdit.mouseClicked(fixedEvent);
         if (handleSearchClearClick(mouseX, mouseY)) return true;
-        if (super.mouseClicked(event, doubleClick)) return true;
+        if (super.mouseClicked(fixedEvent, doubleClick)) return true;
         if (button != 0) return false;
 
         FilterTab[] tabs = FilterTab.values();
@@ -1035,12 +1036,12 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         }
 
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
-            if (handleModPanelClick(event, doubleClick, mouseX, mouseY)) return true;
+            if (handleModPanelClick(fixedEvent, doubleClick, mouseX, mouseY)) return true;
         } else if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
             int px = BODY_PAD;
             int py = contentTop;
             int ph = contentBottom - contentTop;
-            if (profilePanel.mouseClicked(event, px, py, ph)) return true;
+            if (profilePanel.mouseClicked(fixedEvent, px, py, ph)) return true;
         }
 
         boolean wheelSelected = selectedVirtualKey != null && KeyboardLayoutData.isWheel(selectedVirtualKey);
