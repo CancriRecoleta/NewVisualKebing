@@ -464,17 +464,17 @@ public final class UITheme {
 
     public static void drawGlassBackground(GuiGraphics g, int x, int y, int w, int h, int radius) {
         var c = colors();
-        fillRoundedRect(g, x, y, w, h, radius, c.glassBg());
-        fillRoundedRect(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, 0x08));
-        drawRoundedBorder(g, x, y, w, h, radius, withAlpha(c.widgetBorder(), 0x60));
+        fillRoundedRectFast(g, x, y, w, h, radius, c.glassBg());
+        fillRoundedRectFast(g, x, y, w, h / 2, radius, withAlpha(0xFFFFFF, 0x08));
+        drawRoundedBorderFast(g, x, y, w, h, radius, withAlpha(c.widgetBorder(), 0x60));
     }
 
 
     public static void drawGlassPanel(GuiGraphics g, int x, int y, int w, int h, int radius) {
         var c = colors();
         drawCardShadow(g, x - 2, y - 2, w + 4, h + 4, radius + 2);
-        fillSoftRoundedRect(g, x, y, w, h, radius, c.panelBg());
-        drawSoftRoundedBorder(g, x, y, w, h, radius, c.widgetBorder());
+        fillRoundedRectFast(g, x, y, w, h, radius, c.panelBg());
+        drawRoundedBorderFast(g, x, y, w, h, radius, c.widgetBorder());
     }
 
     public static void drawGradientButton(GuiGraphics g, int x, int y, int w, int h, int radius,

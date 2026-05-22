@@ -25,6 +25,18 @@ final class KeybindProfilePanel {
     private MCEditBox nameBox;
     private int lastNameSelection = Integer.MIN_VALUE;
     private boolean renaming;
+    private String titleText;
+    private String emptyText;
+    private String saveText;
+    private String newText;
+    private String renameText;
+    private String renameConfirmText;
+    private String applyText;
+    private String exportText;
+    private String importText;
+    private String deleteText;
+    private Component nameMessage;
+    private Component namePlaceholder;
 
     KeybindProfilePanel(KeybindProfileStore profileStore, Runnable rebuildEntries, NoticeSink noticeSink) {
         this(profileStore, rebuildEntries, noticeSink, () -> {});
@@ -40,16 +52,13 @@ final class KeybindProfilePanel {
 
     void render(GuiGraphics graphics, Font font, int x, int y, int h, int mouseX, int mouseY) {
         var colors = UITheme.colors();
-        String title = Component.translatable("screen.newvisualkeybing.viewer.profile.title").getString();
-        int contentY = KeybindViewerScreen.paintPanelBase(graphics, font, x, y, WIDTH, h, title);
+        refreshTextCache();
+        int contentY = KeybindViewerScreen.paintPanelBase(graphics, font, x, y, WIDTH, h, titleText);
 
         int nameX = x + 10;
         int nameY = contentY + 4;
         ensureNameBox(font, nameX, nameY);
         syncNameBox();
-        UITheme.fillRoundedRectFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5, colors.inputBg());
-        UITheme.drawRoundedBorderFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5,
-                renaming || nameBox.isFocused() ? colors.accent() : colors.widgetBorder());
         nameBox.render(graphics, mouseX, mouseY, 1.0f);
 
         int rowY = contentY + 30;
@@ -76,39 +85,55 @@ final class KeybindProfilePanel {
         }
 
         if (profiles.isEmpty()) {
-            String empty = Component.translatable("screen.newvisualkeybing.viewer.profile.empty").getString();
-            graphics.drawString(font, fit(font, empty, WIDTH - 20), x + 10,
+            graphics.drawString(font, fit(font, emptyText, WIDTH - 20), x + 10,
                     textY(font, rowY, ROW_H - 2), colors.textMuted(), false);
         }
 
         int halfW = (WIDTH - 22) / 2;
         renderButton(graphics, font, x + 8, buttonTop, halfW, BUTTON_H,
-                Component.translatable("screen.newvisualkeybing.viewer.profile.save").getString(),
+                saveText,
                 colors.accent(), inside(mouseX, mouseY, x + 8, buttonTop, halfW, BUTTON_H));
         renderButton(graphics, font, x + 14 + halfW, buttonTop, halfW, BUTTON_H,
-                Component.translatable("screen.newvisualkeybing.viewer.profile.new").getString(),
+                newText,
                 colors.accentLight(), inside(mouseX, mouseY, x + 14 + halfW, buttonTop, halfW, BUTTON_H));
         renderButton(graphics, font, x + 8, buttonTop + BUTTON_H + 5, WIDTH - 16, BUTTON_H,
-                Component.translatable(renaming
-                        ? "screen.newvisualkeybing.viewer.profile.rename_confirm"
-                        : "screen.newvisualkeybing.viewer.profile.rename").getString(),
+                renaming ? renameConfirmText : renameText,
                 colors.accent(), inside(mouseX, mouseY, x + 8, buttonTop + BUTTON_H + 5, WIDTH - 16, BUTTON_H));
         renderButton(graphics, font, x + 8, buttonTop + (BUTTON_H + 5) * 2, WIDTH - 16, BUTTON_H,
-                Component.translatable("screen.newvisualkeybing.viewer.profile.apply").getString(),
+                applyText,
                 colors.successColor(), inside(mouseX, mouseY, x + 8, buttonTop + (BUTTON_H + 5) * 2, WIDTH - 16, BUTTON_H));
         renderButton(graphics, font, x + 8, buttonTop + (BUTTON_H + 5) * 3, halfW, BUTTON_H,
-                Component.translatable("screen.newvisualkeybing.viewer.profile.export").getString(),
+                exportText,
                 colors.warningColor(), inside(mouseX, mouseY, x + 8, buttonTop + (BUTTON_H + 5) * 3, halfW, BUTTON_H));
         renderButton(graphics, font, x + 14 + halfW, buttonTop + (BUTTON_H + 5) * 3, halfW, BUTTON_H,
-                Component.translatable("screen.newvisualkeybing.viewer.profile.import").getString(),
+                importText,
                 colors.accent(), inside(mouseX, mouseY, x + 14 + halfW, buttonTop + (BUTTON_H + 5) * 3, halfW, BUTTON_H));
         renderButton(graphics, font, x + 8, buttonTop + (BUTTON_H + 5) * 4, WIDTH - 16, BUTTON_H,
-                Component.translatable("screen.newvisualkeybing.viewer.profile.delete").getString(),
+                deleteText,
                 colors.dangerColor(), inside(mouseX, mouseY, x + 8, buttonTop + (BUTTON_H + 5) * 4, WIDTH - 16, BUTTON_H));
     }
 
+    private void refreshTextCache() {
+        if (titleText != null) return;
+        titleText = Component.translatable("screen.newvisualkeybing.viewer.profile.title").getString();
+        emptyText = Component.translatable("screen.newvisualkeybing.viewer.profile.empty").getString();
+        saveText = Component.translatable("screen.newvisualkeybing.viewer.profile.save").getString();
+        newText = Component.translatable("screen.newvisualkeybing.viewer.profile.new").getString();
+        renameText = Component.translatable("screen.newvisualkeybing.viewer.profile.rename").getString();
+        renameConfirmText = Component.translatable("screen.newvisualkeybing.viewer.profile.rename_confirm").getString();
+        applyText = Component.translatable("screen.newvisualkeybing.viewer.profile.apply").getString();
+        exportText = Component.translatable("screen.newvisualkeybing.viewer.profile.export").getString();
+        importText = Component.translatable("screen.newvisualkeybing.viewer.profile.import").getString();
+        deleteText = Component.translatable("screen.newvisualkeybing.viewer.profile.delete").getString();
+        nameMessage = Component.translatable("screen.newvisualkeybing.viewer.profile.name");
+        namePlaceholder = Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder");
+    }
+
     boolean mouseClicked(double mouseX, double mouseY, int x, int y, int h) {
-        if (!inside(mouseX, mouseY, x, y, WIDTH, h)) return false;
+        if (!inside(mouseX, mouseY, x, y, WIDTH, h)) {
+            releaseFocus();
+            return false;
+        }
 
         releaseExternalFocus.run();
 
@@ -216,6 +241,12 @@ final class KeybindProfilePanel {
         return true;
     }
 
+    void releaseFocus() {
+        if (nameBox != null) {
+            nameBox.setFocused(false);
+        }
+    }
+
     boolean charTyped(char codePoint, int modifiers) {
         return nameBox != null && nameBox.isFocused() && nameBox.charTyped(codePoint, modifiers);
     }
@@ -273,11 +304,11 @@ final class KeybindProfilePanel {
     }
 
     private void ensureNameBox(Font font, int x, int y) {
+        refreshTextCache();
         int textY = y + (NAME_BOX_H + 4 - font.lineHeight) / 2 - 2;
         if (nameBox == null) {
-            nameBox = new MCEditBox(font, x, textY, WIDTH - 20, NAME_BOX_H,
-                    Component.translatable("screen.newvisualkeybing.viewer.profile.name"))
-                    .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder"));
+            nameBox = new MCEditBox(font, x, textY, WIDTH - 20, NAME_BOX_H, nameMessage)
+                    .withPlaceholder(namePlaceholder);
             nameBox.setMaxLength(48);
             syncNameBox(true);
         }

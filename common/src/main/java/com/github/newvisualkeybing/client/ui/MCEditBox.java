@@ -66,12 +66,16 @@ public class MCEditBox extends EditBox {
                 : hovered ? UITheme.lerpColor(colors.inputBg(), colors.widgetBg(), 0.28f) : colors.inputBg();
 
         if (focused) {
-            UITheme.drawSoftGlow(graphics, x, y, w, h, FRAME_RADIUS, colors.accent(), 0x34);
+            for (int i = 3; i >= 1; i--) {
+                int alpha = Math.max(1, 0x34 / (i + 1));
+                UITheme.fillRoundedRectFast(graphics, x - i, y - i, w + i * 2, h + i * 2,
+                        FRAME_RADIUS + i, UITheme.withAlpha(colors.accent(), alpha));
+            }
         }
-        UITheme.fillSoftRoundedRect(graphics, x, y, w, h, FRAME_RADIUS, fill);
-        UITheme.fillRoundedRectEx(graphics, x + 1, y + 1, w - 2, Math.max(2, h / 3),
-                FRAME_RADIUS - 1, FRAME_RADIUS - 1, 0, 0, UITheme.withAlpha(0xFFFFFF, focused ? 0x18 : 0x0C));
-        UITheme.drawSoftRoundedBorder(graphics, x, y, w, h, FRAME_RADIUS, UITheme.withAlpha(accent, focused ? 0xF0 : 0xA0));
+        UITheme.fillRoundedRectFast(graphics, x, y, w, h, FRAME_RADIUS, fill);
+        UITheme.fillRoundedRectFast(graphics, x + 1, y + 1, w - 2, Math.max(2, h / 3),
+                FRAME_RADIUS - 1, UITheme.withAlpha(0xFFFFFF, focused ? 0x18 : 0x0C));
+        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, FRAME_RADIUS, UITheme.withAlpha(accent, focused ? 0xF0 : 0xA0));
     }
 
     private void renderText(GuiGraphics graphics) {
@@ -98,7 +102,7 @@ public class MCEditBox extends EditBox {
             int selEnd = Math.max(localCursor, localHighlight);
             int selX = textX + font.width(visible.substring(0, selStart));
             int selW = Math.max(1, font.width(visible.substring(selStart, selEnd)));
-            UITheme.fillSoftRoundedRect(graphics, selX - 1, textY - 2, selW + 2, font.lineHeight + 4, 3,
+            UITheme.fillRoundedRectFast(graphics, selX - 1, textY - 2, selW + 2, font.lineHeight + 4, 3,
                     UITheme.withAlpha(colors.accent(), 0x68));
         }
 
@@ -114,7 +118,7 @@ public class MCEditBox extends EditBox {
             boolean cursorVisible = renderFrame / 12 % 2 == 0;
             if (cursorVisible) {
                 int cursorX = textX + font.width(visible.substring(0, localCursor));
-                UITheme.fillSoftRoundedRect(graphics, cursorX, textY - 2, 1, font.lineHeight + 4, 1, colors.accentLight());
+                UITheme.fillRoundedRectFast(graphics, cursorX, textY - 2, 1, font.lineHeight + 4, 1, colors.accentLight());
             }
         }
 
@@ -127,9 +131,9 @@ public class MCEditBox extends EditBox {
         clearSize = Math.min(12, Math.max(10, getHeight() - 8));
         clearX = getX() + getWidth() - clearSize - 5;
         clearY = getY() + (getHeight() - clearSize) / 2;
-        UITheme.fillSoftRoundedRect(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
+        UITheme.fillRoundedRectFast(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
                 UITheme.lerpColor(colors.widgetBg(), colors.accent(), isFocused() ? 0.24f : 0.12f));
-        UITheme.drawSoftRoundedBorder(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
+        UITheme.drawRoundedBorderFast(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
                 UITheme.withAlpha(colors.widgetBorder(), 0x80));
         int cx = clearX + clearSize / 2;
         int cy = clearY + clearSize / 2;
