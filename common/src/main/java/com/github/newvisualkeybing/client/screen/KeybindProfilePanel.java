@@ -48,11 +48,12 @@ final class KeybindProfilePanel {
 
         int nameX = x + 10;
         int nameY = contentY + 4;
-        ensureNameBox(font, nameX, nameY);
+        int nameFrameX = nameX - 2;
+        int nameFrameY = nameY - 2;
+        int nameFrameW = WIDTH - 16;
+        int nameFrameH = NAME_BOX_H + 4;
+        ensureNameBox(font, nameFrameX, nameFrameY, nameFrameW, nameFrameH);
         syncNameBox();
-        UITheme.fillRoundedRectFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5, colors.inputBg());
-        UITheme.drawRoundedBorderFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5,
-                renaming || nameBox.isFocused() ? colors.accent() : colors.widgetBorder());
         nameBox.render(graphics, mouseX, mouseY, 1.0f);
 
         int rowY = contentY + 30;
@@ -278,18 +279,18 @@ final class KeybindProfilePanel {
         return y + h - BUTTON_H * 5 - 28;
     }
 
-    private void ensureNameBox(Font font, int x, int y) {
-        int textY = y + (NAME_BOX_H + 4 - font.lineHeight) / 2 - 2;
+    private void ensureNameBox(Font font, int x, int y, int width, int height) {
         if (nameBox == null) {
-            nameBox = new MCEditBox(font, x, textY, WIDTH - 20, NAME_BOX_H,
+            nameBox = new MCEditBox(font, x, y, width, height,
                     Component.translatable("screen.newvisualkeybing.viewer.profile.name"))
                     .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder"));
             nameBox.setMaxLength(48);
             syncNameBox(true);
         }
         nameBox.setX(x);
-        nameBox.setY(textY);
-        nameBox.setHeight(NAME_BOX_H);
+        nameBox.setY(y);
+        nameBox.setWidth(width);
+        nameBox.setHeight(height);
     }
 
     private void syncNameBox() {

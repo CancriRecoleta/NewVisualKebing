@@ -70,6 +70,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private MCButton modToggleButton;
     private MCButton profileToggleButton;
     private MCButton layoutButton;
+    private MCEditBox modSearchBox;
 
     private KeyboardLayoutData.Style currentStyle = KeybindViewerConfig.global().defaultLayoutStyle();
 
@@ -134,7 +135,6 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private final int[] legendLabelWidths = new int[5];
     private String hintLabel;
     private String modPanelTitle;
-    private String modSearchPlaceholder;
     private String clearModLabel;
 
     public KeybindViewerScreen(Screen parent) {
@@ -210,6 +210,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
                 Component.translatable("screen.newvisualkeybing.viewer.profiles"), button -> {
             profilePanelOpen = !profilePanelOpen;
             if (profilePanelOpen) modPanelOpen = false;
+            if (!modPanelOpen) releaseModSearchFocus();
             invalidateLayoutCache();
         });
         addRenderableWidget(profileToggleButton);
@@ -218,6 +219,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
                 Component.translatable("screen.newvisualkeybing.viewer.mods"), button -> {
             modPanelOpen = !modPanelOpen;
             if (modPanelOpen) profilePanelOpen = false;
+            if (!modPanelOpen) releaseModSearchFocus();
             invalidateLayoutCache();
         });
         addRenderableWidget(modToggleButton);
@@ -277,7 +279,6 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         }
         hintLabel = Component.translatable("screen.newvisualkeybing.viewer.hint").getString();
         modPanelTitle = Component.translatable("screen.newvisualkeybing.viewer.mods").getString();
-        modSearchPlaceholder = Component.translatable("screen.newvisualkeybing.viewer.mod_search").getString();
         clearModLabel = Component.translatable("screen.newvisualkeybing.viewer.clear_mod").getString();
     }
 
@@ -317,10 +318,13 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
             renderModPanel(g, fixedMouseX, fixedMouseY);
         } else if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
+            releaseModSearchFocus();
             int x = BODY_PAD;
             int y = contentTop;
             int h = contentBottom - contentTop;
             profilePanel.render(g, font, x, y, h, fixedMouseX, fixedMouseY);
+        } else {
+            releaseModSearchFocus();
         }
 
         renderKeyboard(g, fixedMouseX, fixedMouseY, nowMs);
@@ -467,13 +471,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         int fieldX = x + PANEL_PAD;
         int fieldW = w - PANEL_PAD * 2;
         int searchY = contentY + 4;
-        UITheme.fillRoundedRectFast(g, fieldX, searchY, fieldW, 18, 6, c.inputBg());
-        UITheme.drawRoundedBorderFast(g, fieldX, searchY, fieldW, 18, 6, c.widgetBorder());
-        String display = modSearchQuery.isBlank()
-                ? modSearchPlaceholder
-                : modSearchQuery;
-        g.drawString(font, display, fieldX + 6, searchY + 5,
-                modSearchQuery.isBlank() ? c.textMuted() : c.textPrimary(), false);
+        ensureModSearchBox(fieldX, searchY, fieldW, 18);
+        modSearchBox.render(g, mouseX, mouseY, 1.0f);
 
         int listY = searchY + 26;
         int clearY = y + h - PANEL_PAD - ACTION_BTN_H;
@@ -700,6 +699,53 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         if (this.getFocused() == searchBox) {
             this.setFocused(null);
         }
+    }
+
+    private void releaseModSearchFocus() {
+        if (modSearchBox != null && modSearchBox.isFocused()) {
+            modSearchBox.setFocused(false);
+        }
+        if (this.getFocused() == modSearchBox) {
+            this.setFocused(null);
+        }
+    }
+
+    private void ensureModSearchBox(int x, int y, int w, int h) {
+        if (modSearchBox == null) {
+            modSearchBox = new MCEditBox(font, x, y, w, h,
+                    Component.translatable("screen.newvisualkeybing.viewer.mod_search"))
+                    .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.mod_search"))
+                    .withClearAffordance(true);
+            modSearchBox.setMaxLength(96);
+            modSearchBox.setResponder(this::setModSearchQuery);
+        }
+        modSearchBox.setX(x);
+        modSearchBox.setY(y);
+        modSearchBox.setWidth(w);
+        modSearchBox.setHeight(h);
+        if (!modSearchQuery.equals(modSearchBox.getValue())) {
+            modSearchBox.setValue(modSearchQuery);
+        }
+    }
+
+    private void setModSearchQuery(String query) {
+        String next = query == null ? "" : query;
+        if (next.equals(modSearchQuery)) return;
+        modSearchQuery = next;
+        modScrollOffset = 0;
+        if (modSearchBox != null && !next.equals(modSearchBox.getValue())) {
+            modSearchBox.setValue(next);
+        }
+    }
+
+    private void focusModSearchAtEnd() {
+        if (modSearchBox == null) return;
+        releaseSearchFocus();
+        modSearchBox.setFocused(true);
+        this.setFocused(modSearchBox);
+        int end = modSearchBox.getValue().length();
+        modSearchBox.setHighlightPos(end);
+        modSearchBox.setCursorPosition(end);
     }
 
     private void onPriorityMutation() {
@@ -989,7 +1035,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         }
 
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
-            if (handleModPanelClick(mouseX, mouseY)) return true;
+            if (handleModPanelClick(event, doubleClick, mouseX, mouseY)) return true;
         } else if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
             int px = BODY_PAD;
             int py = contentTop;
@@ -1053,7 +1099,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         return false;
     }
 
-    private boolean handleModPanelClick(double mouseX, double mouseY) {
+    private boolean handleModPanelClick(MouseButtonEvent event, boolean doubleClick, double mouseX, double mouseY) {
         int x = BODY_PAD;
         int y = contentTop;
         int w = MOD_PANEL_W;
@@ -1070,7 +1116,15 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         int visibleRows = Math.max(1, (comboToggleY - ACTION_BTN_GAP - listY) / rowH);
 
         if (inside(mouseX, mouseY, fieldX, searchY, fieldW, 18)) {
-            modSearchQuery = "";
+            if (modSearchBox != null) {
+                if (modSearchBox.clearAffordanceClicked(mouseX, mouseY)) {
+                    modSearchBox.setValue("");
+                    focusModSearchAtEnd();
+                    return true;
+                }
+                modSearchBox.mouseClicked(event, doubleClick);
+                focusModSearchAtEnd();
+            }
             return true;
         }
 
@@ -1116,10 +1170,15 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     public boolean charTyped(CharacterEvent event) {
         applyFixedScaleMetrics();
         if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.charTyped(event)) return true;
-        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused() && event.codepoint() >= 32) {
-            modSearchQuery += event.codepointAsString();
-            modScrollOffset = 0;
-            return true;
+        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && searchBox != null && !searchBox.isFocused()) {
+            if (modSearchBox != null && modSearchBox.isFocused()) {
+                return modSearchBox.charTyped(event);
+            }
+            if (event.codepoint() >= 32) {
+                setModSearchQuery(modSearchQuery + event.codepointAsString());
+                focusModSearchAtEnd();
+                return true;
+            }
         }
         return super.charTyped(event);
     }
@@ -1130,12 +1189,24 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         int keyCode = event.key();
         if (quickEdit.isOpen()) return quickEdit.keyPressed(event);
         if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.keyPressed(event)) return true;
-        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused()) {
+        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && searchBox != null && !searchBox.isFocused()) {
+            if (modSearchBox != null && modSearchBox.isFocused()) {
+                if (keyCode == 256) {
+                    if (!modSearchBox.getValue().isEmpty()) {
+                        modSearchBox.setValue("");
+                        return true;
+                    }
+                    releaseModSearchFocus();
+                    return true;
+                }
+                return modSearchBox.keyPressed(event);
+            }
             if (keyCode == 259 && !modSearchQuery.isEmpty()) {
-                modSearchQuery = modSearchQuery.substring(0, modSearchQuery.length() - 1);
+                setModSearchQuery(modSearchQuery.substring(0, modSearchQuery.length() - 1));
+                focusModSearchAtEnd();
                 return true;
             }
-            if (keyCode == 256) modSearchQuery = "";
+            if (keyCode == 256) setModSearchQuery("");
         }
         if (keyCode == 256 && searchBox != null && searchBox.isFocused()) {
             if (!searchBox.getValue().isEmpty()) {
@@ -1145,6 +1216,9 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             searchBox.setFocused(false);
             this.setFocused(null);
             return true;
+        }
+        if (searchBox != null && searchBox.isFocused()) {
+            return super.keyPressed(event);
         }
         return super.keyPressed(event);
     }
