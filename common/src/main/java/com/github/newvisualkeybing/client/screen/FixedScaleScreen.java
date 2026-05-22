@@ -40,12 +40,12 @@ abstract class FixedScaleScreen extends Screen {
     }
 
     protected final void pushFixedScale(GuiGraphics graphics) {
-        graphics.pose().pushPose();
-        graphics.pose().scale(fixedRenderScale, fixedRenderScale, 1.0f);
+        graphics.pose().pushMatrix();
+        graphics.pose().scale(fixedRenderScale, fixedRenderScale);
     }
 
     protected final void popFixedScale(GuiGraphics graphics) {
-        graphics.pose().popPose();
+        graphics.pose().popMatrix();
     }
 
     protected final void enableFixedScissor(GuiGraphics graphics, int minX, int minY, int maxX, int maxY) {
@@ -60,32 +60,6 @@ abstract class FixedScaleScreen extends Screen {
     public void mouseMoved(double mouseX, double mouseY) {
         applyFixedScaleMetrics();
         super.mouseMoved(fixedMouseX(mouseX), fixedMouseY(mouseY));
-    }
-
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        applyFixedScaleMetrics();
-        return releaseLogicalMouse(fixedMouseX(mouseX), fixedMouseY(mouseY), button);
-    }
-
-    @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        applyFixedScaleMetrics();
-        return dragLogicalMouse(
-                fixedMouseX(mouseX),
-                fixedMouseY(mouseY),
-                button,
-                dragX / fixedRenderScale,
-                dragY / fixedRenderScale);
-    }
-
-    protected final boolean releaseLogicalMouse(double mouseX, double mouseY, int button) {
-        return super.mouseReleased(mouseX, mouseY, button);
-    }
-
-    protected final boolean dragLogicalMouse(
-            double mouseX, double mouseY, int button, double dragX, double dragY) {
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     protected final int fixedMouseX(int mouseX) {
