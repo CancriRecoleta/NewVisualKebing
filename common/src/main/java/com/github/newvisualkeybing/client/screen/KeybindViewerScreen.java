@@ -287,10 +287,6 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     }
 
     @Override
-    public void renderBackground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-    }
-
-    @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         applyFixedScaleMetrics();
         int fixedMouseX = fixedMouseX(mouseX);

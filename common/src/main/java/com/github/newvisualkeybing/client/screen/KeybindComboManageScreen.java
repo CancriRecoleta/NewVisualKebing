@@ -44,6 +44,8 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private CaptureState capture = null;
     private String noticeMessage;
     private long noticeUntil;
+    private int headerSearchX;
+    private int headerSearchW;
 
     public KeybindComboManageScreen(Screen parent) {
         super(Component.translatable("screen.newvisualkeybing.viewer.combo.title"));
@@ -53,38 +55,25 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     @Override
     protected void init() {
         super.init();
-        applyFixedScaleMetrics();
         UITheme.setMode(UITheme.Mode.DARK);
 
-        int searchX = 12;
-        int searchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 22;
-        int searchY = (HEADER_H - searchH) / 2;
-        mappingSearchBox = new MCEditBox(font, searchX, searchY, searchW, searchH,
+        mappingSearchBox = new MCEditBox(font, 0, 0, 1, 1,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
                 .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
                 .withClearAffordance(true);
         mappingSearchBox.setResponder(value -> rebuildRows());
         addRenderableWidget(mappingSearchBox);
 
-        int btnGap = 6;
-        int backW = 60;
-        int addW = 110;
-        int clearW = 110;
-        int xClear = width - 12 - clearW;
-        int xAdd = xClear - btnGap - addW;
-        int xBack = xAdd - btnGap - backW;
-
-        backButton = MCButton.create(xBack, 10, backW, 20,
+        backButton = MCButton.create(0, 0, 60, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.back"), b -> onClose());
         addRenderableWidget(backButton);
 
-        addButton = MCButton.create(xAdd, 10, addW, 20,
+        addButton = MCButton.create(0, 0, 110, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.add"),
                 b -> beginAddCombo());
         addRenderableWidget(addButton);
 
-        clearAllButton = MCButton.create(xClear, 10, clearW, 20,
+        clearAllButton = MCButton.create(0, 0, 110, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.clear_all"),
                 b -> {
                     store.clear();
@@ -93,7 +82,53 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 });
         addRenderableWidget(clearAllButton);
 
+        layoutHeaderControls();
         rebuildRows();
+    }
+
+    @Override
+    protected void onFixedScaleMetricsChanged() {
+        layoutHeaderControls();
+        scrollOffset = Mth.clamp(scrollOffset, 0, Math.max(0, totalListH - listHeight()));
+    }
+
+    private void layoutHeaderControls() {
+        headerSearchX = 12;
+        headerSearchW = Mth.clamp(width / 3, 180, 320);
+        int searchH = 22;
+        int searchY = (HEADER_H - searchH) / 2;
+        if (mappingSearchBox != null) {
+            mappingSearchBox.setX(headerSearchX);
+            mappingSearchBox.setY(searchY);
+            mappingSearchBox.setWidth(headerSearchW);
+            mappingSearchBox.setHeight(searchH);
+        }
+
+        int btnGap = 6;
+        int backW = 60;
+        int addW = 110;
+        int clearW = 110;
+        int xClear = width - 12 - clearW;
+        int xAdd = xClear - btnGap - addW;
+        int xBack = xAdd - btnGap - backW;
+        if (backButton != null) {
+            backButton.setX(xBack);
+            backButton.setY(10);
+            backButton.setWidth(backW);
+            backButton.setHeight(20);
+        }
+        if (addButton != null) {
+            addButton.setX(xAdd);
+            addButton.setY(10);
+            addButton.setWidth(addW);
+            addButton.setHeight(20);
+        }
+        if (clearAllButton != null) {
+            clearAllButton.setX(xClear);
+            clearAllButton.setY(10);
+            clearAllButton.setWidth(clearW);
+            clearAllButton.setHeight(20);
+        }
     }
 
     private void rebuildRows() {
@@ -151,20 +186,11 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         var colors = UITheme.colors();
         UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4, 8);
 
-        int searchX = 12;
-        int searchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 22;
-        int searchY = (HEADER_H - searchH) / 2;
-        if (mappingSearchBox != null) {
-            mappingSearchBox.setX(searchX);
-            mappingSearchBox.setY(searchY);
-            mappingSearchBox.setWidth(searchW);
-            mappingSearchBox.setHeight(searchH);
-        }
+        layoutHeaderControls();
 
         String title = Component.translatable("screen.newvisualkeybing.viewer.combo.title").getString();
         String count = Component.translatable("screen.newvisualkeybing.viewer.combo.count", store.size()).getString();
-        int titleX = searchX + searchW + 16;
+        int titleX = headerSearchX + headerSearchW + 16;
         int textBlockH = font.lineHeight * 2 + 3;
         int titleY = (HEADER_H - textBlockH) / 2;
         int titleRight = backButton == null ? width - 12 : backButton.getX() - 8;

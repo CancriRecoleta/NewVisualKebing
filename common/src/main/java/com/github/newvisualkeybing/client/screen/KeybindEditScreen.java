@@ -73,6 +73,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
     private long noticeUntil;
     private int searchX;
     private int searchW;
+    private int buttonLeftX;
 
     public KeybindEditScreen(Screen parent) {
         this(parent, null);
@@ -87,8 +88,43 @@ public class KeybindEditScreen extends FixedScaleScreen {
     @Override
     protected void init() {
         super.init();
-        applyFixedScaleMetrics();
 
+        searchBox = new MCEditBox(font, 0, 0, 1, 1,
+                Component.translatable("screen.newvisualkeybing.viewer.search"))
+                .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.search"))
+                .withClearAffordance(true);
+        searchBox.setResponder(value -> rebuildEntries());
+        addRenderableWidget(searchBox);
+
+        backButton = MCButton.create(0, 0, 60, 20,
+                Component.translatable("screen.newvisualkeybing.viewer.back"), b -> onClose());
+        addRenderableWidget(backButton);
+
+        comboButton = MCButton.create(0, 0, 96, 20,
+                Component.translatable("screen.newvisualkeybing.viewer.combo.open"),
+                b -> minecraft.setScreen(new KeybindComboManageScreen(this)));
+        addRenderableWidget(comboButton);
+
+        viewerButton = MCButton.create(0, 0, 96, 20,
+                Component.translatable("screen.newvisualkeybing.viewer.open_visual"),
+                b -> minecraft.setScreen(new KeybindViewerScreen(parent)));
+        addRenderableWidget(viewerButton);
+
+        resetAllButton = MCButton.create(0, 0, 110, 20,
+                Component.translatable("screen.newvisualkeybing.viewer.reset_all"), b -> resetAllMappings());
+        addRenderableWidget(resetAllButton);
+
+        layoutHeaderControls();
+        rebuildEntries();
+    }
+
+    @Override
+    protected void onFixedScaleMetricsChanged() {
+        layoutHeaderControls();
+        scrollOffset = Mth.clamp(scrollOffset, 0, Math.max(0, totalListH - listHeight()));
+    }
+
+    private void layoutHeaderControls() {
         searchX = KeybindProfilePanel.WIDTH + 22;
         int btnGap = 6;
         int backW = 60;
@@ -99,35 +135,39 @@ public class KeybindEditScreen extends FixedScaleScreen {
         int xViewer = xReset - btnGap - viewerW;
         int xCombo = xViewer - btnGap - comboW;
         int xBack = xCombo - btnGap - backW;
+        buttonLeftX = xBack;
         searchW = Mth.clamp(xBack - searchX - 14, 130, 330);
-        int searchH = 22;
-        int editY = 7;
-        searchBox = new MCEditBox(font, searchX, editY, searchW, searchH,
-                Component.translatable("screen.newvisualkeybing.viewer.search"))
-                .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.search"))
-                .withClearAffordance(true);
-        searchBox.setResponder(value -> rebuildEntries());
-        addRenderableWidget(searchBox);
 
-        backButton = MCButton.create(xBack, 8, backW, 20,
-                Component.translatable("screen.newvisualkeybing.viewer.back"), b -> onClose());
-        addRenderableWidget(backButton);
-
-        comboButton = MCButton.create(xCombo, 8, comboW, 20,
-                Component.translatable("screen.newvisualkeybing.viewer.combo.open"),
-                b -> minecraft.setScreen(new KeybindComboManageScreen(this)));
-        addRenderableWidget(comboButton);
-
-        viewerButton = MCButton.create(xViewer, 8, viewerW, 20,
-                Component.translatable("screen.newvisualkeybing.viewer.open_visual"),
-                b -> minecraft.setScreen(new KeybindViewerScreen(parent)));
-        addRenderableWidget(viewerButton);
-
-        resetAllButton = MCButton.create(xReset, 8, resetW, 20,
-                Component.translatable("screen.newvisualkeybing.viewer.reset_all"), b -> resetAllMappings());
-        addRenderableWidget(resetAllButton);
-
-        rebuildEntries();
+        if (searchBox != null) {
+            searchBox.setX(searchX);
+            searchBox.setY(7);
+            searchBox.setWidth(searchW);
+            searchBox.setHeight(22);
+        }
+        if (backButton != null) {
+            backButton.setX(xBack);
+            backButton.setY(8);
+            backButton.setWidth(backW);
+            backButton.setHeight(20);
+        }
+        if (comboButton != null) {
+            comboButton.setX(xCombo);
+            comboButton.setY(8);
+            comboButton.setWidth(comboW);
+            comboButton.setHeight(20);
+        }
+        if (viewerButton != null) {
+            viewerButton.setX(xViewer);
+            viewerButton.setY(8);
+            viewerButton.setWidth(viewerW);
+            viewerButton.setHeight(20);
+        }
+        if (resetAllButton != null) {
+            resetAllButton.setX(xReset);
+            resetAllButton.setY(8);
+            resetAllButton.setWidth(resetW);
+            resetAllButton.setHeight(20);
+        }
     }
 
     private void rebuildEntries() {
@@ -211,7 +251,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
                 : Component.translatable("screen.newvisualkeybing.viewer.edit_title").getString();
         int titleY = 8 + (20 - font.lineHeight) / 2 + 1;
         int titleX = searchX + searchW + 12;
-        int titleRight = backButton == null ? width - 12 : backButton.getX() - 8;
+        int titleRight = backButton == null ? width - 12 : buttonLeftX - 8;
         graphics.drawString(font, KeybindViewerScreen.fitToWidth(font, title, Math.max(40, titleRight - titleX)),
                 titleX, titleY, colors.textPrimary(), false);
     }
