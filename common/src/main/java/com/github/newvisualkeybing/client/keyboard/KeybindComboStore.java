@@ -21,8 +21,10 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -52,6 +54,10 @@ public final class KeybindComboStore {
     private final Path storeFile;
     private StoreData data = new StoreData();
     private volatile long version;
+    private long indexedVersion = Long.MIN_VALUE;
+    private ComboIndex cachedIndex = ComboIndex.EMPTY;
+    private KeyMapping[] cachedMappingArray;
+    private Map<String, KeyMapping> cachedMappingsByName = Collections.emptyMap();
 
     private KeybindComboStore() {
         Path root = Minecraft.getInstance().options.getFile().toPath().toAbsolutePath().getParent();
@@ -110,10 +116,7 @@ public final class KeybindComboStore {
 
     public synchronized ComboBinding findByMapping(String mappingName) {
         if (mappingName == null) return null;
-        for (ComboBinding combo : data.combos) {
-            if (mappingName.equals(combo.mappingName)) return combo;
-        }
-        return null;
+        return index().byMapping().get(mappingName);
     }
 
     public synchronized void putCombo(KeyMapping mapping,
@@ -161,14 +164,7 @@ public final class KeybindComboStore {
 
     /** Returns the set of virtual key codes that participate in any combo. */
     public synchronized Set<Integer> participantVirtualKeys() {
-        Set<Integer> result = new LinkedHashSet<>();
-        for (ComboBinding combo : data.combos) {
-            Integer first = resolveVirtualKey(combo.firstKey);
-            Integer second = resolveVirtualKey(combo.secondKey);
-            if (first != null) result.add(first);
-            if (second != null) result.add(second);
-        }
-        return result;
+        return index().participants();
     }
 
     public boolean isParticipant(int virtualKey) {
@@ -176,15 +172,7 @@ public final class KeybindComboStore {
     }
 
     public synchronized List<ComboBinding> combosForVirtualKey(int virtualKey) {
-        List<ComboBinding> result = new ArrayList<>();
-        for (ComboBinding combo : data.combos) {
-            Integer first = resolveVirtualKey(combo.firstKey);
-            Integer second = resolveVirtualKey(combo.secondKey);
-            if ((first != null && first == virtualKey) || (second != null && second == virtualKey)) {
-                result.add(combo);
-            }
-        }
-        return result;
+        return index().byVirtualKey().getOrDefault(virtualKey, Collections.emptyList());
     }
 
 
@@ -228,12 +216,7 @@ public final class KeybindComboStore {
 
     public static KeyMapping findMapping(String mappingName) {
         if (mappingName == null) return null;
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.options == null) return null;
-        for (KeyMapping mapping : mc.options.keyMappings) {
-            if (Objects.equals(mapping.getName(), mappingName)) return mapping;
-        }
-        return null;
+        return global().mappingByName(mappingName);
     }
 
     public static InputConstants.Key currentKey(KeyMapping mapping) {
@@ -303,9 +286,8 @@ public final class KeybindComboStore {
         if (triggerKey == null || triggerKey == InputConstants.UNKNOWN) return null;
         String triggerName = triggerKey.getName();
         Match fallback = null;
-        for (ComboBinding combo : data.combos) {
+        for (ComboBinding combo : combosBySecondKey(triggerKey)) {
             if (!isComplete(combo)) continue;
-            if (!Objects.equals(combo.secondKey, triggerName)) continue;
             KeyMapping mapping = findMapping(combo.mappingName);
             if (mapping == null) continue;
             if (!Objects.equals(currentKey(mapping).getName(), triggerName)) continue;
@@ -320,9 +302,8 @@ public final class KeybindComboStore {
         if (triggerKey == null || triggerKey == InputConstants.UNKNOWN) return Collections.emptyList();
         String triggerName = triggerKey.getName();
         List<Match> result = new ArrayList<>();
-        for (ComboBinding combo : data.combos) {
+        for (ComboBinding combo : combosBySecondKey(triggerKey)) {
             if (!isComplete(combo)) continue;
-            if (!sameInput(combo.secondKey, triggerName)) continue;
             KeyMapping mapping = findMapping(combo.mappingName);
             if (mapping == null) continue;
             if (!sameInput(currentKey(mapping).getName(), triggerName)) continue;
@@ -394,6 +375,83 @@ public final class KeybindComboStore {
         return a != null && b != null && a.getType() == b.getType() && a.getValue() == b.getValue();
     }
 
+    private List<ComboBinding> combosBySecondKey(InputConstants.Key triggerKey) {
+        String signature = inputSignature(triggerKey);
+        if (signature == null) return Collections.emptyList();
+        return index().bySecondKey().getOrDefault(signature, Collections.emptyList());
+    }
+
+    private KeyMapping mappingByName(String mappingName) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.options == null) return null;
+        KeyMapping[] mappings = mc.options.keyMappings;
+        if (mappings != cachedMappingArray) {
+            Map<String, KeyMapping> byName = new HashMap<>();
+            for (KeyMapping mapping : mappings) {
+                byName.put(mapping.getName(), mapping);
+            }
+            cachedMappingArray = mappings;
+            cachedMappingsByName = byName;
+        }
+        return cachedMappingsByName.get(mappingName);
+    }
+
+    private ComboIndex index() {
+        if (indexedVersion == version) return cachedIndex;
+
+        Map<String, ComboBinding> byMapping = new HashMap<>();
+        Map<Integer, List<ComboBinding>> byVirtualKey = new HashMap<>();
+        Map<String, List<ComboBinding>> bySecondKey = new HashMap<>();
+        Set<Integer> participants = new LinkedHashSet<>();
+
+        for (ComboBinding combo : data.combos) {
+            if (combo == null || combo.mappingName == null) continue;
+            byMapping.put(combo.mappingName, combo);
+
+            Integer first = resolveVirtualKey(combo.firstKey);
+            Integer second = resolveVirtualKey(combo.secondKey);
+            if (first != null) {
+                participants.add(first);
+                byVirtualKey.computeIfAbsent(first, ignored -> new ArrayList<>()).add(combo);
+            }
+            if (second != null) {
+                participants.add(second);
+                byVirtualKey.computeIfAbsent(second, ignored -> new ArrayList<>()).add(combo);
+            }
+
+            String secondSignature = inputSignature(combo.secondKey);
+            if (secondSignature != null) {
+                bySecondKey.computeIfAbsent(secondSignature, ignored -> new ArrayList<>()).add(combo);
+            }
+        }
+
+        cachedIndex = new ComboIndex(
+                Collections.unmodifiableMap(byMapping),
+                freezeListMap(byVirtualKey),
+                freezeListMap(bySecondKey),
+                Collections.unmodifiableSet(participants));
+        indexedVersion = version;
+        return cachedIndex;
+    }
+
+    private static <K> Map<K, List<ComboBinding>> freezeListMap(Map<K, List<ComboBinding>> source) {
+        Map<K, List<ComboBinding>> frozen = new HashMap<>();
+        for (Map.Entry<K, List<ComboBinding>> entry : source.entrySet()) {
+            frozen.put(entry.getKey(), Collections.unmodifiableList(new ArrayList<>(entry.getValue())));
+        }
+        return Collections.unmodifiableMap(frozen);
+    }
+
+    private static String inputSignature(String inputName) {
+        Optional<InputConstants.Key> parsed = parseInput(inputName);
+        return parsed.map(KeybindComboStore::inputSignature).orElse(null);
+    }
+
+    private static String inputSignature(InputConstants.Key key) {
+        if (key == null || key == InputConstants.UNKNOWN) return null;
+        return key.getType() + ":" + key.getValue();
+    }
+
     /**
      * Whether the modifier key of a combo bound to the same trigger as {@code triggerKey}
      * is required. Returns the combo whose modifier needs to be held, or {@code null} when
@@ -403,9 +461,9 @@ public final class KeybindComboStore {
     public synchronized ComboBinding triggerCombo(InputConstants.Key triggerKey, KeyMapping mapping) {
         if (triggerKey == null || mapping == null) return null;
         String triggerName = triggerKey.getName();
-        for (ComboBinding combo : data.combos) {
+        for (ComboBinding combo : combosBySecondKey(triggerKey)) {
             if (!Objects.equals(combo.mappingName, mapping.getName())) continue;
-            if (Objects.equals(combo.secondKey, triggerName)) return combo;
+            if (sameInput(combo.secondKey, triggerName)) return combo;
         }
         return null;
     }
@@ -431,6 +489,14 @@ public final class KeybindComboStore {
     private static final class StoreData {
         int version = 1;
         List<ComboBinding> combos = new ArrayList<>();
+    }
+
+    private record ComboIndex(Map<String, ComboBinding> byMapping,
+                              Map<Integer, List<ComboBinding>> byVirtualKey,
+                              Map<String, List<ComboBinding>> bySecondKey,
+                              Set<Integer> participants) {
+        static final ComboIndex EMPTY = new ComboIndex(
+                Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
     }
 
     public static final class ComboBinding {

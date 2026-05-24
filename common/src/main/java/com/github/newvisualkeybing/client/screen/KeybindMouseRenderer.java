@@ -9,6 +9,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
+import java.util.Set;
 import java.util.function.IntPredicate;
 
 
@@ -52,6 +53,8 @@ final class KeybindMouseRenderer {
     private final float[] selectProgress = new float[KeyboardLayoutData.MOUSE_KEYS.size()];
     private long cachedDataVersion = Long.MIN_VALUE;
     private long lastFrameMs;
+    private long cachedComboVersion = Long.MIN_VALUE;
+    private Set<Integer> cachedComboKeys = java.util.Collections.emptySet();
 
     KeybindMouseRenderer(KeyBindingScanner scanner) {
         this.scanner = scanner;
@@ -123,6 +126,7 @@ final class KeybindMouseRenderer {
         int pulseAccent = KeybindViewerScreen.pulseAccent(animTick);
         int searchPulseColor = KeybindViewerScreen.searchPulseColor(animTick);
         int searchPulseAlpha = KeybindViewerScreen.searchPulseAlpha(animTick);
+        Set<Integer> comboKeys = comboParticipantKeys();
         Integer hovered = null;
         for (int i = 0; i < KeyboardLayoutData.MOUSE_KEYS.size(); i++) {
             Rect b = boundsAt(i);
@@ -192,7 +196,7 @@ final class KeybindMouseRenderer {
                         b.y + (b.h - font.lineHeight) / 2,
                         textColor, false);
             }
-            boolean comboParticipant = !hidden && KeybindComboStore.global().isParticipant(key.glfwKey());
+            boolean comboParticipant = !hidden && comboKeys.contains(key.glfwKey());
             if (comboParticipant && b.w >= 10 && b.h >= 8) {
                 int comboColor = matched ? KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR
                         : UITheme.withAlpha(KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0x70);
@@ -203,6 +207,16 @@ final class KeybindMouseRenderer {
             if (!hidden) renderBindingBadge(g, font, b, bindingCount, status, comboParticipant);
         }
         return hovered;
+    }
+
+    private Set<Integer> comboParticipantKeys() {
+        KeybindComboStore store = KeybindComboStore.global();
+        long version = store.version();
+        if (version != cachedComboVersion) {
+            cachedComboVersion = version;
+            cachedComboKeys = store.participantVirtualKeys();
+        }
+        return cachedComboKeys;
     }
 
     private void refreshInputData() {

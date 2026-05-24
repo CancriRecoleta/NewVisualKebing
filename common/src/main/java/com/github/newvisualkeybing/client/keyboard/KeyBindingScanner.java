@@ -47,7 +47,10 @@ public class KeyBindingScanner {
             InputModifier defaultModifier,
             String baseKeyName,
             String currentKeyName,
-            String defaultKeyName
+            String defaultKeyName,
+            String searchText,
+            boolean currentCombo,
+            String activatorSignature
     ) {
         public String contextDescription() {
             return switch (conflictContext) {
@@ -71,8 +74,14 @@ public class KeyBindingScanner {
     private final Map<Integer, KeyStatus> keyboardStatuses = new HashMap<>();
     private final Map<Integer, KeyStatus> mouseStatuses = new HashMap<>();
     private final Map<Integer, String> keyLabelCache = new HashMap<>();
+    private final Map<String, String> actionNameCache = new HashMap<>();
+    private final Map<String, String> categoryNameCache = new HashMap<>();
+    private final Map<String, String> displayNameCache = new HashMap<>();
+    private final Map<String, String> resolvedModIdCache = new HashMap<>();
+    private final Map<String, String> resolvedModNameCache = new HashMap<>();
     private final Map<String, String> registeredMods = new LinkedHashMap<>();
     private final Map<String, ModStats> modStats = new HashMap<>();
+    private final Map<String, Set<Integer>> modKeys = new HashMap<>();
     private Map<String, String> sortedRegisteredMods = Collections.emptyMap();
     private ScanStats stats = new ScanStats(0, 0, 0, 0, 0, 0, 0);
     private long version;
@@ -103,6 +112,7 @@ public class KeyBindingScanner {
         mouseStatuses.clear();
         registeredMods.clear();
         modStats.clear();
+        modKeys.clear();
 
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.options == null) {
@@ -113,6 +123,7 @@ public class KeyBindingScanner {
             return;
         }
 
+        KeybindComboStore comboStore = KeybindComboStore.global();
         for (KeyMapping mapping : minecraft.options.keyMappings) {
             String actionKey = mapping.getName();
             String categoryKey = categoryKey(mapping);
@@ -126,13 +137,18 @@ public class KeyBindingScanner {
             ConflictContext ctx = Services.PLATFORM.getConflictContext(mapping);
             InputModifier modifier = Services.PLATFORM.getKeyModifier(mapping);
             InputModifier defaultModifier = Services.PLATFORM.getDefaultKeyModifier(mapping);
-            String baseKeyName = key.getDisplayName().getString();
-            String defaultBaseKeyName = mapping.getDefaultKey().getDisplayName().getString();
+            String baseKeyName = displayName(key);
+            String defaultBaseKeyName = displayName(mapping.getDefaultKey());
+            String actionName = actionName(actionKey);
+            String categoryName = categoryName(categoryKey, mapping);
+            String currentKeyName = displayKeyName(modifier, baseKeyName);
+            String defaultKeyName = displayKeyName(defaultModifier, defaultBaseKeyName);
+            boolean currentCombo = comboStore.matchesCurrentCombo(mapping);
             KeyBindingInfo info = new KeyBindingInfo(
                     actionKey,
-                    Component.translatable(actionKey).getString(),
+                    actionName,
                     categoryKey,
-                    mapping.getCategory().label().getString(),
+                    categoryName,
                     modId,
                     modName,
                     Constants.MOD_ID.equals(modId),
@@ -140,8 +156,11 @@ public class KeyBindingScanner {
                     modifier,
                     defaultModifier,
                     baseKeyName,
-                    displayKeyName(modifier, baseKeyName),
-                    displayKeyName(defaultModifier, defaultBaseKeyName)
+                    currentKeyName,
+                    defaultKeyName,
+                    searchText(actionName, actionKey, categoryName, categoryKey, modId, modName, currentKeyName),
+                    currentCombo,
+                    comboStore.activatorSignature(mapping, modifier)
             );
 
             if (key.getType() == InputConstants.Type.MOUSE) {
@@ -165,9 +184,13 @@ public class KeyBindingScanner {
             mouseStatuses.put(entry.getKey(), computeStatus(entry.getValue()));
         }
 
-        sortedRegisteredMods = registeredMods.entrySet().stream()
-                .sorted(Map.Entry.comparingByValue(String.CASE_INSENSITIVE_ORDER))
-                .collect(LinkedHashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue()), LinkedHashMap::putAll);
+        List<Map.Entry<String, String>> sortedMods = new ArrayList<>(registeredMods.entrySet());
+        sortedMods.sort(Map.Entry.comparingByValue(String.CASE_INSENSITIVE_ORDER));
+        LinkedHashMap<String, String> sorted = new LinkedHashMap<>();
+        for (Map.Entry<String, String> entry : sortedMods) {
+            sorted.put(entry.getKey(), entry.getValue());
+        }
+        sortedRegisteredMods = sorted;
         rebuildModStats();
         stats = computeStats();
         version++;
@@ -220,10 +243,8 @@ public class KeyBindingScanner {
 
     public boolean hasBindingForMod(int virtualKey, String modId) {
         if (modId == null || modId.isBlank()) return false;
-        for (KeyBindingInfo info : getVirtualBindings(virtualKey)) {
-            if (modId.equals(info.modId())) return true;
-        }
-        return false;
+        Set<Integer> keys = modKeys.get(modId);
+        return keys != null && keys.contains(virtualKey);
     }
 
     public String primaryModId(int virtualKey) {
@@ -281,20 +302,7 @@ public class KeyBindingScanner {
         if (cachedFilterModVersion == version && modId.equals(cachedFilterModId)) {
             return cachedFilterMod;
         }
-        Set<Integer> matches = new LinkedHashSet<>();
-        for (Map.Entry<Integer, List<KeyBindingInfo>> entry : keyboardBindings.entrySet()) {
-            for (KeyBindingInfo info : entry.getValue()) {
-                if (modId.equals(info.modId())) { matches.add(entry.getKey()); break; }
-            }
-        }
-        for (Map.Entry<Integer, List<KeyBindingInfo>> entry : mouseBindings.entrySet()) {
-            for (KeyBindingInfo info : entry.getValue()) {
-                if (modId.equals(info.modId())) {
-                    matches.add(KeyboardLayoutData.mouseToVirtual(entry.getKey()));
-                    break;
-                }
-            }
-        }
+        Set<Integer> matches = modKeys.getOrDefault(modId, Collections.emptySet());
         cachedFilterModVersion = version;
         cachedFilterModId = modId;
         cachedFilterMod = matches;
@@ -367,18 +375,25 @@ public class KeyBindingScanner {
 
     private void rebuildModStats() {
         Map<String, MutableModStats> mutable = new HashMap<>();
-        collectModStats(keyboardBindings, keyboardStatuses, mutable);
-        collectModStats(mouseBindings, mouseStatuses, mutable);
+        Map<String, LinkedHashSet<Integer>> mutableModKeys = new HashMap<>();
+        collectModStats(keyboardBindings, keyboardStatuses, mutable, mutableModKeys, false);
+        collectModStats(mouseBindings, mouseStatuses, mutable, mutableModKeys, true);
         modStats.clear();
         for (Map.Entry<String, MutableModStats> entry : mutable.entrySet()) {
             MutableModStats s = entry.getValue();
             modStats.put(entry.getKey(), new ModStats(s.bindings, s.inputs, s.conflicts));
         }
+        modKeys.clear();
+        for (Map.Entry<String, LinkedHashSet<Integer>> entry : mutableModKeys.entrySet()) {
+            modKeys.put(entry.getKey(), Collections.unmodifiableSet(entry.getValue()));
+        }
     }
 
     private static void collectModStats(Map<Integer, List<KeyBindingInfo>> bindings,
                                         Map<Integer, KeyStatus> statuses,
-                                        Map<String, MutableModStats> out) {
+                                        Map<String, MutableModStats> out,
+                                        Map<String, LinkedHashSet<Integer>> modKeys,
+                                        boolean mouse) {
         for (Map.Entry<Integer, List<KeyBindingInfo>> entry : bindings.entrySet()) {
             KeyStatus status = statuses.getOrDefault(entry.getKey(), KeyStatus.FREE);
             Set<String> seenMods = new LinkedHashSet<>();
@@ -387,10 +402,12 @@ public class KeyBindingScanner {
                 stats.bindings++;
                 seenMods.add(info.modId());
             }
+            int virtualKey = mouse ? KeyboardLayoutData.mouseToVirtual(entry.getKey()) : entry.getKey();
             for (String modId : seenMods) {
                 MutableModStats stats = out.computeIfAbsent(modId, ignored -> new MutableModStats());
                 stats.inputs++;
                 if (status == KeyStatus.CONFLICT) stats.conflicts++;
+                modKeys.computeIfAbsent(modId, ignored -> new LinkedHashSet<>()).add(virtualKey);
             }
         }
     }
@@ -453,20 +470,24 @@ public class KeyBindingScanner {
     }
 
     private static boolean matches(KeyBindingInfo info, String query) {
-        return info.actionName().toLowerCase(Locale.ROOT).contains(query)
-                || info.translationKey().toLowerCase(Locale.ROOT).contains(query)
-                || info.categoryName().toLowerCase(Locale.ROOT).contains(query)
-                || info.categoryKey().toLowerCase(Locale.ROOT).contains(query)
-                || info.modId().toLowerCase(Locale.ROOT).contains(query)
-                || info.modName().toLowerCase(Locale.ROOT).contains(query)
-                || info.currentKeyName().toLowerCase(Locale.ROOT).contains(query);
+        return info.searchText().contains(query);
     }
 
 
     private static KeyStatus computeStatus(List<KeyBindingInfo> infos) {
         if (infos.isEmpty()) return KeyStatus.FREE;
         boolean comboAware = KeybindViewerConfig.global().comboKeysNonConflicting();
-        boolean hasCombo = infos.stream().anyMatch(info -> isCombination(info) || hasStoredCombo(info));
+        boolean hasCombo = false;
+        boolean hasSelf = false;
+        boolean hasOther = false;
+        for (KeyBindingInfo info : infos) {
+            hasCombo |= isCombination(info) || info.currentCombo();
+            if (info.self()) {
+                hasSelf = true;
+            } else {
+                hasOther = true;
+            }
+        }
         if (infos.size() == 1) {
             if (comboAware && hasCombo) return KeyStatus.COMBO;
             return infos.get(0).self() ? KeyStatus.SELF : KeyStatus.OTHER_SINGLE;
@@ -481,20 +502,12 @@ public class KeyBindingScanner {
             }
         }
         if (comboAware && hasCombo) return KeyStatus.COMBO;
-        boolean hasSelf = infos.stream().anyMatch(KeyBindingInfo::self);
-        boolean hasOther = infos.stream().anyMatch(info -> !info.self());
         if (hasSelf && hasOther) return KeyStatus.CONFLICT;
         return hasSelf ? KeyStatus.SELF : KeyStatus.OTHER_SINGLE;
     }
 
-    private static boolean hasStoredCombo(KeyBindingInfo info) {
-        return KeybindComboStore.global().hasCurrentCombo(info.translationKey());
-    }
-
     private static boolean sameActivator(KeyBindingInfo a, KeyBindingInfo b) {
-        KeybindComboStore store = KeybindComboStore.global();
-        return store.activatorSignature(a.translationKey(), a.modifier())
-                .equals(store.activatorSignature(b.translationKey(), b.modifier()));
+        return a.activatorSignature().equals(b.activatorSignature());
     }
 
     private static boolean matchesStatus(KeyStatus status, FilterTab tab) {
@@ -522,12 +535,18 @@ public class KeyBindingScanner {
     }
 
 
-    private static String resolveModId(String name, String category) {
+    private String resolveModId(String name, String category) {
+        String cacheKey = String.valueOf(name) + '\u001F' + String.valueOf(category);
+        return resolvedModIdCache.computeIfAbsent(cacheKey, ignored -> resolveModIdUncached(name, category));
+    }
+
+    private static String resolveModIdUncached(String name, String category) {
         
         if (name != null && name.startsWith("key.")) {
-            String[] parts = name.split("\\.", 3);
-            if (parts.length >= 2) {
-                String candidate = parts[1];
+            int start = "key.".length();
+            int end = name.indexOf('.', start);
+            if (end > start) {
+                String candidate = name.substring(start, end);
                 if (!"minecraft".equals(candidate) && Services.PLATFORM.isModLoaded(candidate)) return candidate;
             }
         }
@@ -550,26 +569,23 @@ public class KeyBindingScanner {
         }
         
         if (name != null) {
-            for (String part : name.split("\\.")) {
-                if (part.isEmpty()) continue;
-                String lower = part.toLowerCase(Locale.ROOT);
-                if ("key".equals(lower) || "minecraft".equals(lower)) continue;
-                if (Services.PLATFORM.isModLoaded(lower)) return lower;
-            }
+            String found = loadedModIdFromDotted(name, false);
+            if (found != null) return found;
         }
         
         if (category != null) {
-            for (String part : category.split("\\.")) {
-                if (part.isEmpty()) continue;
-                String lower = part.toLowerCase(Locale.ROOT);
-                if ("key".equals(lower) || "categories".equals(lower) || "minecraft".equals(lower)) continue;
-                if (Services.PLATFORM.isModLoaded(lower)) return lower;
-            }
+            String found = loadedModIdFromDotted(category, true);
+            if (found != null) return found;
         }
         return "minecraft";
     }
 
-    private static String resolveModName(String modId, String categoryKey) {
+    private String resolveModName(String modId, String categoryKey) {
+        String cacheKey = modId + '\u001F' + String.valueOf(categoryKey);
+        return resolvedModNameCache.computeIfAbsent(cacheKey, ignored -> resolveModNameUncached(modId, categoryKey));
+    }
+
+    private static String resolveModNameUncached(String modId, String categoryKey) {
         if ("minecraft".equals(modId)) return "Minecraft";
         String fromPlatform = Services.PLATFORM.getModName(modId);
         if (fromPlatform != null && !fromPlatform.isBlank()) return fromPlatform;
@@ -578,5 +594,44 @@ public class KeyBindingScanner {
             if (translated != null && !translated.equals(categoryKey) && !translated.isBlank()) return translated;
         }
         return modId;
+    }
+
+    private String actionName(String actionKey) {
+        return actionNameCache.computeIfAbsent(actionKey, key -> Component.translatable(key).getString());
+    }
+
+    private String categoryName(String categoryKey, KeyMapping mapping) {
+        return categoryNameCache.computeIfAbsent(categoryKey, ignored -> mapping.getCategory().label().getString());
+    }
+
+    private String displayName(InputConstants.Key key) {
+        return displayNameCache.computeIfAbsent(key.getName(), ignored -> key.getDisplayName().getString());
+    }
+
+    private static String searchText(String actionName, String actionKey, String categoryName, String categoryKey,
+                                     String modId, String modName, String currentKeyName) {
+        return (actionName + '\n' + actionKey + '\n' + categoryName + '\n' + categoryKey + '\n'
+                + modId + '\n' + modName + '\n' + currentKeyName).toLowerCase(Locale.ROOT);
+    }
+
+    private static String loadedModIdFromDotted(String value, boolean skipCategories) {
+        int start = 0;
+        while (start <= value.length()) {
+            int end = value.indexOf('.', start);
+            if (end < 0) end = value.length();
+            if (end > start) {
+                String part = value.substring(start, end);
+                String lower = part.toLowerCase(Locale.ROOT);
+                if (!"key".equals(lower)
+                        && !"minecraft".equals(lower)
+                        && (!skipCategories || !"categories".equals(lower))
+                        && Services.PLATFORM.isModLoaded(lower)) {
+                    return lower;
+                }
+            }
+            if (end == value.length()) break;
+            start = end + 1;
+        }
+        return null;
     }
 }
