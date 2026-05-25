@@ -62,6 +62,8 @@ public class KeybindEditScreen extends FixedScaleScreen {
     private final KeybindProfileStore profileStore = KeybindProfileStore.global();
     private final KeybindProfilePanel profilePanel = new KeybindProfilePanel(profileStore, this::rebuildEntries, this::showNotice);
     private final KeybindPriorityControls priorityControls = new KeybindPriorityControls(profileStore);
+    private final Runnable profileReloadListener = this::onProfilesReloaded;
+    private final Runnable comboReloadListener = this::onCombosReloaded;
 
     private final List<Object> entries = new ArrayList<>();
     private int scrollOffset;
@@ -127,7 +129,31 @@ public class KeybindEditScreen extends FixedScaleScreen {
                 Component.translatable("screen.newvisualkeybing.viewer.reset_all"), b -> resetAllMappings());
         addRenderableWidget(resetAllButton);
 
+        profileStore.addReloadListener(profileReloadListener);
+        com.github.newvisualkeybing.client.keyboard.KeybindComboStore.global().addReloadListener(comboReloadListener);
+
         rebuildEntries();
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        profileStore.removeReloadListener(profileReloadListener);
+        com.github.newvisualkeybing.client.keyboard.KeybindComboStore.global().removeReloadListener(comboReloadListener);
+    }
+
+    private void onProfilesReloaded() {
+        rebuildEntries();
+        KeybindProfileStore.Profile selected = profileStore.selectedProfile();
+        String name = selected == null ? "" : selected.name;
+        showNotice(Component.translatable(
+                "screen.newvisualkeybing.viewer.profile.reloaded", name).getString());
+    }
+
+    private void onCombosReloaded() {
+        rebuildEntries();
+        showNotice(Component.translatable(
+                "screen.newvisualkeybing.viewer.profile.combos_reloaded").getString());
     }
 
     private void rebuildEntries() {

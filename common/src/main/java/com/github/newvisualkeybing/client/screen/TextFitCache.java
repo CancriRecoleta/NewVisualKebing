@@ -24,10 +24,14 @@ final class TextFitCache {
 
     static String fitByChars(Font font, String text, int maxW) {
         if (maxW <= 0) return "";
-        if (font.width(text) <= maxW) return text;
         Key key = new Key(MODE_CHARS, text, maxW, font.lineHeight);
         String cached = CACHE.get(key);
         if (cached != null) return cached;
+        // Cache also covers the "fits as-is" branch so subsequent calls skip font.width(text).
+        if (font.width(text) <= maxW) {
+            CACHE.put(key, text);
+            return text;
+        }
         String ellipsis = "..";
         int eW = font.width(ellipsis);
         String result;
@@ -50,10 +54,13 @@ final class TextFitCache {
 
     static String fitPlain(Font font, String text, int maxW) {
         if (maxW <= 0) return "";
-        if (font.width(text) <= maxW) return text;
         Key key = new Key(MODE_PLAIN, text, maxW, font.lineHeight);
         String cached = CACHE.get(key);
         if (cached != null) return cached;
+        if (font.width(text) <= maxW) {
+            CACHE.put(key, text);
+            return text;
+        }
         String ellipsis = "..";
         int eW = font.width(ellipsis);
         String result = maxW <= eW ? ellipsis : font.plainSubstrByWidth(text, maxW - eW) + ellipsis;

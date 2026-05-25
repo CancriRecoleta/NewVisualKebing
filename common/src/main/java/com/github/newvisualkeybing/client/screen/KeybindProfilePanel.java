@@ -177,15 +177,15 @@ final class KeybindProfilePanel {
             return true;
         }
         if (inside(mouseX, mouseY, x + 14 + halfW, buttonTop + (BUTTON_H + 5) * 3, halfW, BUTTON_H)) {
-            KeybindProfileStore.Profile profile = profileStore.importLatestExport();
-            if (profile != null) {
-                setNameText(profile.name);
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            net.minecraft.client.gui.screens.Screen current = mc.screen;
+            mc.setScreen(new KeybindProfileImportScreen(current, imported -> {
+                setNameText(imported.name);
                 renaming = false;
                 rebuildEntries.run();
-                noticeSink.notice(Component.translatable("screen.newvisualkeybing.viewer.profile.imported", profile.name).getString());
-            } else {
-                noticeSink.notice(Component.translatable("screen.newvisualkeybing.viewer.profile.no_exports").getString());
-            }
+                noticeSink.notice(Component.translatable(
+                        "screen.newvisualkeybing.viewer.profile.imported", imported.name).getString());
+            }));
             return true;
         }
         if (inside(mouseX, mouseY, x + 8, buttonTop + (BUTTON_H + 5) * 4, WIDTH - 16, BUTTON_H)) {

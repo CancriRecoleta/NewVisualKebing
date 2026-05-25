@@ -8,7 +8,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.List;
-import java.util.Set;
 import java.util.function.IntPredicate;
 
 
@@ -26,8 +25,6 @@ final class KeybindKeyboardRenderer {
     private float cachedKeyScale = Float.NaN;
     private KeyDrawState[] drawStates = new KeyDrawState[0];
     private long lastFrameMs;
-    private long cachedComboVersion = Long.MIN_VALUE;
-    private Set<Integer> cachedComboKeys = java.util.Collections.emptySet();
 
     KeybindKeyboardRenderer(KeyBindingScanner scanner) {
         this.scanner = scanner;
@@ -48,7 +45,7 @@ final class KeybindKeyboardRenderer {
         long scannerVersion = scanner.version();
         float dt = lastFrameMs > 0 ? Math.min((nowMs - lastFrameMs) / 1000f, 0.05f) : 0.016f;
         lastFrameMs = nowMs;
-        Set<Integer> comboKeys = comboParticipantKeys();
+        KeybindComboStore comboStore = KeybindComboStore.global();
 
         int pulseAccent = KeybindViewerScreen.pulseAccent(animTick);
         int searchPulseColor = KeybindViewerScreen.searchPulseColor(animTick);
@@ -67,7 +64,7 @@ final class KeybindKeyboardRenderer {
             state.searchMatch = isSearchMatch.test(state.glfwKey);
             state.hover = !state.hidden && KeybindViewerScreen.inside(mouseX, mouseY, state.x, state.y, state.w, state.h);
             state.selected = selectedVirtualKey != null && selectedVirtualKey == state.glfwKey;
-            state.comboParticipant = comboKeys.contains(state.glfwKey);
+            state.comboParticipant = comboStore.isParticipant(state.glfwKey);
             if (state.cachedDataVersion != scannerVersion) {
                 state.cachedDataVersion = scannerVersion;
                 state.status = scanner.getStatus(state.glfwKey);
@@ -97,16 +94,6 @@ final class KeybindKeyboardRenderer {
             }
         }
         return hovered;
-    }
-
-    private Set<Integer> comboParticipantKeys() {
-        KeybindComboStore store = KeybindComboStore.global();
-        long v = store.version();
-        if (v != cachedComboVersion) {
-            cachedComboVersion = v;
-            cachedComboKeys = store.participantVirtualKeys();
-        }
-        return cachedComboKeys;
     }
 
     private static void renderComboTopBar(GuiGraphics g, KeyDrawState state, boolean dim) {

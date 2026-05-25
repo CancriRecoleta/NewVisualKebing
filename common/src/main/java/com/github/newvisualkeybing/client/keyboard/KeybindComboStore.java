@@ -52,12 +52,40 @@ public final class KeybindComboStore {
     private final Path storeFile;
     private StoreData data = new StoreData();
     private volatile long version;
+    private final java.util.List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private KeybindComboStore() {
         Path root = Minecraft.getInstance().options.getFile().toPath().toAbsolutePath().getParent();
         if (root == null) root = Path.of(".");
         this.storeFile = root.resolve("config").resolve(Constants.MOD_ID).resolve("combo_keybinds.json");
         load();
+        try {
+            KeybindConfigWatcher.global().watch(
+                    storeFile.getFileName().toString(),
+                    this::serializeForCompare,
+                    this::reloadFromDisk);
+        } catch (Throwable ignored) {
+            // Watcher is best-effort; failure should not stop the store from working.
+        }
+    }
+
+    private synchronized String serializeForCompare() {
+        return GSON.toJson(data);
+    }
+
+    private void reloadFromDisk() {
+        load();
+        for (Runnable listener : reloadListeners) {
+            try { listener.run(); } catch (Throwable ignored) {}
+        }
+    }
+
+    public void addReloadListener(Runnable listener) {
+        if (listener != null) reloadListeners.add(listener);
+    }
+
+    public void removeReloadListener(Runnable listener) {
+        reloadListeners.remove(listener);
     }
 
     public synchronized void load() {
@@ -154,25 +182,112 @@ public final class KeybindComboStore {
         bumpVersion();
     }
 
+    /** Deep-copied snapshot for inclusion in profile exports. */
+    public synchronized List<ComboBinding> snapshot() {
+        List<ComboBinding> copy = new ArrayList<>(data.combos.size());
+        for (ComboBinding source : data.combos) {
+            if (source == null) continue;
+            ComboBinding target = new ComboBinding();
+            target.mappingName = source.mappingName;
+            target.action = source.action;
+            target.category = source.category;
+            target.firstKey = source.firstKey;
+            target.secondKey = source.secondKey;
+            target.updatedAt = source.updatedAt;
+            copy.add(target);
+        }
+        return copy;
+    }
+
+    /**
+     * Replace every stored combo with the supplied list. Called during profile import so
+     * a profile fully owns the chord configuration alongside its key bindings.
+     */
+    public synchronized void replaceCombos(List<ComboBinding> incoming) {
+        data.combos.clear();
+        if (incoming != null) {
+            for (ComboBinding source : incoming) {
+                if (source == null) continue;
+                ComboBinding target = new ComboBinding();
+                target.mappingName = source.mappingName;
+                target.action = source.action;
+                target.category = source.category;
+                target.firstKey = source.firstKey;
+                target.secondKey = source.secondKey;
+                target.updatedAt = source.updatedAt == null
+                        ? LocalDateTime.now().toString() : source.updatedAt;
+                data.combos.add(target);
+            }
+        }
+        normalize();
+        save();
+        bumpVersion();
+    }
+
     public synchronized int size() {
         return data.combos.size();
     }
 
 
-    /** Returns the set of virtual key codes that participate in any combo. */
-    public synchronized Set<Integer> participantVirtualKeys() {
-        Set<Integer> result = new LinkedHashSet<>();
+    /**
+     * Returns the distinct set of trigger ({@code secondKey}) keys whose combos use the
+     * given key as their modifier ({@code firstKey}). Used by the dispatch mixin to
+     * precisely re-sync chord state when a modifier is pressed or released without
+     * walking every combo.
+     */
+    public synchronized Set<InputConstants.Key> triggersForFirstKey(InputConstants.Key firstKey) {
+        if (firstKey == null || firstKey == InputConstants.UNKNOWN) return Collections.emptySet();
+        String name = firstKey.getName();
+        Set<InputConstants.Key> result = new LinkedHashSet<>();
         for (ComboBinding combo : data.combos) {
-            Integer first = resolveVirtualKey(combo.firstKey);
-            Integer second = resolveVirtualKey(combo.secondKey);
-            if (first != null) result.add(first);
-            if (second != null) result.add(second);
+            if (!isComplete(combo)) continue;
+            if (!sameInput(combo.firstKey, name)) continue;
+            parseInput(combo.secondKey).ifPresent(result::add);
         }
         return result;
     }
 
+    private volatile Set<Integer> cachedParticipantSet;
+    private volatile int[] cachedParticipantSorted;
+    private volatile long cachedParticipantsVersion = Long.MIN_VALUE;
+
+    private void ensureParticipantCache() {
+        long v = version;
+        if (cachedParticipantsVersion == v && cachedParticipantSet != null) return;
+        synchronized (this) {
+            if (cachedParticipantsVersion == version && cachedParticipantSet != null) return;
+            Set<Integer> result = new LinkedHashSet<>();
+            for (ComboBinding combo : data.combos) {
+                Integer first = resolveVirtualKey(combo.firstKey);
+                Integer second = resolveVirtualKey(combo.secondKey);
+                if (first != null) result.add(first);
+                if (second != null) result.add(second);
+            }
+            int[] sorted = new int[result.size()];
+            int i = 0;
+            for (Integer key : result) sorted[i++] = key;
+            java.util.Arrays.sort(sorted);
+            cachedParticipantSet = Collections.unmodifiableSet(result);
+            cachedParticipantSorted = sorted;
+            cachedParticipantsVersion = version;
+        }
+    }
+
+    /** Returns the set of virtual key codes that participate in any combo (cached). */
+    public Set<Integer> participantVirtualKeys() {
+        ensureParticipantCache();
+        return cachedParticipantSet;
+    }
+
+    /**
+     * Primitive-int participation test that hits a cached sorted array — no boxing,
+     * no rebuild per call. Hot path: called per mouse button per frame from
+     * {@link com.github.newvisualkeybing.client.screen.KeybindMouseRenderer}.
+     */
     public boolean isParticipant(int virtualKey) {
-        return participantVirtualKeys().contains(virtualKey);
+        ensureParticipantCache();
+        int[] arr = cachedParticipantSorted;
+        return arr.length > 0 && java.util.Arrays.binarySearch(arr, virtualKey) >= 0;
     }
 
     public synchronized List<ComboBinding> combosForVirtualKey(int virtualKey) {

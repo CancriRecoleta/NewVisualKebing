@@ -76,6 +76,9 @@ public final class UITheme {
     }
 
     private static final int[][] FAST_INSETS = new int[33][];
+    /** Number of leading non-zero entries in {@code FAST_INSETS[r]}, parallel-cached. */
+    private static final int[] FAST_SKIPS = new int[33];
+    private static final int[] EMPTY_INSETS = new int[0];
 
     private static int[] fastInsets(int r) {
         if (r <= 0) return EMPTY_INSETS;
@@ -84,12 +87,22 @@ public final class UITheme {
             if (cached != null) return cached;
             int[] built = computeFastInsets(r);
             FAST_INSETS[r] = built;
+            FAST_SKIPS[r] = computeSkip(built, r);
             return built;
         }
         return computeFastInsets(r);
     }
 
-    private static final int[] EMPTY_INSETS = new int[0];
+    private static int fastSkip(int r, int[] insets) {
+        if (r < FAST_SKIPS.length) return FAST_SKIPS[r];
+        return computeSkip(insets, r);
+    }
+
+    private static int computeSkip(int[] insets, int r) {
+        int skip = 0;
+        while (skip < r && insets[skip] > 0) skip++;
+        return skip;
+    }
 
     private static int[] computeFastInsets(int r) {
         int[] insets = new int[r];
@@ -112,8 +125,7 @@ public final class UITheme {
             return;
         }
         int[] insets = fastInsets(radius);
-        int skip = 0;
-        while (skip < radius && insets[skip] > 0) skip++;
+        int skip = fastSkip(radius, insets);
         g.fill(x, y + skip, x + w, y + h - skip, color);
         for (int i = 0; i < skip; i++) {
             int inset = insets[i];
@@ -146,8 +158,7 @@ public final class UITheme {
             return;
         }
         int[] insets = fastInsets(radius);
-        int skip = 0;
-        while (skip < radius && insets[skip] > 0) skip++;
+        int skip = fastSkip(radius, insets);
         int outerInset = insets[0];
         g.fill(x + outerInset, y, x + w - outerInset, y + 1, color);
         g.fill(x + outerInset, y + h - 1, x + w - outerInset, y + h, color);

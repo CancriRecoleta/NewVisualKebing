@@ -1,6 +1,7 @@
 package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
+import com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
@@ -446,6 +447,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 }
                 if (mouseX >= deleteX && mouseX < deleteX + DELETE_BTN_W) {
                     store.removeCombo(combo.mappingName);
+                    KeybindPriorityEnforcer.resetAndEnforce();
                     rebuildRows();
                     showNotice(Component.translatable(
                             "screen.newvisualkeybing.viewer.combo.deleted",
@@ -561,6 +563,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
             return;
         }
         store.putCombo(capture.mapping, capture.firstKey, key);
+        KeybindPriorityEnforcer.resetAndEnforce();
         showNotice(Component.translatable("screen.newvisualkeybing.viewer.combo.saved",
                 KeybindComboStore.describeMapping(capture.mapping.getName()),
                 capture.firstKey.getDisplayName().getString() + " + " + key.getDisplayName().getString()).getString());

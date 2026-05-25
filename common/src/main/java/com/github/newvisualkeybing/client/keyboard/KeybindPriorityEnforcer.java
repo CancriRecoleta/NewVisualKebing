@@ -25,6 +25,34 @@ public final class KeybindPriorityEnforcer {
         applyPriority();
     }
 
+    /**
+     * Read the live {@code KeyMapping.MAP} winner for the given key, or {@code null} if
+     * the field cannot be located or no mapping is bound. Used by the dispatch mixin to
+     * decide whether vanilla {@code set}/{@code click} would touch a chord mapping that
+     * we want to override.
+     */
+    public static KeyMapping mapWinner(InputConstants.Key key) {
+        if (key == null || key == InputConstants.UNKNOWN) return null;
+        Field field = cachedMapField;
+        if (field == null && !lookupFailed) {
+            field = locateMapField();
+            if (field == null) {
+                lookupFailed = true;
+                return null;
+            }
+            cachedMapField = field;
+        }
+        if (field == null) return null;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<InputConstants.Key, KeyMapping> liveMap = (Map<InputConstants.Key, KeyMapping>) field.get(null);
+            return liveMap == null ? null : liveMap.get(key);
+        } catch (IllegalAccessException ignored) {
+            lookupFailed = true;
+            return null;
+        }
+    }
+
     public static void applyPriority() {
         if (lookupFailed) return;
         Field field = cachedMapField;
@@ -45,14 +73,13 @@ public final class KeybindPriorityEnforcer {
             Map<InputConstants.Key, KeyMapping> liveMap = (Map<InputConstants.Key, KeyMapping>) field.get(null);
             if (liveMap == null) return;
 
+            KeybindComboStore combos = KeybindComboStore.global();
             Map<InputConstants.Key, KeyMapping> winners = new HashMap<>();
             for (KeyMapping mapping : mc.options.keyMappings) {
                 InputConstants.Key key = ((KeyMappingAccessor) (Object) mapping).newvisualkeybing$getKey();
                 if (key == null || key == InputConstants.UNKNOWN) continue;
                 KeyMapping current = winners.get(key);
-                if (current == null
-                        || KeybindProfileStore.globalPriorityOf(mapping.getName())
-                            > KeybindProfileStore.globalPriorityOf(current.getName())) {
+                if (current == null || beats(combos, mapping, current)) {
                     winners.put(key, mapping);
                 }
             }
@@ -64,6 +91,20 @@ public final class KeybindPriorityEnforcer {
         }
     }
 
+
+    /**
+     * Pick the better of two same-key candidates. Mappings whose current key is the trigger
+     * of a complete chord are demoted: a non-chord mapping always wins, so single-key
+     * presses fall through to the non-chord mapping while the chord is dispatched manually
+     * by {@link com.github.newvisualkeybing.mixin.MixinKeyMappingDispatch}.
+     */
+    private static boolean beats(KeybindComboStore combos, KeyMapping candidate, KeyMapping current) {
+        boolean candidateChord = combos.matchesCurrentCombo(candidate);
+        boolean currentChord = combos.matchesCurrentCombo(current);
+        if (currentChord != candidateChord) return currentChord;
+        return KeybindProfileStore.globalPriorityOf(candidate.getName())
+                > KeybindProfileStore.globalPriorityOf(current.getName());
+    }
 
     private static Field locateMapField() {
         String[] candidates = { "MAP", "f_90810_", "field_1665" };

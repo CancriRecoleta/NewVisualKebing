@@ -15,4 +15,9 @@ public class MixinMinecraft {
         Constants.LOG.info("This line is printed by a common mixin from {}!", Constants.MOD_NAME);
         Constants.LOG.info("MC Version: {}", Minecraft.getInstance().getVersionType());
     }
+
+    @Inject(at = @At("TAIL"), method = "tick")
+    private void newvisualkeybing$tick(CallbackInfo info) {
+        com.github.newvisualkeybing.client.keyboard.KeybindModifierSuppressor.tick();
+    }
 }
