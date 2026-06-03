@@ -8,7 +8,10 @@ import com.github.newvisualkeybing.platform.services.IPlatformHelper.ConflictCon
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.Style;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -70,7 +73,6 @@ final class KeybindTooltipRenderer {
         int totalH = layout.totalH();
         int chipW = layout.chipW();
         int titleH = layout.titleH();
-        int rowH = layout.rowH();
         int padX = 10;
         int padY = 8;
         int tx = clamp(mouseX + 12, 4, screenW - totalW - 4);
@@ -102,33 +104,48 @@ final class KeybindTooltipRenderer {
         } else {
             g.drawString(font, layout.summaryFit(), curX, curY, c.textSecondary(), true);
             curY += font.lineHeight + 5;
+            int lineH = font.lineHeight + 2;
             for (BindingRowLayout row : layout.rows()) {
                 KeyBindingScanner.KeyBindingInfo info = row.info();
+                int rowH = row.rowH();
                 int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
-                UITheme.fillSoftRoundedRect(g, curX, curY, innerW, rowH - 1, 6,
+                UITheme.fillSoftRoundedRect(g, curX, curY, innerW, rowH - 2, 6,
                         UITheme.withAlpha(c.widgetBg(), info.self() ? 0xB8 : 0x88));
-                UITheme.drawSoftRoundedBorder(g, curX, curY, innerW, rowH - 1, 6,
+                UITheme.drawSoftRoundedBorder(g, curX, curY, innerW, rowH - 2, 6,
                         UITheme.withAlpha(sideColor, info.self() ? 0x70 : 0x40));
-                UITheme.fillSoftRoundedRect(g, curX + 3, curY + 4, 3, rowH - 9, 2, sideColor);
+                UITheme.fillSoftRoundedRect(g, curX + 3, curY + 4, 3, rowH - 10, 2, sideColor);
 
-                int textY = curY + 2;
-                g.drawString(font, row.actionFit(), curX + 6, textY,
-                        info.self() ? c.accent() : c.textPrimary(), true);
-                int rightX = curX + innerW - row.modW();
-                g.drawString(font, row.modText(), rightX, textY, c.textSecondary(), true);
-                if (!row.ctxTag().isEmpty()) {
-                    int tagX = rightX - row.ctxTagW() - 6;
-                    int tagW = row.ctxTagW() + 6;
-                    UITheme.fillSoftRoundedRect(g, tagX - 3, textY - 1, tagW, font.lineHeight + 2, 4,
-                            UITheme.withAlpha(c.accentAlt(), 0x28));
-                    UITheme.drawSoftRoundedBorder(g, tagX - 3, textY - 1, tagW, font.lineHeight + 2, 4,
-                            UITheme.withAlpha(c.accentAlt(), 0x70));
-                    g.drawString(font, row.ctxTag(), tagX, textY, c.accentAlt(), true);
+                int ly = curY + 3;
+                // Action name wraps to up to two lines; the mod source and context tag ride the
+                // first line, right-aligned, so the header reads "<action> ........ [tag] <mod>".
+                List<String> actionLines = row.actionLines();
+                for (int i = 0; i < actionLines.size(); i++) {
+                    g.drawString(font, actionLines.get(i), curX + 8, ly,
+                            info.self() ? c.accent() : c.textPrimary(), true);
+                    if (i == 0) {
+                        int rightX = curX + innerW - 6 - row.modW();
+                        g.drawString(font, row.modText(), rightX, ly, c.textSecondary(), true);
+                        if (!row.ctxTag().isEmpty()) {
+                            int tagW = row.ctxTagW() + 6;
+                            int tagX = rightX - tagW - 4;
+                            UITheme.fillSoftRoundedRect(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, 4,
+                                    UITheme.withAlpha(c.accentAlt(), 0x28));
+                            UITheme.drawSoftRoundedBorder(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, 4,
+                                    UITheme.withAlpha(c.accentAlt(), 0x70));
+                            g.drawString(font, row.ctxTag(), tagX, ly, c.accentAlt(), true);
+                        }
+                    }
+                    ly += lineH;
                 }
-                g.drawString(font, row.metaFit(),
-                        curX + 6, curY + font.lineHeight + 4, c.textMuted(), true);
-                g.drawString(font, row.keyMetaFit(),
-                        curX + 6, curY + font.lineHeight * 2 + 6, UITheme.withAlpha(c.textMuted(), 0xD0), true);
+                g.drawString(font, row.metaFit(), curX + 8, ly, c.textMuted(), true);
+                ly += lineH;
+                // Translation key wraps on its own (mod ids can be long); the key pair sits below it.
+                for (String idLine : row.idLines()) {
+                    g.drawString(font, idLine, curX + 8, ly, UITheme.withAlpha(c.textMuted(), 0xBE), true);
+                    ly += lineH;
+                }
+                g.drawString(font, row.keyInfoFit(), curX + 8, ly,
+                        UITheme.withAlpha(c.textMuted(), 0xD8), true);
                 curY += rowH;
             }
             if (layout.moreText() != null) {
@@ -197,25 +214,21 @@ final class KeybindTooltipRenderer {
         int chipW = statusChipWidth(font, status);
         int padX = 10;
         int padY = 8;
-        int maxInnerW = Math.max(140, Math.min(340, screenW - 32));
-        int innerW = Math.min(maxInnerW, Math.max(190, font.width(keyName) + 8 + chipW));
+        int maxInnerW = Math.max(160, Math.min(360, screenW - 32));
+        int innerW = Math.min(maxInnerW, Math.max(200, font.width(keyName) + 8 + chipW));
         String inputType = inputTypeName(virtualKey);
         String statusLine = Component.translatable("screen.newvisualkeybing.viewer.tooltip.status_line",
                 inputType, contextCountText(bindings)).getString();
         innerW = Math.min(maxInnerW, Math.max(innerW, font.width(statusLine)));
         int maxRows = Math.min(bindings.size(), 4);
+        // Widen only to fit each row's header line (action + tag + mod). The longer detail lines
+        // (category, translation id, key pair) wrap to multiple lines instead of forcing width.
         for (int i = 0; i < maxRows; i++) {
             KeyBindingScanner.KeyBindingInfo info = bindings.get(i);
             String ctxTag = contextTag(info.conflictContext());
-            int rowW = 8 + font.width(info.actionName()) + 8 + font.width(info.modName())
-                    + (ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 8);
-            rowW = Math.max(rowW, 8 + font.width(info.categoryName() + " | " + contextName(info.conflictContext())));
-            rowW = Math.max(rowW, 8 + font.width(info.translationKey() + " | "
-                    + Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key",
-                    info.currentKeyName()).getString() + " | "
-                    + Component.translatable("screen.newvisualkeybing.viewer.tooltip.default_key",
-                    info.defaultKeyName()).getString()));
-            innerW = Math.min(maxInnerW, Math.max(innerW, rowW));
+            int headW = 14 + font.width(info.actionName()) + 10 + font.width(info.modName())
+                    + (ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 10);
+            innerW = Math.min(maxInnerW, Math.max(innerW, headW));
         }
         if (status == KeyBindingScanner.KeyStatus.CONFLICT) {
             innerW = Math.min(maxInnerW, Math.max(innerW, font.width(conflictWarningText)));
@@ -231,25 +244,8 @@ final class KeybindTooltipRenderer {
             comboLines[i] = line;
         }
 
-        int titleH = Math.max(font.lineHeight, 12);
-        int rowH = font.lineHeight * 3 + 7;
-        int contentH = titleH + 6;
-        contentH += font.lineHeight + 5;
-        if (isWheel || bindings.isEmpty()) {
-            contentH += font.lineHeight + 4;
-        } else {
-            contentH += font.lineHeight + 5;
-            contentH += maxRows * rowH;
-            if (bindings.size() > maxRows) contentH += font.lineHeight + 2;
-        }
-        if (status == KeyBindingScanner.KeyStatus.CONFLICT) contentH += font.lineHeight + 4;
-        if (comboLines.length > 0) contentH += comboLines.length * (font.lineHeight + 2) + 2;
-        contentH += font.lineHeight + 6;
-
-        int totalW = innerW + padX * 2;
-        int totalH = contentH + padY * 2;
-        String keyNameFit = fitToWidth(font, keyName, innerW - chipW - 6);
-        String statusLineFit = fitToWidth(font, statusLine, innerW);
+        // Rows are built before content height so the variable wrapped heights can be summed.
+        int lineH = font.lineHeight + 2;
         String summaryFit = null;
         String moreText = null;
         BindingRowLayout[] rows = new BindingRowLayout[maxRows];
@@ -262,25 +258,49 @@ final class KeybindTooltipRenderer {
                 String ctxTag = contextTag(info.conflictContext());
                 int ctxTagW = ctxTag.isEmpty() ? 0 : font.width(ctxTag);
                 int tagW = ctxTag.isEmpty() ? 0 : ctxTagW + 6;
-                int modMaxW = Math.max(44, Math.min(innerW / 3, innerW - 74));
+                int modMaxW = Math.max(40, Math.min(innerW / 3, innerW - 90));
                 String modText = fitToWidth(font, info.modName(), modMaxW);
                 int modW = font.width(modText);
-                int rightBlockW = tagW + modW + 4;
-                String actionFit = fitToWidth(font, info.actionName(), Math.max(30, innerW - 10 - rightBlockW));
-                String meta = info.categoryName() + " | " + contextName(info.conflictContext());
-                String keyMeta = info.translationKey() + " | "
-                        + Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key",
-                        info.currentKeyName()).getString() + " | "
+                int rightBlockW = tagW + modW + 6;
+                List<String> actionLines = wrapLines(font, info.actionName(),
+                        Math.max(40, innerW - 14 - rightBlockW), 2);
+                String meta = info.categoryName() + "  \u00b7  " + contextName(info.conflictContext());
+                String metaFit = fitToWidth(font, meta, innerW - 12);
+                List<String> idLines = wrapLines(font, info.translationKey(), innerW - 12, 2);
+                String keyInfo = Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key",
+                        info.currentKeyName()).getString() + "   \u00b7   "
                         + Component.translatable("screen.newvisualkeybing.viewer.tooltip.default_key",
                         info.defaultKeyName()).getString();
-                rows[i] = new BindingRowLayout(info, ctxTag, ctxTagW, actionFit, modText, modW,
-                        fitToWidth(font, meta, innerW - 6), fitToWidth(font, keyMeta, innerW - 6));
+                String keyInfoFit = fitToWidth(font, keyInfo, innerW - 12);
+                int nLines = actionLines.size() + 1 + idLines.size() + 1;
+                int rh = 6 + nLines * lineH;
+                rows[i] = new BindingRowLayout(info, ctxTag, ctxTagW, actionLines, modText, modW,
+                        metaFit, idLines, keyInfoFit, rh);
             }
             if (bindings.size() > maxRows) {
                 moreText = Component.translatable("screen.newvisualkeybing.viewer.tooltip.more",
                         bindings.size() - maxRows).getString();
             }
         }
+
+        int titleH = Math.max(font.lineHeight, 12);
+        int contentH = titleH + 6;
+        contentH += font.lineHeight + 5;
+        if (isWheel || bindings.isEmpty()) {
+            contentH += font.lineHeight + 4;
+        } else {
+            contentH += font.lineHeight + 5;
+            for (BindingRowLayout r : rows) contentH += r.rowH();
+            if (bindings.size() > maxRows) contentH += font.lineHeight + 2;
+        }
+        if (status == KeyBindingScanner.KeyStatus.CONFLICT) contentH += font.lineHeight + 10;
+        if (comboLines.length > 0) contentH += comboLines.length * (font.lineHeight + 8) + 2;
+        contentH += font.lineHeight + 6;
+
+        int totalW = innerW + padX * 2;
+        int totalH = contentH + padY * 2;
+        String keyNameFit = fitToWidth(font, keyName, innerW - chipW - 6);
+        String statusLineFit = fitToWidth(font, statusLine, innerW);
 
         String[] comboLinesFit = new String[comboLines.length];
         for (int i = 0; i < comboLines.length; i++) {
@@ -289,7 +309,7 @@ final class KeybindTooltipRenderer {
         cachedLayout = new TooltipLayout(virtualKey, version, comboVersion, screenW, isWheel, bindings, status,
                 keyNameFit, statusLineFit, summaryFit, moreText,
                 fitToWidth(font, conflictWarningText, innerW), fitToWidth(font, clickHintText, innerW),
-                innerW, totalW, totalH, chipW, titleH, rowH, rows, comboLinesFit);
+                innerW, totalW, totalH, chipW, titleH, rows, comboLinesFit);
         return cachedLayout;
     }
 
@@ -425,6 +445,27 @@ final class KeybindTooltipRenderer {
         return name != null ? name : unknownContextText;
     }
 
+    /**
+     * Greedy word/character wrap (via Minecraft's line splitter) capped at {@code maxLines}; the last
+     * kept line is ellipsized when the text overflows the cap so nothing is silently dropped.
+     */
+    private static List<String> wrapLines(Font font, String text, int maxW, int maxLines) {
+        if (text == null || text.isEmpty()) return List.of("");
+        if (maxW <= 0) return List.of(fitToWidth(font, text, Math.max(1, maxW)));
+        if (font.width(text) <= maxW) return List.of(text);
+        List<FormattedText> split = font.getSplitter().splitLines(text, maxW, Style.EMPTY);
+        if (split.isEmpty()) return List.of(fitToWidth(font, text, maxW));
+        List<String> lines = new ArrayList<>(Math.min(split.size(), maxLines));
+        for (int i = 0; i < split.size() && i < maxLines; i++) {
+            lines.add(split.get(i).getString());
+        }
+        if (split.size() > maxLines && !lines.isEmpty()) {
+            int last = lines.size() - 1;
+            lines.set(last, fitToWidth(font, lines.get(last) + " " + split.get(maxLines).getString(), maxW));
+        }
+        return lines;
+    }
+
     private record TooltipLayout(int virtualKey, long scannerVersion, long comboVersion,
                                  int screenW, boolean isWheel,
                                  List<KeyBindingScanner.KeyBindingInfo> bindings,
@@ -433,10 +474,10 @@ final class KeybindTooltipRenderer {
                                  String summaryFit, String moreText,
                                  String conflictFit, String clickFit,
                                  int innerW, int totalW, int totalH, int chipW,
-                                 int titleH, int rowH, BindingRowLayout[] rows,
+                                 int titleH, BindingRowLayout[] rows,
                                  String[] comboLines) {}
 
     private record BindingRowLayout(KeyBindingScanner.KeyBindingInfo info, String ctxTag, int ctxTagW,
-                                    String actionFit, String modText, int modW,
-                                    String metaFit, String keyMetaFit) {}
+                                    List<String> actionLines, String modText, int modW,
+                                    String metaFit, List<String> idLines, String keyInfoFit, int rowH) {}
 }

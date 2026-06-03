@@ -69,9 +69,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         addRenderableWidget(mappingSearchBox);
 
         int btnGap = 6;
-        int backW = 60;
-        int addW = 110;
-        int clearW = 110;
+        int backW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.back"), 40, 60);
+        int addW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.combo.add"), 56, 110);
+        int clearW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.combo.clear_all"), 64, 110);
         int xClear = width - 12 - clearW;
         int xAdd = xClear - btnGap - addW;
         int xBack = xAdd - btnGap - backW;
@@ -101,10 +101,12 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         rows.clear();
         String q = mappingSearchBox == null ? "" : mappingSearchBox.getValue().toLowerCase(Locale.ROOT);
         for (KeybindComboStore.ComboBinding combo : store.combos()) {
+            String desc = KeybindComboStore.describeMapping(combo.mappingName);
             if (q.isBlank()
-                    || KeybindComboStore.describeMapping(combo.mappingName).toLowerCase(Locale.ROOT).contains(q)
+                    || desc.toLowerCase(Locale.ROOT).contains(q)
                     || (combo.mappingName != null && combo.mappingName.toLowerCase(Locale.ROOT).contains(q))
-                    || combo.comboLabel().toLowerCase(Locale.ROOT).contains(q)) {
+                    || combo.comboLabel().toLowerCase(Locale.ROOT).contains(q)
+                    || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(desc, q)) {
                 rows.add(combo);
             }
         }
@@ -598,7 +600,8 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 String name = Component.translatable(km.getName()).getString();
                 if (q.isBlank()
                         || name.toLowerCase(Locale.ROOT).contains(q)
-                        || km.getName().toLowerCase(Locale.ROOT).contains(q)) {
+                        || km.getName().toLowerCase(Locale.ROOT).contains(q)
+                        || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(name, q)) {
                     all.add(km);
                 }
             }

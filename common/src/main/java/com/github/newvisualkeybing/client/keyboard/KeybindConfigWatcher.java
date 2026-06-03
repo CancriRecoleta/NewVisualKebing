@@ -19,14 +19,12 @@ import java.util.function.Supplier;
 
 /**
  * Daemon-thread file watcher for the mod's config directory. Reloads stores when their
- * backing JSON changes externally — typical sources: a git pull, a manual edit, or a
- * sync from another machine.
+ * backing JSON changes externally (git pull, manual edit, sync from another machine).
  *
  * <p>Distinguishes our own writes from external changes by comparing the on-disk content
- * to what the store would currently serialize: equality means the file is in the state
- * we just wrote, so the event came from our own {@code save()}. This avoids the brittle
- * "remember our last mtime" approach which races with watch-event delivery (events fire
- * asynchronously and may arrive before or after we record the mtime).
+ * to the store's current serialization — equality means we just wrote it ourselves. This
+ * avoids the brittle "track our last mtime" approach which races with the watch event
+ * delivery.
  */
 public final class KeybindConfigWatcher {
 
@@ -70,9 +68,10 @@ public final class KeybindConfigWatcher {
     }
 
     /**
-     * Register {@code fileName} (relative to the mod config dir) for hot reload.
-     * {@code currentSerialization} returns the exact JSON the store would write today;
-     * {@code onExternalChange} runs on the client thread when the file differs.
+     * Register {@code fileName} for hot reload. {@code currentSerialization} should
+     * return the exact JSON string the store would write today (used to detect
+     * self-writes); {@code onExternalChange} runs on the client thread when the file
+     * differs from that snapshot.
      */
     public void watch(String fileName, Supplier<String> currentSerialization, Runnable onExternalChange) {
         if (fileName == null || onExternalChange == null) return;
@@ -84,8 +83,9 @@ public final class KeybindConfigWatcher {
         try {
             while (!Thread.currentThread().isInterrupted()) {
                 WatchKey key = service.take();
-                // Many editors emit several events per save (temp-file rename, then
-                // mtime update, etc.); coalesce them into a single reload.
+                // Editors often emit several events per save (temp file rename, mtime
+                // update, etc.); a short coalescing window collapses those bursts so we
+                // don't reload twice for one logical change.
                 try {
                     Thread.sleep(120);
                 } catch (InterruptedException e) {
@@ -123,7 +123,7 @@ public final class KeybindConfigWatcher {
             inMemory = null;
         }
         if (inMemory != null && normalize(onDisk).equals(normalize(inMemory))) {
-            return; // identical content — this was our own write
+            return; // our own write — ignore
         }
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return;

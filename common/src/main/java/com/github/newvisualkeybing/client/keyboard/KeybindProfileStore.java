@@ -22,10 +22,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
 
 public final class KeybindProfileStore {
@@ -43,8 +45,6 @@ public final class KeybindProfileStore {
                 if (local == null) {
                     local = new KeybindProfileStore();
                     INSTANCE = local;
-
-                    KeybindPriorityEnforcer.applyPriority();
                 }
             }
         }
@@ -56,6 +56,14 @@ public final class KeybindProfileStore {
             return global().priorityOf(mappingName);
         } catch (Throwable ignored) {
             return 0;
+        }
+    }
+
+    public static boolean globalConflictIgnored(String mappingName) {
+        try {
+            return global().isConflictIgnored(mappingName);
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -71,13 +79,10 @@ public final class KeybindProfileStore {
         this.storeFile = modDir.resolve("keybind_profiles.json");
         this.exportDir = modDir.resolve("exports");
         load();
-        try {
-            KeybindConfigWatcher.global().watch(
-                    storeFile.getFileName().toString(),
-                    this::serializeForCompare,
-                    this::reloadFromDisk);
-        } catch (Throwable ignored) {
-        }
+        KeybindConfigWatcher.global().watch(
+                storeFile.getFileName().toString(),
+                this::serializeForCompare,
+                this::reloadFromDisk);
     }
 
     private synchronized String serializeForCompare() {
@@ -201,9 +206,18 @@ public final class KeybindProfileStore {
         Profile profile = selectedProfile();
         if (profile == null) return false;
         Map<String, KeyMapping> byName = currentMappingsByName();
+        // Rebuild the live priority map from this profile alone, mirroring the wholesale replace that
+        // combos already get below. Merging in place (the old behaviour) left stale priorities for
+        // every mapping the profile did not mention, so switching to a heterogeneous profile —
+        // imported from a different mod set — kept the previous profile's values (F11). Mappings
+        // absent from the profile now fall back to default 0 via priorityOf. Priority is applied for
+        // each present mapping independently of whether its saved key still parses.
+        data.priorities.clear();
         for (Binding binding : profile.bindings) {
             KeyMapping mapping = byName.get(binding.name);
-            if (mapping == null || binding.key == null) continue;
+            if (mapping == null) continue;
+            data.priorities.put(mapping.getName(), binding.priority);
+            if (binding.key == null) continue;
             InputConstants.Key key;
             try {
                 key = InputConstants.getKey(binding.key);
@@ -211,7 +225,6 @@ public final class KeybindProfileStore {
                 continue;
             }
             mapping.setKey(key);
-            data.priorities.put(mapping.getName(), binding.priority);
         }
         if (profile.combos != null) {
             KeybindComboStore.global().replaceCombos(profile.combos);
@@ -248,9 +261,9 @@ public final class KeybindProfileStore {
     }
 
     /**
-     * Enumerate every {@code .json} file under {@code exports/}, sorted newest first by
-     * file modification time. Each entry carries parsed metadata so the import chooser
-     * does not have to re-parse on every render.
+     * Enumerate every {@code .json} file under {@code exports/}, sorted newest first
+     * by file modification time. Each entry carries the parsed profile metadata so the
+     * UI can render a chooser without re-parsing.
      */
     public List<ExportEntry> availableExports() {
         List<ExportEntry> entries = new ArrayList<>();
@@ -289,9 +302,9 @@ public final class KeybindProfileStore {
     }
 
     /**
-     * Import a specific export file. Adds it as a new profile, selects it, returns the
-     * imported profile (or {@code null} on parse failure). Does not auto-apply; the
-     * caller drives Apply.
+     * Import a specific export file. Adds it as a new profile, selects it, and returns
+     * the imported profile (or {@code null} on failure). Does not apply automatically;
+     * the caller still drives the Apply action.
      */
     public Profile importExport(Path path) {
         if (path == null || !Files.isRegularFile(path)) return null;
@@ -333,6 +346,31 @@ public final class KeybindProfileStore {
         }
         save();
         KeybindPriorityEnforcer.resetAndEnforce();
+    }
+
+    /** Whether this mapping is manually excluded from conflict detection/display. */
+    public boolean isConflictIgnored(String mappingName) {
+        return mappingName != null && data.conflictIgnored.contains(mappingName);
+    }
+
+    public boolean isConflictIgnored(KeyMapping mapping) {
+        return mapping != null && isConflictIgnored(mapping.getName());
+    }
+
+    /** Toggle the ignore-in-conflict flag for a mapping; returns the new state. */
+    public boolean toggleConflictIgnored(KeyMapping mapping) {
+        if (mapping == null) return false;
+        String name = mapping.getName();
+        boolean nowIgnored;
+        if (data.conflictIgnored.contains(name)) {
+            data.conflictIgnored.remove(name);
+            nowIgnored = false;
+        } else {
+            data.conflictIgnored.add(name);
+            nowIgnored = true;
+        }
+        save();
+        return nowIgnored;
     }
 
     public List<KeyMapping> sortedMappings(KeyMapping[] mappings) {
@@ -380,13 +418,16 @@ public final class KeybindProfileStore {
     private void normalize() {
         if (data.profiles == null) data.profiles = new ArrayList<>();
         if (data.priorities == null) data.priorities = new HashMap<>();
+        if (data.conflictIgnored == null) data.conflictIgnored = new LinkedHashSet<>();
         for (Profile profile : data.profiles) {
             if (profile.bindings == null) profile.bindings = new ArrayList<>();
             if (profile.name == null || profile.name.isBlank()) profile.name = normalizeProfileName(null, -1);
-            for (Binding binding : profile.bindings) {
-                if (binding.name != null) data.priorities.putIfAbsent(binding.name, binding.priority);
-            }
         }
+        // Deliberately does NOT seed data.priorities from profile bindings. The old back-fill merged
+        // every profile's priorities into the single live map (first profile wins via putIfAbsent),
+        // leaking values across profiles — most visibly right after importing a heterogeneous profile
+        // (F11). data.priorities is the persisted live working set: replaced wholesale only by an
+        // explicit applySelectedProfile(), and kept in sync per-edit by changePriority().
     }
 
     private String nextProfileName() {
@@ -468,6 +509,7 @@ public final class KeybindProfileStore {
         int selectedProfile;
         List<Profile> profiles = new ArrayList<>();
         Map<String, Integer> priorities = new HashMap<>();
+        Set<String> conflictIgnored = new LinkedHashSet<>();
     }
 
     public static final class Profile {

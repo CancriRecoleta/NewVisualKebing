@@ -54,8 +54,8 @@ public class KeybindProfileImportScreen extends FixedScaleScreen {
         UITheme.setMode(UITheme.Mode.DARK);
 
         int btnGap = 6;
-        int backW = 60;
-        int refreshW = 96;
+        int backW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.back"), 40, 60);
+        int refreshW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.profile.import.refresh"), 56, 96);
         int xRefresh = width - 12 - refreshW;
         int xBack = xRefresh - btnGap - backW;
 
@@ -255,6 +255,7 @@ public class KeybindProfileImportScreen extends FixedScaleScreen {
                 drawY += ROW_H;
             }
         }
+        // Pass fixed-scale coords so addRenderableWidget'd buttons (Back/Refresh) hit-test correctly.
         return super.mouseClicked(fmx, fmy, button);
     }
 

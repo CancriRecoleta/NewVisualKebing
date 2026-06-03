@@ -27,6 +27,8 @@ final class KeybindDetailPanel {
     private static final int ACTION_BTN_GAP = 8;
     private static final int ROW_UNBIND_W = 14;
     private static final int ROW_UNBIND_GAP = 4;
+    private static final int ROW_IGNORE_W = 14;
+    private static final int ROW_IGNORE_GAP = 4;
     private static final int ROW_PRIORITY_W = 48;
     private static final int ROW_PRIORITY_BTN_W = 13;
     private static final int ROW_PRIORITY_GAP = 5;
@@ -39,6 +41,7 @@ final class KeybindDetailPanel {
     private int unbindX = -1, unbindY = -1;
     private int actionBtnW;
     private final List<RowHit> rowHits = new ArrayList<>();
+    private final List<RowHit> ignoreHits = new ArrayList<>();
     private final List<PriorityHit> priorityHits = new ArrayList<>();
     private final EnumMap<KeyBindingScanner.KeyStatus, String> statusLabels =
             new EnumMap<>(KeyBindingScanner.KeyStatus.class);
@@ -83,6 +86,13 @@ final class KeybindDetailPanel {
         return null;
     }
 
+    KeyBindingScanner.KeyBindingInfo getRowIgnoreHit(double mx, double my) {
+        for (RowHit h : ignoreHits) {
+            if (KeybindViewerScreen.inside(mx, my, h.x, h.y, h.w, h.h)) return h.info;
+        }
+        return null;
+    }
+
     PriorityHit getRowPriorityHit(double mx, double my) {
         for (PriorityHit h : priorityHits) {
             if (KeybindViewerScreen.inside(mx, my, h.x, h.y, h.w, h.h)) return h;
@@ -95,6 +105,7 @@ final class KeybindDetailPanel {
         ensureTextCache();
         modifyX = modifyY = unbindX = unbindY = -1;
         rowHits.clear();
+        ignoreHits.clear();
         priorityHits.clear();
 
         var c = UITheme.colors();
@@ -299,7 +310,7 @@ final class KeybindDetailPanel {
         int singleRowH = font.lineHeight + 4;
 
         boolean showPriority = w >= 156;
-        int reservedRight = ROW_UNBIND_W + ROW_UNBIND_GAP
+        int reservedRight = ROW_UNBIND_W + ROW_UNBIND_GAP + ROW_IGNORE_W + ROW_IGNORE_GAP
                 + (showPriority ? ROW_PRIORITY_W + ROW_PRIORITY_GAP : 0);
         int textW = w - reservedRight;
 
@@ -410,10 +421,11 @@ final class KeybindDetailPanel {
                                   KeyBindingScanner.KeyBindingInfo info, boolean showPriority,
                                   int mouseX, int mouseY) {
         var c = UITheme.colors();
-        int reservedRight = ROW_UNBIND_W + ROW_UNBIND_GAP
+        int reservedRight = ROW_UNBIND_W + ROW_UNBIND_GAP + ROW_IGNORE_W + ROW_IGNORE_GAP
                 + (showPriority ? ROW_PRIORITY_W + ROW_PRIORITY_GAP : 0);
         int textW = w - reservedRight;
         boolean rowHovered = KeybindViewerScreen.inside(mouseX, mouseY, x, y, w, rowH);
+        boolean ignored = info.conflictIgnored();
 
         if (info.self()) {
             UITheme.fillSoftRoundedRect(g, x, y, textW, rowH, 5,
@@ -422,7 +434,7 @@ final class KeybindDetailPanel {
         int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
         UITheme.fillSoftRoundedRect(g, x, y + 2, 2, rowH - 4, 1, sideColor);
 
-        int actionColor = info.self() ? c.accent() : c.textPrimary();
+        int actionColor = ignored ? c.textMuted() : (info.self() ? c.accent() : c.textPrimary());
         String ctxTag = bindingTag(info);
         String modText = info.modName();
 
@@ -435,6 +447,10 @@ final class KeybindDetailPanel {
         String actionText = KeybindViewerScreen.fitToWidth(font, info.actionName(), actionMaxW);
         int rowTextY = textY(font, y, rowH);
         g.drawString(font, actionText, x + 6, rowTextY, actionColor, false);
+        if (ignored) {
+            int strikeY = rowTextY + font.lineHeight / 2;
+            g.fill(x + 6, strikeY, x + 6 + font.width(actionText), strikeY + 1, c.textMuted());
+        }
         int rightX = x + textW - modW;
         g.drawString(font, modFit, rightX, rowTextY, c.textMuted(), false);
         if (!ctxTag.isEmpty()) {
@@ -448,8 +464,10 @@ final class KeybindDetailPanel {
 
         int xButtonX = x + w - ROW_UNBIND_W;
         int xButtonY = y + (rowH - ROW_UNBIND_W) / 2;
+        int ignoreX = xButtonX - ROW_IGNORE_GAP - ROW_IGNORE_W;
+        renderIgnoreToggle(g, font, ignoreX, xButtonY, ignored, info, mouseX, mouseY);
         if (showPriority) {
-            int priorityX = xButtonX - ROW_PRIORITY_GAP - ROW_PRIORITY_W;
+            int priorityX = ignoreX - ROW_PRIORITY_GAP - ROW_PRIORITY_W;
             renderPriorityControls(g, font, info, priorityX, xButtonY, mouseX, mouseY);
         }
         rowHits.add(new RowHit(xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, info));
@@ -498,6 +516,34 @@ final class KeybindDetailPanel {
         g.drawString(font, fitted,
                 valueX + (valueW - font.width(fitted)) / 2,
                 buttonTextY, c.textMuted(), false);
+    }
+
+    /**
+     * Small per-binding toggle marking it excluded from conflict display. When active, draws a
+     * filled "muted" swatch with a dash; otherwise a faint outlined swatch with a dot. Registered
+     * in {@link #ignoreHits} so the host screen can route clicks to it.
+     */
+    private void renderIgnoreToggle(GuiGraphics g, Font font, int x, int y, boolean ignored,
+                                    KeyBindingScanner.KeyBindingInfo info, int mouseX, int mouseY) {
+        var c = UITheme.colors();
+        ignoreHits.add(new RowHit(x, y, ROW_IGNORE_W, ROW_IGNORE_W, info));
+        boolean hovered = KeybindViewerScreen.inside(mouseX, mouseY, x, y, ROW_IGNORE_W, ROW_IGNORE_W);
+        int accent = ignored ? c.warningColor() : c.widgetBorder();
+        int fill = ignored
+                ? UITheme.lerpColor(c.widgetBg(), c.warningColor(), hovered ? 0.55f : 0.34f)
+                : UITheme.lerpColor(c.widgetBg(), c.accentAlt(), hovered ? 0.40f : 0.12f);
+        UITheme.fillRoundedRectFast(g, x, y, ROW_IGNORE_W, ROW_IGNORE_W, 3, fill);
+        UITheme.drawRoundedBorderFast(g, x, y, ROW_IGNORE_W, ROW_IGNORE_W, 3,
+                UITheme.withAlpha(accent, hovered || ignored ? 0xC8 : 0x78));
+        int cx = x + ROW_IGNORE_W / 2;
+        int cy = y + ROW_IGNORE_W / 2;
+        int mark = ignored ? c.warningColor() : UITheme.withAlpha(c.textMuted(), 0xC0);
+        if (ignored) {
+            // dash = "muted / not counted"
+            g.fill(cx - 3, cy, cx + 4, cy + 1, mark);
+        } else {
+            g.fill(cx - 1, cy - 1, cx + 1, cy + 1, mark);
+        }
     }
 
     private static int textY(Font font, int y, int h) {
