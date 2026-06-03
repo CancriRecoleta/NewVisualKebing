@@ -51,12 +51,13 @@ public class MCEditBox extends EditBox {
     public void setX(int x) { this.x = x; }
     public void setY(int y) { this.y = y; }
 
-    /** 1.20.1 setFocused(boolean) is public on GuiEventListener; on 1.19.2 it is protected. Widen it
-     *  and also drive EditBox's own text-input focus so external focus calls behave as on 1.20.1. */
+    /** 1.20.1 setFocused(boolean) is public (GuiEventListener); on 1.19.2 AbstractWidget's is protected.
+     *  Widen it to public so external focus calls work. Do NOT delegate to EditBox.setFocus here: in
+     *  1.19.2 setFocus() itself just calls setFocused(), so routing back would infinitely recurse
+     *  (StackOverflowError). super.setFocused sets the same focus field EditBox's text input reads. */
     @Override
     public void setFocused(boolean focused) {
         super.setFocused(focused);
-        setFocus(focused);
     }
 
     public boolean clearAffordanceClicked(double mouseX, double mouseY) {
