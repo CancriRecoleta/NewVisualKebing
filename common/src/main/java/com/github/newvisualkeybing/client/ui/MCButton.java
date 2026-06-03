@@ -2,11 +2,16 @@ package com.github.newvisualkeybing.client.ui;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 
 public class MCButton extends AbstractWidget {
+
+    // Vanilla widget atlas; the button sprite lives at x=0 with v=46/66/86 (disabled/normal/hover).
+    private static final ResourceLocation VANILLA_WIDGETS = new ResourceLocation("textures/gui/widgets.png");
 
     private static final int CORNER_RADIUS = 6;
     private static final float ANIM_SPEED_IN = 0.15f;
@@ -23,6 +28,7 @@ public class MCButton extends AbstractWidget {
     private int cachedTextColor = 0;
     private boolean cacheDirty = true;
     private float lastEasedHover = 0f;
+    private int cachedThemeVersion = -1;
 
     @FunctionalInterface
     public interface OnPress {
@@ -38,10 +44,13 @@ public class MCButton extends AbstractWidget {
         return new MCButton(x, y, w, h, text, onPress);
     }
 
-    public int getX() {
-        return x;
-    }
+    // 1.19.2: AbstractWidget exposes x/y as fields, not getX/getY/setX/setY.
+    public int getX() { return this.x; }
+    public int getY() { return this.y; }
+    public void setX(int x) { this.x = x; }
+    public void setY(int y) { this.y = y; }
 
+    /** 1.19.2 widget render entrypoint is renderButton(PoseStack,…); bridge to the shim-based one. */
     @Override
     public void renderButton(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
         renderWidget(new GuiGraphics(poseStack), mouseX, mouseY, partialTick);
@@ -51,7 +60,13 @@ public class MCButton extends AbstractWidget {
         updateAnimations(partialTick);
 
         var colors = UITheme.colors();
-        int x = this.x, y = this.y, w = getWidth(), h = getHeight();
+        int x = getX(), y = getY(), w = getWidth(), h = getHeight();
+
+        int themeVersion = UITheme.themeVersion();
+        if (cachedThemeVersion != themeVersion) {
+            cachedThemeVersion = themeVersion;
+            cacheDirty = true;
+        }
 
         float easedHover = UITheme.easeOutCubic(hoverProgress);
         float easedPress = UITheme.easeOutCubic(pressAnimation);
@@ -71,19 +86,49 @@ public class MCButton extends AbstractWidget {
             return;
         }
 
-        int radius = Math.min(CORNER_RADIUS, Math.max(2, Math.min(w, h) / 2));
-        renderSurface(graphics, x, y, w, h, radius, easedHover, easedPress);
-
         Minecraft mc = Minecraft.getInstance();
         int textWidth = mc.font.width(getMessage());
         int textX = x + (w - textWidth) / 2;
         int textY = y + (h - mc.font.lineHeight) / 2 + 1;
+
+        if (UITheme.flat()) {
+            if (!(UITheme.custom() && drawCustomButton(graphics, x, y, w, h))) {
+                renderVanillaButton(graphics, x, y, w, h);
+            }
+            // Vanilla/custom button text: white when active, gray when disabled, with the standard shadow.
+            int vColor = this.active ? 0xFFFFFFFF : 0xFFA0A0A0;
+            graphics.drawString(mc.font, getMessage(), textX, textY, vColor, true);
+            return;
+        }
+
+        int radius = Math.min(CORNER_RADIUS, Math.max(2, Math.min(w, h) / 2));
+        renderSurface(graphics, x, y, w, h, radius, easedHover, easedPress);
 
         if (this.active) {
             graphics.drawString(mc.font, getMessage(), textX + 1, textY + 1,
                     UITheme.withAlpha(0xFF000000, 0x60), false);
         }
         graphics.drawString(mc.font, getMessage(), textX, textY, cachedTextColor, true);
+    }
+
+    /** Pixel-perfect vanilla button: nine-sliced from widgets.png, state chosen by active/hover. */
+    private void renderVanillaButton(GuiGraphics graphics, int x, int y, int w, int h) {
+        boolean hovered = isHoveredOrFocused() && this.active;
+        int v = !this.active ? 46 : hovered ? 86 : 66;
+        graphics.blitNineSliced(VANILLA_WIDGETS, x, y, w, h, 20, 4, 200, 20, 0, v);
+    }
+
+    /** Custom skin: draw the user's button texture for the current state, or false to fall back. */
+    private boolean drawCustomButton(GuiGraphics graphics, int x, int y, int w, int h) {
+        UITextureStore store = UITextureStore.global();
+        boolean hovered = isHoveredOrFocused() && this.active;
+        UITextureSlot slot = UITextureSlot.BUTTON;
+        if (!this.active && store.has(UITextureSlot.BUTTON_DISABLED)) {
+            slot = UITextureSlot.BUTTON_DISABLED;
+        } else if (hovered && store.has(UITextureSlot.BUTTON_HOVER)) {
+            slot = UITextureSlot.BUTTON_HOVER;
+        }
+        return store.draw(slot, graphics, x, y, w, h);
     }
 
     private void renderSurface(GuiGraphics graphics, int x, int y, int w, int h, int radius,

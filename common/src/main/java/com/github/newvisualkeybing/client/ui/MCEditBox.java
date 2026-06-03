@@ -3,8 +3,10 @@ package com.github.newvisualkeybing.client.ui;
 import com.github.newvisualkeybing.mixin.EditBoxAccessor;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.gui.Font;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 
 public class MCEditBox extends EditBox {
@@ -28,6 +30,7 @@ public class MCEditBox extends EditBox {
 
     public MCEditBox withPlaceholder(Component placeholder) {
         this.placeholder = placeholder;
+        // 1.19.2 EditBox has no setHint; the mod draws its own placeholder, so only clear the suggestion.
         setSuggestion(null);
         return this;
     }
@@ -37,20 +40,23 @@ public class MCEditBox extends EditBox {
         return this;
     }
 
-    public int getX() {
-        return x;
-    }
-
-    public int getY() {
-        return y;
-    }
-
-    public void setY(int y) {
-        this.y = y;
-    }
-
+    /** 1.20.1 lacks AbstractWidget.setHeight; height is a public field, so set it directly. */
     public void setHeight(int height) {
         this.height = height;
+    }
+
+    // ----- 1.19.2 widget API bridges (1.20.1's getX/getY/setX/setY/public setFocused don't exist) -----
+    public int getX() { return this.x; }
+    public int getY() { return this.y; }
+    public void setX(int x) { this.x = x; }
+    public void setY(int y) { this.y = y; }
+
+    /** 1.20.1 setFocused(boolean) is public on GuiEventListener; on 1.19.2 it is protected. Widen it
+     *  and also drive EditBox's own text-input focus so external focus calls behave as on 1.20.1. */
+    @Override
+    public void setFocused(boolean focused) {
+        super.setFocused(focused);
+        setFocus(focused);
     }
 
     public boolean clearAffordanceClicked(double mouseX, double mouseY) {
@@ -59,10 +65,35 @@ public class MCEditBox extends EditBox {
                 && mouseY >= clearY && mouseY < clearY + clearSize;
     }
 
+    /**
+     * Self-manage focus on click. Vanilla 1.20.1 {@link EditBox} no longer toggles its own focus
+     * in {@code mouseClicked}, leaving it to the container — but this mod hosts several edit boxes,
+     * some of which are not registered screen children, so without this an out-of-bounds click
+     * never clears focus (the box stays focused) and multiple boxes can be focused at once (text
+     * routed to the wrong one). Focusing only when the click lands inside, and clearing otherwise,
+     * keeps exactly one box focused and lets clicks elsewhere blur it.
+     */
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!isVisible()) return false;
+        boolean inside = mouseX >= getX() && mouseX < getX() + getWidth()
+                && mouseY >= getY() && mouseY < getY() + getHeight();
+        if (!inside) {
+            if (isFocused()) setFocused(false);
+            return false;
+        }
+        setFocused(true);
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    /** 1.19.2 widget render entrypoint is renderButton(PoseStack,…); bridge to the shim-based one. */
     @Override
     public void renderButton(PoseStack poseStack, int mouseX, int mouseY, float partialTick) {
+        renderWidget(new GuiGraphics(poseStack), mouseX, mouseY, partialTick);
+    }
+
+    public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         renderFrame++;
-        GuiGraphics graphics = new GuiGraphics(poseStack);
         renderFrame(graphics, mouseX, mouseY);
         renderText(graphics);
     }
@@ -75,6 +106,21 @@ public class MCEditBox extends EditBox {
         int h = getHeight();
         boolean focused = isFocused();
         boolean hovered = isMouseOver(mouseX, mouseY);
+
+        if (UITheme.flat()) {
+            // Custom skin: a user editbox texture wins; otherwise the pixel-exact vanilla EditBox
+            // (1px border — white when focused, else gray #A0A0A0 — behind a pure-black interior).
+            if (UITheme.custom()) {
+                UITextureSlot slot = focused && UITextureStore.global().has(UITextureSlot.EDITBOX_FOCUSED)
+                        ? UITextureSlot.EDITBOX_FOCUSED : UITextureSlot.EDITBOX;
+                if (UITextureStore.global().draw(slot, graphics, x, y, w, h)) return;
+            }
+            int border = focused ? 0xFFFFFFFF : 0xFFA0A0A0;
+            graphics.fill(x - 1, y - 1, x + w + 1, y + h + 1, border);
+            graphics.fill(x, y, x + w, y + h, 0xFF000000);
+            return;
+        }
+
         int accent = focused ? colors.accent() : hovered ? colors.accentAlt() : colors.widgetBorder();
         int fill = focused
                 ? UITheme.lerpColor(colors.inputBg(), colors.accent(), 0.12f)
@@ -121,14 +167,16 @@ public class MCEditBox extends EditBox {
             Component hint = placeholder == null ? getMessage() : placeholder;
             graphics.drawString(font, hint, textX, textY, UITheme.withAlpha(colors.textMuted(), 0xB8), false);
         } else {
-            graphics.drawString(font, visible, textX, textY, colors.textPrimary(), false);
+            graphics.drawString(font, FormattedCharSequence.forward(visible, net.minecraft.network.chat.Style.EMPTY),
+                    textX, textY, colors.textPrimary());
         }
 
         if (isFocused()) {
             boolean cursorVisible = renderFrame / 12 % 2 == 0;
             if (cursorVisible) {
                 int cursorX = textX + font.width(visible.substring(0, localCursor));
-                UITheme.fillSoftRoundedRect(graphics, cursorX, textY - 2, 1, font.lineHeight + 4, 1, colors.accentLight());
+                int cursorColor = UITheme.flat() ? 0xFFD0D0D0 : colors.accentLight();
+                UITheme.fillSoftRoundedRect(graphics, cursorX, textY - 2, 1, font.lineHeight + 4, 1, cursorColor);
             }
         }
 

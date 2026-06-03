@@ -7,6 +7,7 @@ public enum FilterTab {
     FREE("screen.newvisualkeybing.viewer.filter.free"),
     SELF("screen.newvisualkeybing.viewer.filter.self"),
     OTHER("screen.newvisualkeybing.viewer.filter.other"),
+    COMBO("screen.newvisualkeybing.viewer.filter.combo"),
     CONFLICT("screen.newvisualkeybing.viewer.filter.conflict");
 
     private final String translationKey;

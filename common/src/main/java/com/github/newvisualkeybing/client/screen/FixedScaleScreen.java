@@ -1,12 +1,39 @@
 package com.github.newvisualkeybing.client.screen;
 
+import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
+import com.github.newvisualkeybing.client.ui.UITheme;
+import com.github.newvisualkeybing.client.ui.UITextureStore;
 import com.mojang.blaze3d.platform.Window;
-import com.github.newvisualkeybing.client.ui.GuiGraphics;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
+import com.github.newvisualkeybing.client.ui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 abstract class FixedScaleScreen extends Screen {
+
+    // ----- 1.19.2 render bridge -----
+    // 1.20.1 Screen.render/renderBackground take the native GuiGraphics; 1.19.2 takes a PoseStack.
+    // Bridge the real MC entrypoints (PoseStack) into the mod's shim-GuiGraphics overloads that the
+    // subclasses implement, so all the ported (1.20.1-shaped) screen code works unchanged here.
+
+    @Override
+    public void render(PoseStack pose, int mouseX, int mouseY, float partialTick) {
+        render(new GuiGraphics(pose), mouseX, mouseY, partialTick);
+    }
+
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics.pose(), mouseX, mouseY, partialTick);
+    }
+
+    @Override
+    public void renderBackground(PoseStack pose) {
+        renderBackground(new GuiGraphics(pose));
+    }
+
+    public void renderBackground(GuiGraphics graphics) {
+        super.renderBackground(graphics.pose());
+    }
 
     private static final float FIXED_GUI_SCALE = 2.0f;
     private static final float MIN_RENDER_SCALE = 0.001f;
@@ -15,6 +42,16 @@ abstract class FixedScaleScreen extends Screen {
 
     protected FixedScaleScreen(Component title) {
         super(title);
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        // Load the persisted skin before any widget builds its colour cache, so every screen in the
+        // mod (viewer, board, edit, …) honours the choice the user made on the main screen.
+        UITheme.setSkin(KeybindViewerConfig.global().uiSkin());
+        // When the custom skin is active, make sure the active pack's textures are loaded (render thread).
+        if (UITheme.custom()) UITextureStore.global().ensureLoaded(KeybindViewerConfig.global().uiTexturePack());
     }
 
     protected final void applyFixedScaleMetrics() {
