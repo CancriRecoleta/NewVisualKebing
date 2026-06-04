@@ -1,6 +1,7 @@
 package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
+import com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
@@ -14,7 +15,6 @@ import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -38,29 +38,13 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private MCButton addButton;
     private MCButton clearAllButton;
 
-    private final List<ComboRow> rows = new ArrayList<>();
-    private final List<MappingPickRow> mappingPickRows = new ArrayList<>();
+    private final List<KeybindComboStore.ComboBinding> rows = new ArrayList<>();
     private int scrollOffset;
     private int totalListH;
-    private long mappingPickRowsVersion = -1L;
-    private String comboTitleText;
-    private String comboEmptyText;
-    private String statusActiveText;
-    private String statusDormantText;
-    private String rerecordText;
-    private String deleteText;
-    private String footerHintText;
-    private String pickerSearchText;
-    private String pickerHintText;
-    private String pickerTitleText;
-    private String captureTitleText;
-    private String cancelHintText;
 
     private CaptureState capture = null;
     private String noticeMessage;
     private long noticeUntil;
-    private int headerSearchX;
-    private int headerSearchW;
 
     public KeybindComboManageScreen(Screen parent) {
         super(Component.translatable("screen.newvisualkeybing.viewer.combo.title"));
@@ -70,25 +54,38 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     @Override
     protected void init() {
         super.init();
+        applyFixedScaleMetrics();
         UITheme.setMode(UITheme.Mode.DARK);
 
-        mappingSearchBox = new MCEditBox(font, 0, 0, 1, 1,
+        int searchX = 12;
+        int searchW = Mth.clamp(width / 3, 180, 320);
+        int searchH = 22;
+        int searchY = (HEADER_H - searchH) / 2;
+        mappingSearchBox = new MCEditBox(font, searchX, searchY, searchW, searchH,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
                 .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.combo.search"))
                 .withClearAffordance(true);
         mappingSearchBox.setResponder(value -> rebuildRows());
         addRenderableWidget(mappingSearchBox);
 
-        backButton = MCButton.create(0, 0, 60, 20,
+        int btnGap = 6;
+        int backW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.back"), 40, 60);
+        int addW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.combo.add"), 56, 110);
+        int clearW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.combo.clear_all"), 64, 110);
+        int xClear = width - 12 - clearW;
+        int xAdd = xClear - btnGap - addW;
+        int xBack = xAdd - btnGap - backW;
+
+        backButton = MCButton.create(xBack, 10, backW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.back"), b -> onClose());
         addRenderableWidget(backButton);
 
-        addButton = MCButton.create(0, 0, 110, 20,
+        addButton = MCButton.create(xAdd, 10, addW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.add"),
                 b -> beginAddCombo());
         addRenderableWidget(addButton);
 
-        clearAllButton = MCButton.create(0, 0, 110, 20,
+        clearAllButton = MCButton.create(xClear, 10, clearW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.clear_all"),
                 b -> {
                     store.clear();
@@ -97,98 +94,24 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 });
         addRenderableWidget(clearAllButton);
 
-        layoutHeaderControls();
         rebuildRows();
     }
 
-    @Override
-    protected void onFixedScaleMetricsChanged() {
-        layoutHeaderControls();
-        scrollOffset = Mth.clamp(scrollOffset, 0, Math.max(0, totalListH - listHeight()));
-    }
-
-    private void layoutHeaderControls() {
-        headerSearchX = 12;
-        headerSearchW = Mth.clamp(width / 3, 180, 320);
-        int searchH = 22;
-        int searchY = (HEADER_H - searchH) / 2;
-        if (mappingSearchBox != null) {
-            mappingSearchBox.setX(headerSearchX);
-            mappingSearchBox.setY(searchY);
-            mappingSearchBox.setWidth(headerSearchW);
-            mappingSearchBox.setHeight(searchH);
-        }
-
-        int btnGap = 6;
-        int backW = 60;
-        int addW = 110;
-        int clearW = 110;
-        int xClear = width - 12 - clearW;
-        int xAdd = xClear - btnGap - addW;
-        int xBack = xAdd - btnGap - backW;
-        if (backButton != null) {
-            backButton.setX(xBack);
-            backButton.setY(10);
-            backButton.setWidth(backW);
-            backButton.setHeight(20);
-        }
-        if (addButton != null) {
-            addButton.setX(xAdd);
-            addButton.setY(10);
-            addButton.setWidth(addW);
-            addButton.setHeight(20);
-        }
-        if (clearAllButton != null) {
-            clearAllButton.setX(xClear);
-            clearAllButton.setY(10);
-            clearAllButton.setWidth(clearW);
-            clearAllButton.setHeight(20);
-        }
-    }
-
     private void rebuildRows() {
-        refreshTextCache();
         rows.clear();
         String q = mappingSearchBox == null ? "" : mappingSearchBox.getValue().toLowerCase(Locale.ROOT);
         for (KeybindComboStore.ComboBinding combo : store.combos()) {
-            ComboRow row = ComboRow.of(combo);
-            if (q.isBlank() || row.matches(q)) {
-                rows.add(row);
+            String desc = KeybindComboStore.describeMapping(combo.mappingName);
+            if (q.isBlank()
+                    || desc.toLowerCase(Locale.ROOT).contains(q)
+                    || (combo.mappingName != null && combo.mappingName.toLowerCase(Locale.ROOT).contains(q))
+                    || combo.comboLabel().toLowerCase(Locale.ROOT).contains(q)
+                    || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(desc, q)) {
+                rows.add(combo);
             }
         }
         totalListH = rows.size() * ROW_H;
         scrollOffset = Mth.clamp(scrollOffset, 0, Math.max(0, totalListH - listHeight()));
-    }
-
-    private void refreshTextCache() {
-        if (comboTitleText != null) return;
-        comboTitleText = Component.translatable("screen.newvisualkeybing.viewer.combo.title").getString();
-        comboEmptyText = Component.translatable("screen.newvisualkeybing.viewer.combo.empty").getString();
-        statusActiveText = Component.translatable("screen.newvisualkeybing.viewer.combo.status.active").getString();
-        statusDormantText = Component.translatable("screen.newvisualkeybing.viewer.combo.status.dormant").getString();
-        rerecordText = Component.translatable("screen.newvisualkeybing.viewer.combo.rerecord").getString();
-        deleteText = Component.translatable("screen.newvisualkeybing.viewer.combo.delete").getString();
-        footerHintText = Component.translatable("screen.newvisualkeybing.viewer.combo.hint").getString();
-        pickerSearchText = Component.translatable("screen.newvisualkeybing.viewer.combo.search").getString();
-        pickerHintText = Component.translatable("screen.newvisualkeybing.viewer.combo.picker_hint").getString();
-        pickerTitleText = Component.translatable("screen.newvisualkeybing.viewer.combo.pick_mapping").getString();
-        captureTitleText = Component.translatable("screen.newvisualkeybing.viewer.combo.capture_title").getString();
-        cancelHintText = Component.translatable("screen.newvisualkeybing.viewer.combo.cancel_hint").getString();
-    }
-
-    private List<MappingPickRow> mappingPickRows() {
-        Minecraft mc = Minecraft.getInstance();
-        long version = mc != null && mc.options != null ? mc.options.keyMappings.length : 0L;
-        if (version == mappingPickRowsVersion) return mappingPickRows;
-        mappingPickRows.clear();
-        if (mc != null && mc.options != null) {
-            for (KeyMapping km : mc.options.keyMappings) {
-                mappingPickRows.add(MappingPickRow.of(km));
-            }
-            mappingPickRows.sort(Comparator.comparing(MappingPickRow::name, String.CASE_INSENSITIVE_ORDER));
-        }
-        mappingPickRowsVersion = version;
-        return mappingPickRows;
     }
 
     private void beginAddCombo() {
@@ -203,6 +126,10 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private int listHeight() { return height - HEADER_H - FOOTER_H - 8; }
     private int listX() { return 12; }
     private int listW() { return width - listX() - 12; }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -231,9 +158,20 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         var colors = UITheme.colors();
         UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4, 8);
 
-        String title = comboTitleText;
+        int searchX = 12;
+        int searchW = Mth.clamp(width / 3, 180, 320);
+        int searchH = 22;
+        int searchY = (HEADER_H - searchH) / 2;
+        if (mappingSearchBox != null) {
+            mappingSearchBox.setX(searchX);
+            mappingSearchBox.setY(searchY);
+            mappingSearchBox.setWidth(searchW);
+            mappingSearchBox.setHeight(searchH);
+        }
+
+        String title = Component.translatable("screen.newvisualkeybing.viewer.combo.title").getString();
         String count = Component.translatable("screen.newvisualkeybing.viewer.combo.count", store.size()).getString();
-        int titleX = headerSearchX + headerSearchW + 16;
+        int titleX = searchX + searchW + 16;
         int textBlockH = font.lineHeight * 2 + 3;
         int titleY = (HEADER_H - textBlockH) / 2;
         int titleRight = backButton == null ? width - 12 : backButton.getX() - 8;
@@ -265,7 +203,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         UITheme.drawRoundedBorderFast(graphics, x, listTop, w, listH, 8, colors.widgetBorder());
 
         if (rows.isEmpty()) {
-            String empty = comboEmptyText;
+            String empty = Component.translatable("screen.newvisualkeybing.viewer.combo.empty").getString();
             graphics.drawString(font, empty,
                     x + (w - font.width(empty)) / 2,
                     listTop + (listH - font.lineHeight) / 2,
@@ -294,7 +232,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         }
     }
 
-    private void renderRow(GuiGraphics graphics, ComboRow combo,
+    private void renderRow(GuiGraphics graphics, KeybindComboStore.ComboBinding combo,
                            int x, int y, int w, int mouseX, int mouseY, boolean hovered) {
         var colors = UITheme.colors();
         int rowTop = y + 1;
@@ -316,13 +254,15 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 && combo.secondKey != null
                 && combo.secondKey.equals(KeybindComboStore.currentKey(mapping).getName());
         int statusColor = active ? HIGHLIGHT_COLOR : colors.warningColor();
-        String statusText = active ? statusActiveText : statusDormantText;
+        String statusText = Component.translatable(active
+                ? "screen.newvisualkeybing.viewer.combo.status.active"
+                : "screen.newvisualkeybing.viewer.combo.status.dormant").getString();
         int statusW = font.width(statusText);
 
-        String name = combo.name;
+        String name = KeybindComboStore.describeMapping(combo.mappingName);
         int nameMaxW = textColMaxW;
         if (font.width(name) > nameMaxW) name = font.plainSubstrByWidth(name, nameMaxW - 6) + "..";
-        String comboLabel = combo.comboLabel;
+        String comboLabel = combo.comboLabel();
         int comboMaxW = Math.max(20, textColMaxW - statusW - 12);
         if (font.width(comboLabel) > comboMaxW) {
             comboLabel = font.plainSubstrByWidth(comboLabel, comboMaxW - 6) + "..";
@@ -348,7 +288,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         UITheme.fillRoundedRectFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, 4, rcFill);
         UITheme.drawRoundedBorderFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, 4,
                 UITheme.withAlpha(HIGHLIGHT_COLOR, 0xC0));
-        String reLabel = rerecordText;
+        String reLabel = Component.translatable("screen.newvisualkeybing.viewer.combo.rerecord").getString();
         graphics.drawString(font, reLabel,
                 recordX + (RECORD_BTN_W - font.width(reLabel)) / 2,
                 btnTop + (16 - font.lineHeight) / 2 + 1,
@@ -362,7 +302,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         UITheme.fillRoundedRectFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, 4, delFill);
         UITheme.drawRoundedBorderFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, 4,
                 UITheme.withAlpha(colors.dangerColor(), 0xB0));
-        String del = deleteText;
+        String del = Component.translatable("screen.newvisualkeybing.viewer.combo.delete").getString();
         graphics.drawString(font, del,
                 deleteX + (DELETE_BTN_W - font.width(del)) / 2,
                 btnTop + (16 - font.lineHeight) / 2 + 1,
@@ -373,7 +313,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         var colors = UITheme.colors();
         int y = height - FOOTER_H;
         graphics.fill(0, y, width, y + 1, colors.divider());
-        String hint = capture == null ? footerHintText : capture.hintMessage();
+        String hint = capture == null
+                ? Component.translatable("screen.newvisualkeybing.viewer.combo.hint").getString()
+                : capture.hintMessage();
         graphics.drawString(font, hint, (width - font.width(hint)) / 2,
                 y + (FOOTER_H - font.lineHeight) / 2, colors.textSecondary(), false);
     }
@@ -411,7 +353,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private void renderMappingPicker(GuiGraphics graphics, int bx, int by, int bw, int bh) {
         var colors = UITheme.colors();
         String search = capture.search.isEmpty()
-                ? pickerSearchText
+                ? Component.translatable("screen.newvisualkeybing.viewer.combo.search").getString()
                 : "> " + capture.search;
         graphics.drawString(font, search, bx + 12, by + 22,
                 capture.search.isEmpty() ? colors.textMuted() : HIGHLIGHT_COLOR, false);
@@ -423,7 +365,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 UITheme.withAlpha(colors.widgetBg(), 0xC0));
         UITheme.drawRoundedBorderFast(graphics, listX, listY, listW, listH, 6, colors.widgetBorder());
 
-        List<MappingPickRow> mappings = capture.filteredMappings();
+        List<KeyMapping> mappings = capture.filteredMappings();
         int rowH = 16;
         int visible = Math.max(1, (listH - 6) / rowH);
         capture.scrollOffset = Mth.clamp(capture.scrollOffset, 0, Math.max(0, mappings.size() - visible));
@@ -431,9 +373,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         enableFixedScissor(graphics, listX + 1, listY + 1, listX + listW - 1, listY + listH - 1);
         int drawY = listY + 4;
         for (int i = capture.scrollOffset; i < mappings.size() && i < capture.scrollOffset + visible; i++) {
-            MappingPickRow rowData = mappings.get(i);
-            String name = rowData.name;
-            String current = rowData.currentKey;
+            KeyMapping km = mappings.get(i);
+            String name = Component.translatable(km.getName()).getString();
+            String current = km.getTranslatedKeyMessage().getString();
             String row = name + "  (" + current + ")";
             if (font.width(row) > listW - 16) row = font.plainSubstrByWidth(row, listW - 22) + "..";
             graphics.drawString(font, row, listX + 8, drawY, colors.textPrimary(), false);
@@ -441,7 +383,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         }
         graphics.disableScissor();
 
-        String tip = pickerHintText;
+        String tip = Component.translatable("screen.newvisualkeybing.viewer.combo.picker_hint").getString();
         graphics.drawString(font, tip, bx + (bw - font.width(tip)) / 2, by + bh - 16, colors.textMuted(), false);
     }
 
@@ -479,14 +421,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
             return true;
         }
         if (handleSearchClearClick(mouseX, mouseY)) return true;
-        if (mappingSearchBox != null && mappingSearchBox.isMouseOver(mouseX, mouseY)) {
-            return super.mouseClicked(mouseX, mouseY, button);
-        }
-        if (mappingSearchBox != null && mappingSearchBox.isFocused()) {
-            mappingSearchBox.setFocused(false);
-            if (this.getFocused() == mappingSearchBox) this.setFocused(null);
-        }
-        if (headerButtonClicked(mouseX, mouseY, button)) return true;
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
 
         int x = listX(), w = listW();
         int listTop = listTop();
@@ -495,7 +430,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
             int relY = (int) (mouseY - listTop - 4) + scrollOffset;
             int idx = relY / ROW_H;
             if (idx >= 0 && idx < rows.size() && relY - idx * ROW_H < ROW_H) {
-                ComboRow combo = rows.get(idx);
+                KeybindComboStore.ComboBinding combo = rows.get(idx);
                 int rowX = x + 8;
                 int rowW = w - 16;
                 int recordX = rowX + rowW - RECORD_BTN_W - DELETE_BTN_W - COL_GAP * 2;
@@ -514,26 +449,17 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 }
                 if (mouseX >= deleteX && mouseX < deleteX + DELETE_BTN_W) {
                     store.removeCombo(combo.mappingName);
+                    KeybindPriorityEnforcer.resetAndEnforce();
                     rebuildRows();
                     showNotice(Component.translatable(
                             "screen.newvisualkeybing.viewer.combo.deleted",
-                            combo.name).getString());
+                            KeybindComboStore.describeMapping(combo.mappingName)).getString());
                     return true;
                 }
                 return true;
             }
         }
         return false;
-    }
-
-    private boolean headerButtonClicked(double mouseX, double mouseY, int button) {
-        return clickHeaderButton(backButton, mouseX, mouseY, button)
-                || clickHeaderButton(addButton, mouseX, mouseY, button)
-                || clickHeaderButton(clearAllButton, mouseX, mouseY, button);
-    }
-
-    private boolean clickHeaderButton(MCButton button, double mouseX, double mouseY, int mouseButton) {
-        return button != null && button.mouseClicked(mouseX, mouseY, mouseButton);
     }
 
     private boolean handleMappingPickerClick(double mouseX, double mouseY) {
@@ -548,14 +474,14 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         if (mouseX < listX || mouseX >= listX + listW || mouseY < listY || mouseY >= listY + listH) {
             return false;
         }
-        List<MappingPickRow> mappings = capture.filteredMappings();
+        List<KeyMapping> mappings = capture.filteredMappings();
         int rowH = 16;
         int relY = (int) (mouseY - listY - 4);
         int idx = relY / rowH;
         if (idx < 0) return true;
         int real = capture.scrollOffset + idx;
         if (real >= 0 && real < mappings.size()) {
-            capture.mapping = mappings.get(real).mapping;
+            capture.mapping = mappings.get(real);
             capture.stage = CaptureStage.AWAITING_FIRST;
         }
         return true;
@@ -639,6 +565,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
             return;
         }
         store.putCombo(capture.mapping, capture.firstKey, key);
+        KeybindPriorityEnforcer.resetAndEnforce();
         showNotice(Component.translatable("screen.newvisualkeybing.viewer.combo.saved",
                 KeybindComboStore.describeMapping(capture.mapping.getName()),
                 capture.firstKey.getDisplayName().getString() + " + " + key.getDisplayName().getString()).getString());
@@ -657,77 +584,47 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
 
     private enum CaptureStage { SELECT_MAPPING, AWAITING_FIRST }
 
-    private final class CaptureState {
+    private static final class CaptureState {
         CaptureStage stage = CaptureStage.SELECT_MAPPING;
         KeyMapping mapping;
         InputConstants.Key firstKey;
         String search = "";
         int scrollOffset;
 
-        List<MappingPickRow> filteredMappings() {
-            List<MappingPickRow> all = new ArrayList<>();
+        List<KeyMapping> filteredMappings() {
+            List<KeyMapping> all = new ArrayList<>();
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.options == null) return all;
             String q = search.toLowerCase(Locale.ROOT);
-            for (MappingPickRow row : KeybindComboManageScreen.this.mappingPickRows()) {
+            for (KeyMapping km : mc.options.keyMappings) {
+                String name = Component.translatable(km.getName()).getString();
                 if (q.isBlank()
-                        || row.nameLower.contains(q)
-                        || row.mappingNameLower.contains(q)) {
-                    all.add(row);
+                        || name.toLowerCase(Locale.ROOT).contains(q)
+                        || km.getName().toLowerCase(Locale.ROOT).contains(q)
+                        || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(name, q)) {
+                    all.add(km);
                 }
             }
+            all.sort((a, b) -> {
+                String an = Component.translatable(a.getName()).getString();
+                String bn = Component.translatable(b.getName()).getString();
+                return an.compareToIgnoreCase(bn);
+            });
             return all;
         }
 
         String titleMessage() {
             if (stage == CaptureStage.SELECT_MAPPING) {
-                return pickerTitleText;
+                return Component.translatable("screen.newvisualkeybing.viewer.combo.pick_mapping").getString();
             }
-            return captureTitleText;
+            return Component.translatable("screen.newvisualkeybing.viewer.combo.capture_title").getString();
         }
 
         String hintMessage() {
             if (stage == CaptureStage.SELECT_MAPPING) {
-                return pickerHintText;
+                return Component.translatable("screen.newvisualkeybing.viewer.combo.picker_hint").getString();
             }
-            return cancelHintText;
-        }
-    }
-
-    private static final class ComboRow {
-        final String mappingName;
-        final String secondKey;
-        final String name;
-        final String comboLabel;
-        final String searchable;
-
-        private ComboRow(String mappingName, String secondKey, String name, String comboLabel, String searchable) {
-            this.mappingName = mappingName;
-            this.secondKey = secondKey;
-            this.name = name;
-            this.comboLabel = comboLabel;
-            this.searchable = searchable;
-        }
-
-        static ComboRow of(KeybindComboStore.ComboBinding combo) {
-            String mappingName = combo.mappingName;
-            String name = KeybindComboStore.describeMapping(mappingName);
-            String comboLabel = combo.comboLabel();
-            String searchable = (name + "\n" + String.valueOf(mappingName) + "\n" + comboLabel)
-                    .toLowerCase(Locale.ROOT);
-            return new ComboRow(mappingName, combo.secondKey, name, comboLabel, searchable);
-        }
-
-        boolean matches(String query) {
-            return searchable.contains(query);
-        }
-    }
-
-    private record MappingPickRow(KeyMapping mapping, String mappingName, String mappingNameLower,
-                                  String name, String nameLower, String currentKey) {
-        static MappingPickRow of(KeyMapping mapping) {
-            String mappingName = mapping.getName();
-            String name = Component.translatable(mappingName).getString();
-            return new MappingPickRow(mapping, mappingName, mappingName.toLowerCase(Locale.ROOT),
-                    name, name.toLowerCase(Locale.ROOT), mapping.getTranslatedKeyMessage().getString());
+            return Component.translatable("screen.newvisualkeybing.viewer.combo.cancel_hint").getString();
         }
     }
 }

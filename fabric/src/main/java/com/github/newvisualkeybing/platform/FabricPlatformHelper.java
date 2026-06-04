@@ -16,6 +16,13 @@ public class FabricPlatformHelper implements IPlatformHelper {
     }
 
     @Override
+    public java.util.Set<String> getLoadedModIds() {
+        return FabricLoader.getInstance().getAllMods().stream()
+                .map(m -> m.getMetadata().getId())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Override
     public boolean isDevelopmentEnvironment() {
         return FabricLoader.getInstance().isDevelopmentEnvironment();
     }

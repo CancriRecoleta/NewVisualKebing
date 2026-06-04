@@ -39,10 +39,36 @@ public class MCEditBox extends EditBox {
         return this;
     }
 
+    /** 1.20.1 lacks AbstractWidget.setHeight; height is a public field, so set it directly. */
+    public void setHeight(int height) {
+        this.height = height;
+    }
+
     public boolean clearAffordanceClicked(double mouseX, double mouseY) {
         return clearAffordance && !getValue().isEmpty()
                 && mouseX >= clearX && mouseX < clearX + clearSize
                 && mouseY >= clearY && mouseY < clearY + clearSize;
+    }
+
+    /**
+     * Self-manage focus on click. Vanilla 1.20.1 {@link EditBox} no longer toggles its own focus
+     * in {@code mouseClicked}, leaving it to the container — but this mod hosts several edit boxes,
+     * some of which are not registered screen children, so without this an out-of-bounds click
+     * never clears focus (the box stays focused) and multiple boxes can be focused at once (text
+     * routed to the wrong one). Focusing only when the click lands inside, and clearing otherwise,
+     * keeps exactly one box focused and lets clicks elsewhere blur it.
+     */
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!isVisible()) return false;
+        boolean inside = mouseX >= getX() && mouseX < getX() + getWidth()
+                && mouseY >= getY() && mouseY < getY() + getHeight();
+        if (!inside) {
+            if (isFocused()) setFocused(false);
+            return false;
+        }
+        setFocused(true);
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
@@ -60,22 +86,33 @@ public class MCEditBox extends EditBox {
         int h = getHeight();
         boolean focused = isFocused();
         boolean hovered = isMouseOver(mouseX, mouseY);
+
+        if (UITheme.flat()) {
+            // Custom skin: a user editbox texture wins; otherwise the pixel-exact vanilla EditBox
+            // (1px border — white when focused, else gray #A0A0A0 — behind a pure-black interior).
+            if (UITheme.custom()) {
+                UITextureSlot slot = focused && UITextureStore.global().has(UITextureSlot.EDITBOX_FOCUSED)
+                        ? UITextureSlot.EDITBOX_FOCUSED : UITextureSlot.EDITBOX;
+                if (UITextureStore.global().draw(slot, graphics, x, y, w, h)) return;
+            }
+            int border = focused ? 0xFFFFFFFF : 0xFFA0A0A0;
+            graphics.fill(x - 1, y - 1, x + w + 1, y + h + 1, border);
+            graphics.fill(x, y, x + w, y + h, 0xFF000000);
+            return;
+        }
+
         int accent = focused ? colors.accent() : hovered ? colors.accentAlt() : colors.widgetBorder();
         int fill = focused
                 ? UITheme.lerpColor(colors.inputBg(), colors.accent(), 0.12f)
                 : hovered ? UITheme.lerpColor(colors.inputBg(), colors.widgetBg(), 0.28f) : colors.inputBg();
 
         if (focused) {
-            for (int i = 3; i >= 1; i--) {
-                int alpha = Math.max(1, 0x34 / (i + 1));
-                UITheme.fillRoundedRectFast(graphics, x - i, y - i, w + i * 2, h + i * 2,
-                        FRAME_RADIUS + i, UITheme.withAlpha(colors.accent(), alpha));
-            }
+            UITheme.drawSoftGlow(graphics, x, y, w, h, FRAME_RADIUS, colors.accent(), 0x34);
         }
-        UITheme.fillRoundedRectFast(graphics, x, y, w, h, FRAME_RADIUS, fill);
-        UITheme.fillRoundedRectFast(graphics, x + 1, y + 1, w - 2, Math.max(2, h / 3),
-                FRAME_RADIUS - 1, UITheme.withAlpha(0xFFFFFF, focused ? 0x18 : 0x0C));
-        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, FRAME_RADIUS, UITheme.withAlpha(accent, focused ? 0xF0 : 0xA0));
+        UITheme.fillSoftRoundedRect(graphics, x, y, w, h, FRAME_RADIUS, fill);
+        UITheme.fillRoundedRectEx(graphics, x + 1, y + 1, w - 2, Math.max(2, h / 3),
+                FRAME_RADIUS - 1, FRAME_RADIUS - 1, 0, 0, UITheme.withAlpha(0xFFFFFF, focused ? 0x18 : 0x0C));
+        UITheme.drawSoftRoundedBorder(graphics, x, y, w, h, FRAME_RADIUS, UITheme.withAlpha(accent, focused ? 0xF0 : 0xA0));
     }
 
     private void renderText(GuiGraphics graphics) {
@@ -102,7 +139,7 @@ public class MCEditBox extends EditBox {
             int selEnd = Math.max(localCursor, localHighlight);
             int selX = textX + font.width(visible.substring(0, selStart));
             int selW = Math.max(1, font.width(visible.substring(selStart, selEnd)));
-            UITheme.fillRoundedRectFast(graphics, selX - 1, textY - 2, selW + 2, font.lineHeight + 4, 3,
+            UITheme.fillSoftRoundedRect(graphics, selX - 1, textY - 2, selW + 2, font.lineHeight + 4, 3,
                     UITheme.withAlpha(colors.accent(), 0x68));
         }
 
@@ -118,7 +155,8 @@ public class MCEditBox extends EditBox {
             boolean cursorVisible = renderFrame / 12 % 2 == 0;
             if (cursorVisible) {
                 int cursorX = textX + font.width(visible.substring(0, localCursor));
-                UITheme.fillRoundedRectFast(graphics, cursorX, textY - 2, 1, font.lineHeight + 4, 1, colors.accentLight());
+                int cursorColor = UITheme.flat() ? 0xFFD0D0D0 : colors.accentLight();
+                UITheme.fillSoftRoundedRect(graphics, cursorX, textY - 2, 1, font.lineHeight + 4, 1, cursorColor);
             }
         }
 
@@ -131,9 +169,9 @@ public class MCEditBox extends EditBox {
         clearSize = Math.min(12, Math.max(10, getHeight() - 8));
         clearX = getX() + getWidth() - clearSize - 5;
         clearY = getY() + (getHeight() - clearSize) / 2;
-        UITheme.fillRoundedRectFast(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
+        UITheme.fillSoftRoundedRect(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
                 UITheme.lerpColor(colors.widgetBg(), colors.accent(), isFocused() ? 0.24f : 0.12f));
-        UITheme.drawRoundedBorderFast(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
+        UITheme.drawSoftRoundedBorder(graphics, clearX, clearY, clearSize, clearSize, clearSize / 2,
                 UITheme.withAlpha(colors.widgetBorder(), 0x80));
         int cx = clearX + clearSize / 2;
         int cy = clearY + clearSize / 2;

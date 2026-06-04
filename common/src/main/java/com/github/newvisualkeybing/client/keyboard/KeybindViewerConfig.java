@@ -1,6 +1,7 @@
 package com.github.newvisualkeybing.client.keyboard;
 
 import com.github.newvisualkeybing.Constants;
+import com.github.newvisualkeybing.client.ui.UITheme;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
@@ -85,6 +86,48 @@ public final class KeybindViewerConfig {
         return data.comboKeysNonConflicting;
     }
 
+    public boolean mousePanelCollapsed() {
+        return data.mousePanelCollapsed;
+    }
+
+    public void setMousePanelCollapsed(boolean collapsed) {
+        data.mousePanelCollapsed = collapsed;
+        save();
+    }
+
+    public boolean detailPanelCollapsed() {
+        return data.detailPanelCollapsed;
+    }
+
+    public void setDetailPanelCollapsed(boolean collapsed) {
+        data.detailPanelCollapsed = collapsed;
+        save();
+    }
+
+    public UITheme.Skin uiSkin() {
+        if (data.uiSkin == null) return UITheme.Skin.MODERN;
+        try {
+            return UITheme.Skin.valueOf(data.uiSkin);
+        } catch (IllegalArgumentException ignored) {
+            return UITheme.Skin.MODERN;
+        }
+    }
+
+    public void setUiSkin(UITheme.Skin skin) {
+        data.uiSkin = skin == null ? null : skin.name();
+        save();
+    }
+
+    /** Id of the active custom UI texture pack (null/blank = the default loose pack). */
+    public String uiTexturePack() {
+        return data.uiTexturePack;
+    }
+
+    public void setUiTexturePack(String packId) {
+        data.uiTexturePack = packId;
+        save();
+    }
+
     public KeyboardLayoutData.Style defaultLayoutStyle() {
         if (data.defaultLayout == null || data.defaultLayout.isBlank()) {
             return KeyboardLayoutData.Style.ANSI_104;
@@ -105,5 +148,9 @@ public final class KeybindViewerConfig {
         boolean hideNonSelectedMod;
         Boolean comboKeysNonConflicting = Boolean.TRUE;
         String defaultLayout;
+        boolean mousePanelCollapsed;
+        boolean detailPanelCollapsed;
+        String uiSkin;
+        String uiTexturePack;
     }
 }
