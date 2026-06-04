@@ -1,6 +1,7 @@
 package com.github.newvisualkeybing.client.screen;
 
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
+import com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
@@ -68,9 +69,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         addRenderableWidget(mappingSearchBox);
 
         int btnGap = 6;
-        int backW = 60;
-        int addW = 110;
-        int clearW = 110;
+        int backW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.back"), 40, 60);
+        int addW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.combo.add"), 56, 110);
+        int clearW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.combo.clear_all"), 64, 110);
         int xClear = width - 12 - clearW;
         int xAdd = xClear - btnGap - addW;
         int xBack = xAdd - btnGap - backW;
@@ -100,10 +101,12 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         rows.clear();
         String q = mappingSearchBox == null ? "" : mappingSearchBox.getValue().toLowerCase(Locale.ROOT);
         for (KeybindComboStore.ComboBinding combo : store.combos()) {
+            String desc = KeybindComboStore.describeMapping(combo.mappingName);
             if (q.isBlank()
-                    || KeybindComboStore.describeMapping(combo.mappingName).toLowerCase(Locale.ROOT).contains(q)
+                    || desc.toLowerCase(Locale.ROOT).contains(q)
                     || (combo.mappingName != null && combo.mappingName.toLowerCase(Locale.ROOT).contains(q))
-                    || combo.comboLabel().toLowerCase(Locale.ROOT).contains(q)) {
+                    || combo.comboLabel().toLowerCase(Locale.ROOT).contains(q)
+                    || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(desc, q)) {
                 rows.add(combo);
             }
         }
@@ -123,6 +126,10 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
     private int listHeight() { return height - HEADER_H - FOOTER_H - 8; }
     private int listX() { return 12; }
     private int listW() { return width - listX() - 12; }
+
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -442,6 +449,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 }
                 if (mouseX >= deleteX && mouseX < deleteX + DELETE_BTN_W) {
                     store.removeCombo(combo.mappingName);
+                    KeybindPriorityEnforcer.resetAndEnforce();
                     rebuildRows();
                     showNotice(Component.translatable(
                             "screen.newvisualkeybing.viewer.combo.deleted",
@@ -557,6 +565,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
             return;
         }
         store.putCombo(capture.mapping, capture.firstKey, key);
+        KeybindPriorityEnforcer.resetAndEnforce();
         showNotice(Component.translatable("screen.newvisualkeybing.viewer.combo.saved",
                 KeybindComboStore.describeMapping(capture.mapping.getName()),
                 capture.firstKey.getDisplayName().getString() + " + " + key.getDisplayName().getString()).getString());
@@ -591,7 +600,8 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 String name = Component.translatable(km.getName()).getString();
                 if (q.isBlank()
                         || name.toLowerCase(Locale.ROOT).contains(q)
-                        || km.getName().toLowerCase(Locale.ROOT).contains(q)) {
+                        || km.getName().toLowerCase(Locale.ROOT).contains(q)
+                        || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(name, q)) {
                     all.add(km);
                 }
             }

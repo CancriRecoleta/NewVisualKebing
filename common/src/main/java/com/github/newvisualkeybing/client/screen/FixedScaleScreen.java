@@ -1,5 +1,8 @@
 package com.github.newvisualkeybing.client.screen;
 
+import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
+import com.github.newvisualkeybing.client.ui.UITheme;
+import com.github.newvisualkeybing.client.ui.UITextureStore;
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -15,6 +18,16 @@ abstract class FixedScaleScreen extends Screen {
 
     protected FixedScaleScreen(Component title) {
         super(title);
+    }
+
+    @Override
+    protected void init() {
+        super.init();
+        // Load the persisted skin before any widget builds its colour cache, so every screen in the
+        // mod (viewer, board, edit, …) honours the choice the user made on the main screen.
+        UITheme.setSkin(KeybindViewerConfig.global().uiSkin());
+        // When the custom skin is active, make sure the active pack's textures are loaded (render thread).
+        if (UITheme.custom()) UITextureStore.global().ensureLoaded(KeybindViewerConfig.global().uiTexturePack());
     }
 
     protected final void applyFixedScaleMetrics() {
@@ -40,6 +53,8 @@ abstract class FixedScaleScreen extends Screen {
     }
 
     protected final void pushFixedScale(GuiGraphics graphics) {
+        // 1.21.6: GuiGraphics.pose() is a Matrix3x2fStack (2D) — pushPose/scale(x,y,z)/popPose became
+        // pushMatrix/scale(x,y)/popMatrix.
         graphics.pose().pushMatrix();
         graphics.pose().scale(fixedRenderScale, fixedRenderScale);
     }
@@ -49,11 +64,13 @@ abstract class FixedScaleScreen extends Screen {
     }
 
     protected final void enableFixedScissor(GuiGraphics graphics, int minX, int minY, int maxX, int maxY) {
-        graphics.enableScissor(
-                (int) Math.floor(minX * fixedRenderScale),
-                (int) Math.floor(minY * fixedRenderScale),
-                (int) Math.ceil(maxX * fixedRenderScale),
-                (int) Math.ceil(maxY * fixedRenderScale));
+        // 1.21.2+ GuiGraphics.enableScissor transforms the scissor rect by the current pose matrix
+        // (ScreenRectangle.transformAxisAligned(pose.last().pose())). enableFixedScissor is always
+        // called inside pushFixedScale, so the active fixed-scale pose already scales these
+        // coordinates — pass them through as logical coordinates. Pre-1.21.2 enableScissor ignored the
+        // pose, so the coords had to be pre-multiplied by fixedRenderScale; doing that here on 1.21.2+
+        // double-scales and mis-clips the scissored panels (e.g. the bind-board function list).
+        graphics.enableScissor(minX, minY, maxX, maxY);
     }
 
     @Override
