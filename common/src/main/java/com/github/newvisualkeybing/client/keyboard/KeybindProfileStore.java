@@ -22,10 +22,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Stream;
 
 public final class KeybindProfileStore {
@@ -43,8 +45,6 @@ public final class KeybindProfileStore {
                 if (local == null) {
                     local = new KeybindProfileStore();
                     INSTANCE = local;
-
-                    KeybindPriorityEnforcer.applyPriority();
                 }
             }
         }
@@ -59,9 +59,22 @@ public final class KeybindProfileStore {
         }
     }
 
+    public static boolean globalConflictIgnored(String mappingName) {
+        try {
+            return global().isConflictIgnored(mappingName);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private final Path storeFile;
     private final Path exportDir;
-    private StoreData data = new StoreData();
+    // volatile + every structural mutator below is synchronized(this), so the watcher daemon thread's
+    // synchronized serializeForCompare() (GSON.toJson over these collections) can never run concurrently
+    // with a put/clear/add that structurally modifies them. The dispatch read path (priorityOf) only
+    // does a HashMap get and runs on the same (client) thread as every mutator, so it stays lock-free.
+    private volatile StoreData data = new StoreData();
+    private final java.util.List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public KeybindProfileStore() {
         Path root = Minecraft.getInstance().options.getFile().toPath().toAbsolutePath().getParent();
@@ -70,9 +83,33 @@ public final class KeybindProfileStore {
         this.storeFile = modDir.resolve("keybind_profiles.json");
         this.exportDir = modDir.resolve("exports");
         load();
+        KeybindConfigWatcher.global().watch(
+                storeFile.getFileName().toString(),
+                this::serializeForCompare,
+                this::reloadFromDisk);
     }
 
-    public void load() {
+    private synchronized String serializeForCompare() {
+        return GSON.toJson(data);
+    }
+
+    private void reloadFromDisk() {
+        load();
+        KeybindPriorityEnforcer.resetAndEnforce();
+        for (Runnable listener : reloadListeners) {
+            try { listener.run(); } catch (Throwable ignored) {}
+        }
+    }
+
+    public void addReloadListener(Runnable listener) {
+        if (listener != null) reloadListeners.add(listener);
+    }
+
+    public void removeReloadListener(Runnable listener) {
+        reloadListeners.remove(listener);
+    }
+
+    public synchronized void load() {
         if (!Files.isRegularFile(storeFile)) {
             data = new StoreData();
             return;
@@ -86,7 +123,7 @@ public final class KeybindProfileStore {
         }
     }
 
-    public void save() {
+    public synchronized void save() {
         try {
             Files.createDirectories(storeFile.getParent());
             try (Writer writer = Files.newBufferedWriter(storeFile, StandardCharsets.UTF_8)) {
@@ -112,7 +149,7 @@ public final class KeybindProfileStore {
         return Math.max(0, Math.min(data.selectedProfile, Math.max(0, profiles().size() - 1)));
     }
 
-    public void select(int index) {
+    public synchronized void select(int index) {
         data.selectedProfile = Math.max(0, Math.min(index, Math.max(0, profiles().size() - 1)));
         save();
     }
@@ -121,7 +158,7 @@ public final class KeybindProfileStore {
         return saveCurrentProfile(null);
     }
 
-    public Profile saveCurrentProfile(String requestedName) {
+    public synchronized Profile saveCurrentProfile(String requestedName) {
         Profile profile = selectedProfile();
         if (profile == null) {
             profile = new Profile(normalizeProfileName(requestedName, -1));
@@ -132,6 +169,7 @@ public final class KeybindProfileStore {
         }
         profile.updatedAt = LocalDateTime.now().toString();
         profile.bindings = captureBindings();
+        profile.combos = KeybindComboStore.global().snapshot();
         save();
         return profile;
     }
@@ -140,17 +178,18 @@ public final class KeybindProfileStore {
         return createProfileFromCurrent(null);
     }
 
-    public Profile createProfileFromCurrent(String requestedName) {
+    public synchronized Profile createProfileFromCurrent(String requestedName) {
         Profile profile = new Profile(normalizeProfileName(requestedName, -1));
         profile.updatedAt = LocalDateTime.now().toString();
         profile.bindings = captureBindings();
+        profile.combos = KeybindComboStore.global().snapshot();
         data.profiles.add(profile);
         data.selectedProfile = data.profiles.size() - 1;
         save();
         return profile;
     }
 
-    public Profile renameSelectedProfile(String requestedName) {
+    public synchronized Profile renameSelectedProfile(String requestedName) {
         Profile profile = selectedProfile();
         if (profile == null) return null;
         profile.name = normalizeProfileName(requestedName, selectedIndex());
@@ -159,7 +198,7 @@ public final class KeybindProfileStore {
         return profile;
     }
 
-    public boolean deleteSelectedProfile() {
+    public synchronized boolean deleteSelectedProfile() {
         if (profiles().isEmpty()) return false;
         data.profiles.remove(selectedIndex());
         data.selectedProfile = Math.max(0, Math.min(data.selectedProfile, Math.max(0, data.profiles.size() - 1)));
@@ -167,13 +206,22 @@ public final class KeybindProfileStore {
         return true;
     }
 
-    public boolean applySelectedProfile() {
+    public synchronized boolean applySelectedProfile() {
         Profile profile = selectedProfile();
         if (profile == null) return false;
         Map<String, KeyMapping> byName = currentMappingsByName();
+        // Rebuild the live priority map from this profile alone, mirroring the wholesale replace that
+        // combos already get below. Merging in place (the old behaviour) left stale priorities for
+        // every mapping the profile did not mention, so switching to a heterogeneous profile —
+        // imported from a different mod set — kept the previous profile's values (F11). Mappings
+        // absent from the profile now fall back to default 0 via priorityOf. Priority is applied for
+        // each present mapping independently of whether its saved key still parses.
+        data.priorities.clear();
         for (Binding binding : profile.bindings) {
             KeyMapping mapping = byName.get(binding.name);
-            if (mapping == null || binding.key == null) continue;
+            if (mapping == null) continue;
+            data.priorities.put(mapping.getName(), binding.priority);
+            if (binding.key == null) continue;
             InputConstants.Key key;
             try {
                 key = InputConstants.getKey(binding.key);
@@ -181,7 +229,9 @@ public final class KeybindProfileStore {
                 continue;
             }
             mapping.setKey(key);
-            data.priorities.put(mapping.getName(), binding.priority);
+        }
+        if (profile.combos != null) {
+            KeybindComboStore.global().replaceCombos(profile.combos);
         }
         KeybindPriorityEnforcer.resetAndEnforce();
         Minecraft.getInstance().options.save();
@@ -189,9 +239,10 @@ public final class KeybindProfileStore {
         return true;
     }
 
-    public Path exportSelectedProfile() {
+    public synchronized Path exportSelectedProfile() {
         Profile profile = selectedProfile();
         if (profile == null) return null;
+        profile.combos = KeybindComboStore.global().snapshot();
         Profile exported = copyProfile(profile);
         exported.exportedAt = LocalDateTime.now().toString();
         try {
@@ -208,33 +259,70 @@ public final class KeybindProfileStore {
     }
 
     public Profile importLatestExport() {
-        try {
-            if (!Files.isDirectory(exportDir)) return null;
-            Path latest;
-            try (Stream<Path> exports = Files.list(exportDir)) {
-                latest = exports
-                        .filter(path -> path.getFileName().toString().endsWith(".json"))
-                        .max(Comparator.comparing(path -> {
-                            try {
-                                return Files.getLastModifiedTime(path);
-                            } catch (IOException e) {
-                                return java.nio.file.attribute.FileTime.fromMillis(0);
-                            }
-                        }))
-                        .orElse(null);
+        List<ExportEntry> exports = availableExports();
+        if (exports.isEmpty()) return null;
+        return importExport(exports.get(0).path);
+    }
+
+    /**
+     * Enumerate every {@code .json} file under {@code exports/}, sorted newest first
+     * by file modification time. Each entry carries the parsed profile metadata so the
+     * UI can render a chooser without re-parsing.
+     */
+    public List<ExportEntry> availableExports() {
+        List<ExportEntry> entries = new ArrayList<>();
+        if (!Files.isDirectory(exportDir)) return entries;
+        try (Stream<Path> stream = Files.list(exportDir)) {
+            stream.filter(path -> path.getFileName().toString().endsWith(".json"))
+                    .forEach(path -> {
+                        ExportEntry entry = readExportMetadata(path);
+                        if (entry != null) entries.add(entry);
+                    });
+        } catch (IOException ignored) {
+        }
+        entries.sort(Comparator.comparingLong((ExportEntry e) -> e.modifiedAt).reversed());
+        return entries;
+    }
+
+    private ExportEntry readExportMetadata(Path path) {
+        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            Profile parsed = GSON.fromJson(reader, Profile.class);
+            if (parsed == null) return null;
+            ExportEntry entry = new ExportEntry();
+            entry.path = path;
+            entry.profileName = parsed.name == null ? path.getFileName().toString() : parsed.name;
+            entry.bindingCount = parsed.bindings == null ? 0 : parsed.bindings.size();
+            entry.comboCount = parsed.combos == null ? 0 : parsed.combos.size();
+            entry.exportedAt = parsed.exportedAt;
+            try {
+                entry.modifiedAt = Files.getLastModifiedTime(path).toMillis();
+            } catch (IOException ignored) {
+                entry.modifiedAt = 0L;
             }
-            if (latest == null) return null;
-            try (Reader reader = Files.newBufferedReader(latest, StandardCharsets.UTF_8)) {
-                Profile imported = GSON.fromJson(reader, Profile.class);
-                if (imported == null || imported.bindings == null) return null;
-                imported.name = normalizeProfileName(imported.name, -1);
-                imported.updatedAt = LocalDateTime.now().toString();
-                data.profiles.add(imported);
-                data.selectedProfile = data.profiles.size() - 1;
-                normalize();
-                save();
-                return imported;
-            }
+            return entry;
+        } catch (IOException | JsonSyntaxException ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Import a specific export file. Adds it as a new profile, selects it, and returns
+     * the imported profile (or {@code null} on failure). Does not apply automatically;
+     * the caller still drives the Apply action.
+     */
+    public synchronized Profile importExport(Path path) {
+        if (path == null || !Files.isRegularFile(path)) return null;
+        try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            Profile imported = GSON.fromJson(reader, Profile.class);
+            if (imported == null || imported.bindings == null) return null;
+            imported.name = normalizeProfileName(imported.name, -1);
+            imported.updatedAt = LocalDateTime.now().toString();
+            if (imported.combos == null) imported.combos = new ArrayList<>();
+            data.profiles.add(imported);
+            data.selectedProfile = data.profiles.size() - 1;
+            normalize();
+            save();
+            return imported;
         } catch (IOException | JsonSyntaxException ignored) {
             return null;
         }
@@ -248,7 +336,7 @@ public final class KeybindProfileStore {
         return data.priorities.getOrDefault(mappingName, 0);
     }
 
-    public void changePriority(KeyMapping mapping, int delta) {
+    public synchronized void changePriority(KeyMapping mapping, int delta) {
         int priority = Math.max(-999, Math.min(999, priorityOf(mapping) + delta));
         data.priorities.put(mapping.getName(), priority);
         Profile profile = selectedProfile();
@@ -262,6 +350,31 @@ public final class KeybindProfileStore {
         }
         save();
         KeybindPriorityEnforcer.resetAndEnforce();
+    }
+
+    /** Whether this mapping is manually excluded from conflict detection/display. */
+    public boolean isConflictIgnored(String mappingName) {
+        return mappingName != null && data.conflictIgnored.contains(mappingName);
+    }
+
+    public boolean isConflictIgnored(KeyMapping mapping) {
+        return mapping != null && isConflictIgnored(mapping.getName());
+    }
+
+    /** Toggle the ignore-in-conflict flag for a mapping; returns the new state. */
+    public synchronized boolean toggleConflictIgnored(KeyMapping mapping) {
+        if (mapping == null) return false;
+        String name = mapping.getName();
+        boolean nowIgnored;
+        if (data.conflictIgnored.contains(name)) {
+            data.conflictIgnored.remove(name);
+            nowIgnored = false;
+        } else {
+            data.conflictIgnored.add(name);
+            nowIgnored = true;
+        }
+        save();
+        return nowIgnored;
     }
 
     public List<KeyMapping> sortedMappings(KeyMapping[] mappings) {
@@ -309,13 +422,16 @@ public final class KeybindProfileStore {
     private void normalize() {
         if (data.profiles == null) data.profiles = new ArrayList<>();
         if (data.priorities == null) data.priorities = new HashMap<>();
+        if (data.conflictIgnored == null) data.conflictIgnored = new LinkedHashSet<>();
         for (Profile profile : data.profiles) {
             if (profile.bindings == null) profile.bindings = new ArrayList<>();
             if (profile.name == null || profile.name.isBlank()) profile.name = normalizeProfileName(null, -1);
-            for (Binding binding : profile.bindings) {
-                if (binding.name != null) data.priorities.putIfAbsent(binding.name, binding.priority);
-            }
         }
+        // Deliberately does NOT seed data.priorities from profile bindings. The old back-fill merged
+        // every profile's priorities into the single live map (first profile wins via putIfAbsent),
+        // leaking values across profiles — most visibly right after importing a heterogeneous profile
+        // (F11). data.priorities is the persisted live working set: replaced wholesale only by an
+        // explicit applySelectedProfile(), and kept in sync per-edit by changePriority().
     }
 
     private String nextProfileName() {
@@ -371,6 +487,19 @@ public final class KeybindProfileStore {
             item.priority = binding.priority;
             copy.bindings.add(item);
         }
+        if (source.combos != null) {
+            for (KeybindComboStore.ComboBinding combo : source.combos) {
+                if (combo == null) continue;
+                KeybindComboStore.ComboBinding item = new KeybindComboStore.ComboBinding();
+                item.mappingName = combo.mappingName;
+                item.action = combo.action;
+                item.category = combo.category;
+                item.firstKey = combo.firstKey;
+                item.secondKey = combo.secondKey;
+                item.updatedAt = combo.updatedAt;
+                copy.combos.add(item);
+            }
+        }
         return copy;
     }
 
@@ -384,6 +513,7 @@ public final class KeybindProfileStore {
         int selectedProfile;
         List<Profile> profiles = new ArrayList<>();
         Map<String, Integer> priorities = new HashMap<>();
+        Set<String> conflictIgnored = new LinkedHashSet<>();
     }
 
     public static final class Profile {
@@ -391,6 +521,7 @@ public final class KeybindProfileStore {
         public String updatedAt;
         public String exportedAt;
         public List<Binding> bindings = new ArrayList<>();
+        public List<KeybindComboStore.ComboBinding> combos = new ArrayList<>();
 
         public Profile() {
         }
@@ -398,6 +529,15 @@ public final class KeybindProfileStore {
         Profile(String name) {
             this.name = name;
         }
+    }
+
+    public static final class ExportEntry {
+        public Path path;
+        public String profileName;
+        public String exportedAt;
+        public long modifiedAt;
+        public int bindingCount;
+        public int comboCount;
     }
 
     public static final class Binding {

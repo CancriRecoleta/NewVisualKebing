@@ -21,8 +21,10 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -52,12 +54,39 @@ public final class KeybindComboStore {
     private final Path storeFile;
     private StoreData data = new StoreData();
     private volatile long version;
+    /** Lock-free hint mirroring {@code !data.combos.isEmpty()}; lets hot paths skip combo work. */
+    private volatile boolean comboPresent;
+    private final java.util.List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private KeybindComboStore() {
         Path root = Minecraft.getInstance().options.getFile().toPath().toAbsolutePath().getParent();
         if (root == null) root = Path.of(".");
         this.storeFile = root.resolve("config").resolve(Constants.MOD_ID).resolve("combo_keybinds.json");
         load();
+        KeybindConfigWatcher.global().watch(
+                storeFile.getFileName().toString(),
+                this::serializeForCompare,
+                this::reloadFromDisk);
+    }
+
+    /** Serialize current state to a string identical to what {@link #save()} writes; used by the watcher. */
+    private synchronized String serializeForCompare() {
+        return GSON.toJson(data);
+    }
+
+    private void reloadFromDisk() {
+        load();
+        for (Runnable listener : reloadListeners) {
+            try { listener.run(); } catch (Throwable ignored) {}
+        }
+    }
+
+    public void addReloadListener(Runnable listener) {
+        if (listener != null) reloadListeners.add(listener);
+    }
+
+    public void removeReloadListener(Runnable listener) {
+        reloadListeners.remove(listener);
     }
 
     public synchronized void load() {
@@ -94,6 +123,16 @@ public final class KeybindComboStore {
 
     private void bumpVersion() {
         version++;
+        comboPresent = data.combos != null && !data.combos.isEmpty();
+    }
+
+    /**
+     * Lock-free check for whether any combo is configured. Hot paths (per-key dispatch,
+     * per-frame rendering) use this to skip all combo bookkeeping in the common no-chord
+     * case without taking the store monitor. Kept in sync by {@link #bumpVersion()}.
+     */
+    public boolean hasCombos() {
+        return comboPresent;
     }
 
     private void normalize() {
@@ -128,7 +167,7 @@ public final class KeybindComboStore {
             existing.mappingName = name;
             data.combos.add(existing);
         }
-        existing.category = mapping.getCategory().label().getString();
+        existing.category = mapping.getCategory().id().toString();
         existing.action = Component.translatable(name).getString();
         existing.firstKey = first.getName();
         existing.secondKey = second.getName();
@@ -154,10 +193,77 @@ public final class KeybindComboStore {
         bumpVersion();
     }
 
+    /**
+     * Returns a deep-copied snapshot of every stored combo, suitable for serialization
+     * inside a {@link KeybindProfileStore} profile export.
+     */
+    public synchronized List<ComboBinding> snapshot() {
+        List<ComboBinding> copy = new ArrayList<>(data.combos.size());
+        for (ComboBinding source : data.combos) {
+            if (source == null) continue;
+            ComboBinding target = new ComboBinding();
+            target.mappingName = source.mappingName;
+            target.action = source.action;
+            target.category = source.category;
+            target.firstKey = source.firstKey;
+            target.secondKey = source.secondKey;
+            target.updatedAt = source.updatedAt;
+            copy.add(target);
+        }
+        return copy;
+    }
+
+    /**
+     * Replace the entire set of stored combos with the supplied list. Used by profile
+     * import so a profile fully describes the chord configuration alongside key bindings.
+     */
+    public synchronized void replaceCombos(List<ComboBinding> incoming) {
+        data.combos.clear();
+        if (incoming != null) {
+            for (ComboBinding source : incoming) {
+                if (source == null) continue;
+                ComboBinding target = new ComboBinding();
+                target.mappingName = source.mappingName;
+                target.action = source.action;
+                target.category = source.category;
+                target.firstKey = source.firstKey;
+                target.secondKey = source.secondKey;
+                target.updatedAt = source.updatedAt == null
+                        ? LocalDateTime.now().toString() : source.updatedAt;
+                data.combos.add(target);
+            }
+        }
+        normalize();
+        save();
+        bumpVersion();
+    }
+
+    /** Reload combos from disk; used by the hot-reload watcher. */
+    public synchronized void reload() {
+        load();
+    }
+
     public synchronized int size() {
         return data.combos.size();
     }
 
+
+    /**
+     * Returns the distinct set of trigger ({@code secondKey}) keys whose combos use the given
+     * key as their modifier ({@code firstKey}). Used to drive precise re-sync when a modifier
+     * is pressed or released, so dispatch never has to walk every combo.
+     */
+    public synchronized Set<InputConstants.Key> triggersForFirstKey(InputConstants.Key firstKey) {
+        if (firstKey == null || firstKey == InputConstants.UNKNOWN) return Collections.emptySet();
+        String name = firstKey.getName();
+        Set<InputConstants.Key> result = new LinkedHashSet<>();
+        for (ComboBinding combo : data.combos) {
+            if (!isComplete(combo)) continue;
+            if (!sameInput(combo.firstKey, name)) continue;
+            parseInput(combo.secondKey).ifPresent(result::add);
+        }
+        return result;
+    }
 
     /** Returns the set of virtual key codes that participate in any combo. */
     public synchronized Set<Integer> participantVirtualKeys() {
@@ -169,10 +275,6 @@ public final class KeybindComboStore {
             if (second != null) result.add(second);
         }
         return result;
-    }
-
-    public boolean isParticipant(int virtualKey) {
-        return participantVirtualKeys().contains(virtualKey);
     }
 
     public synchronized List<ComboBinding> combosForVirtualKey(int virtualKey) {
@@ -226,14 +328,35 @@ public final class KeybindComboStore {
         return Component.translatable(mappingName).getString();
     }
 
+    /**
+     * Cache of {@code mappingName -> KeyMapping}. This association is fixed once mods finish
+     * registering their key mappings — a rebind changes a mapping's bound key (read live via
+     * {@link #currentKey}), never its name or identity — so caching it is accuracy-neutral. It
+     * turns the combo dispatch from O(combos × keyMappings) into O(combos), the dominant cost on
+     * the chord input path. Invalidated defensively from the same {@code resetMapping} hook as the
+     * priority enforcer's key index. {@code null} means "rebuild on next access".
+     */
+    private static volatile Map<String, KeyMapping> mappingByNameCache;
+
+    /** Drop the {@code mappingName -> KeyMapping} cache; rebuilt lazily on next {@link #findMapping}. */
+    public static void invalidateMappingCache() {
+        mappingByNameCache = null;
+    }
+
     public static KeyMapping findMapping(String mappingName) {
         if (mappingName == null) return null;
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null || mc.options == null) return null;
-        for (KeyMapping mapping : mc.options.keyMappings) {
-            if (Objects.equals(mapping.getName(), mappingName)) return mapping;
+        Map<String, KeyMapping> cache = mappingByNameCache;
+        if (cache == null) {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.options == null) return null;
+            cache = new HashMap<>();
+            // putIfAbsent preserves the original "first mapping with this name wins" semantics.
+            for (KeyMapping mapping : mc.options.keyMappings) {
+                cache.putIfAbsent(mapping.getName(), mapping);
+            }
+            mappingByNameCache = cache;
         }
-        return null;
+        return cache.get(mappingName);
     }
 
     public static InputConstants.Key currentKey(KeyMapping mapping) {
@@ -241,44 +364,22 @@ public final class KeybindComboStore {
         return ((KeyMappingAccessor) (Object) mapping).newvisualkeybing$getKey();
     }
 
-    public synchronized boolean hasCompleteCombo(String mappingName) {
-        ComboBinding combo = findByMapping(mappingName);
-        return isComplete(combo);
-    }
-
     public synchronized boolean hasCurrentCombo(String mappingName) {
         KeyMapping mapping = findMapping(mappingName);
         return mapping != null && matchesCurrentCombo(mapping);
-    }
-
-    public synchronized boolean sameCombo(String mappingA, String mappingB) {
-        if (Objects.equals(mappingA, mappingB)) return true;
-        ComboBinding a = findByMapping(mappingA);
-        ComboBinding b = findByMapping(mappingB);
-        if (!isComplete(a) || !isComplete(b)) return false;
-        return Objects.equals(a.firstKey, b.firstKey) && Objects.equals(a.secondKey, b.secondKey);
-    }
-
-    public synchronized boolean combosConflict(String mappingA, String mappingB) {
-        ComboBinding a = findByMapping(mappingA);
-        ComboBinding b = findByMapping(mappingB);
-        if (!isComplete(a) || !isComplete(b)) return true;
-        return sameInput(a.secondKey, b.secondKey) && sameInput(a.firstKey, b.firstKey);
     }
 
     public synchronized boolean matchesCurrentCombo(KeyMapping mapping) {
         if (mapping == null) return false;
         ComboBinding combo = findByMapping(mapping.getName());
         if (!isComplete(combo)) return false;
-        return Objects.equals(combo.secondKey, currentKey(mapping).getName());
-    }
-
-    public synchronized boolean isComboTarget(KeyMapping mapping, InputConstants.Key triggerKey) {
-        if (mapping == null || triggerKey == null || triggerKey == InputConstants.UNKNOWN) return false;
-        ComboBinding combo = findByMapping(mapping.getName());
-        if (!isComplete(combo)) return false;
-        return sameInput(combo.secondKey, triggerKey.getName())
-                && sameInput(currentKey(mapping).getName(), triggerKey.getName());
+        // Key equivalence must match triggerMatches(), which compares with sameInput: otherwise a
+        // secondKey and the mapping's live key that denote the SAME key via different
+        // strings (hand-edited JSON, an alias, canonical-name drift) would make triggerMatches treat
+        // the mapping as a chord trigger while singleKeyMappings (which excludes via this method)
+        // still treats it as a plain single — landing it in both lists and firing it as a bare key
+        // when the modifier is not held (F13). sameInput parses both names and compares by key.
+        return sameInput(combo.secondKey, currentKey(mapping).getName());
     }
 
     public synchronized String activatorSignature(String mappingName, InputModifier modifier) {
@@ -295,28 +396,8 @@ public final class KeybindComboStore {
             if (isComplete(combo) && sameInput(combo.secondKey, currentKey(mapping).getName())) {
                 return activatorSignature(combo.firstKey);
             }
-            if (VanillaDebugKeybinds.isDebugCombination(mapping)) {
-                return activatorSignature(VanillaDebugKeybinds.modifierInputName());
-            }
         }
         return modifierSignature(modifier);
-    }
-
-    public synchronized Match findMatchingCombo(InputConstants.Key triggerKey) {
-        if (triggerKey == null || triggerKey == InputConstants.UNKNOWN) return null;
-        String triggerName = triggerKey.getName();
-        Match fallback = null;
-        for (ComboBinding combo : data.combos) {
-            if (!isComplete(combo)) continue;
-            if (!Objects.equals(combo.secondKey, triggerName)) continue;
-            KeyMapping mapping = findMapping(combo.mappingName);
-            if (mapping == null) continue;
-            if (!Objects.equals(currentKey(mapping).getName(), triggerName)) continue;
-            Match match = new Match(combo, mapping, isKeyHeld(combo.firstKey));
-            if (match.active()) return match;
-            if (fallback == null) fallback = match;
-        }
-        return fallback;
     }
 
     public synchronized List<Match> triggerMatches(InputConstants.Key triggerKey) {
@@ -334,14 +415,29 @@ public final class KeybindComboStore {
         return result;
     }
 
-    public synchronized void syncComboStates() {
-        for (ComboBinding combo : data.combos) {
-            if (!isComplete(combo)) continue;
+    /**
+     * Drop combos whose mapping has been rebound away from the combo's trigger key. A combo's
+     * {@code secondKey} is, by construction, the mapping's bound key — every in-mod rebind path
+     * re-creates or removes the combo to keep that true (see {@code KeybindEditScreen}). An
+     * <em>external</em> rebind through the vanilla controls screen changes only the key, orphaning
+     * the combo and leaving a dormant residual (F14). Invoked from the {@code resetMapping} hook —
+     * the single funnel every rebind passes through — this removes the orphan, matching what the
+     * mod's own rebind does. Mappings not currently loaded are left untouched (the owning mod may be
+     * re-added later); those combos still show as dormant until then. Returns {@code true} if any
+     * combo was removed.
+     */
+    public synchronized boolean reconcileToBoundKeys() {
+        boolean removed = data.combos.removeIf(combo -> {
+            if (!isComplete(combo)) return false;
             KeyMapping mapping = findMapping(combo.mappingName);
-            if (mapping == null) continue;
-            if (!sameInput(combo.secondKey, currentKey(mapping).getName())) continue;
-            mapping.setDown(isKeyHeld(combo.firstKey) && isKeyHeld(combo.secondKey));
+            if (mapping == null) return false;
+            return !sameInput(combo.secondKey, currentKey(mapping).getName());
+        });
+        if (removed) {
+            save();
+            bumpVersion();
         }
+        return removed;
     }
 
     private static boolean isComplete(ComboBinding combo) {
@@ -397,22 +493,6 @@ public final class KeybindComboStore {
         return a != null && b != null && a.getType() == b.getType() && a.getValue() == b.getValue();
     }
 
-    /**
-     * Whether the modifier key of a combo bound to the same trigger as {@code triggerKey}
-     * is required. Returns the combo whose modifier needs to be held, or {@code null} when
-     * no combo with that trigger exists. Used by the dispatch mixin to decide whether to
-     * suppress a vanilla single-key click.
-     */
-    public synchronized ComboBinding triggerCombo(InputConstants.Key triggerKey, KeyMapping mapping) {
-        if (triggerKey == null || mapping == null) return null;
-        String triggerName = triggerKey.getName();
-        for (ComboBinding combo : data.combos) {
-            if (!Objects.equals(combo.mappingName, mapping.getName())) continue;
-            if (Objects.equals(combo.secondKey, triggerName)) return combo;
-        }
-        return null;
-    }
-
     public static boolean isKeyHeld(String inputName) {
         if (inputName == null) return false;
         InputConstants.Key key;
@@ -424,13 +504,13 @@ public final class KeybindComboStore {
         if (key == InputConstants.UNKNOWN) return false;
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.getWindow() == null) return false;
-        var window = mc.getWindow();
-        long handle = window.handle();
+        long handle = mc.getWindow().handle();
         if (handle == 0L) return false;
         if (key.getType() == InputConstants.Type.MOUSE) {
             return GLFW.glfwGetMouseButton(handle, key.getValue()) == GLFW.GLFW_PRESS;
         }
-        return InputConstants.isKeyDown(window, key.getValue());
+        // 1.21.10: InputConstants.isKeyDown takes a Window (not the raw GLFW handle long) now.
+        return InputConstants.isKeyDown(mc.getWindow(), key.getValue());
     }
 
     private static final class StoreData {

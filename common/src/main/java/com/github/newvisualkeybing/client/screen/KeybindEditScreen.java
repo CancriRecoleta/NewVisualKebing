@@ -6,7 +6,6 @@ import com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer;
 import com.github.newvisualkeybing.client.keyboard.KeybindProfileStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindViewerConfig;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
-import com.github.newvisualkeybing.client.keyboard.VanillaDebugKeybinds;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
@@ -14,12 +13,12 @@ import com.github.newvisualkeybing.mixin.KeyMappingAccessor;
 import com.github.newvisualkeybing.platform.Services;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
@@ -29,21 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 public class KeybindEditScreen extends FixedScaleScreen {
 
@@ -61,11 +45,15 @@ public class KeybindEditScreen extends FixedScaleScreen {
     private MCEditBox searchBox;
     private MCButton resetAllButton;
     private MCButton viewerButton;
+    private MCButton boardButton;
     private MCButton comboButton;
     private MCButton backButton;
     private final KeybindProfileStore profileStore = KeybindProfileStore.global();
-    private final KeybindProfilePanel profilePanel = new KeybindProfilePanel(profileStore, this::rebuildEntries, this::showNotice);
+    private final KeybindProfilePanel profilePanel = new KeybindProfilePanel(
+            profileStore, this::rebuildEntries, this::showNotice, this::releaseSearchFocus);
     private final KeybindPriorityControls priorityControls = new KeybindPriorityControls(profileStore);
+    private final Runnable profileReloadListener = this::onProfilesReloaded;
+    private final Runnable comboReloadListener = this::onCombosReloaded;
 
     private final List<Object> entries = new ArrayList<>();
     private int scrollOffset;
@@ -77,7 +65,6 @@ public class KeybindEditScreen extends FixedScaleScreen {
     private long noticeUntil;
     private int searchX;
     private int searchW;
-    private int buttonLeftX;
 
     public KeybindEditScreen(Screen parent) {
         this(parent, null);
@@ -92,86 +79,84 @@ public class KeybindEditScreen extends FixedScaleScreen {
     @Override
     protected void init() {
         super.init();
+        applyFixedScaleMetrics();
 
-        searchBox = new MCEditBox(font, 0, 0, 1, 1,
+        searchX = KeybindProfilePanel.WIDTH + 22;
+        int btnGap = 6;
+        int backW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.back"), 40, 60);
+        int viewerW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.open_visual"), 56, 96);
+        int boardW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.board.open"), 56, 84);
+        int comboW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.combo.open"), 56, 96);
+        int resetW = KeybindViewerScreen.buttonWidth(font, Component.translatable("screen.newvisualkeybing.viewer.reset_all"), 64, 110);
+        int xReset = width - 12 - resetW;
+        int xBoard = xReset - btnGap - boardW;
+        int xViewer = xBoard - btnGap - viewerW;
+        int xCombo = xViewer - btnGap - comboW;
+        int xBack = xCombo - btnGap - backW;
+        searchW = Mth.clamp(xBack - searchX - 14, 130, 330);
+        int searchH = 22;
+        int editY = 7;
+        searchBox = new MCEditBox(font, searchX, editY, searchW, searchH,
                 Component.translatable("screen.newvisualkeybing.viewer.search"))
                 .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.search"))
                 .withClearAffordance(true);
         searchBox.setResponder(value -> rebuildEntries());
         addRenderableWidget(searchBox);
 
-        backButton = MCButton.create(0, 0, 60, 20,
+        // The profile name box is a focusable child widget sharing the same focus model as the
+        // search box; the profile panel is always shown on this screen, so it stays visible.
+        MCEditBox nameBox = profilePanel.createNameBox(font);
+        nameBox.setVisible(true);
+        addRenderableWidget(nameBox);
+
+        backButton = MCButton.create(xBack, 8, backW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.back"), b -> onClose());
         addRenderableWidget(backButton);
 
-        comboButton = MCButton.create(0, 0, 96, 20,
+        comboButton = MCButton.create(xCombo, 8, comboW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.open"),
                 b -> minecraft.setScreen(new KeybindComboManageScreen(this)));
         addRenderableWidget(comboButton);
 
-        viewerButton = MCButton.create(0, 0, 96, 20,
+        viewerButton = MCButton.create(xViewer, 8, viewerW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.open_visual"),
                 b -> minecraft.setScreen(new KeybindViewerScreen(parent)));
         addRenderableWidget(viewerButton);
 
-        resetAllButton = MCButton.create(0, 0, 110, 20,
+        boardButton = MCButton.create(xBoard, 8, boardW, 20,
+                Component.translatable("screen.newvisualkeybing.viewer.board.open"),
+                b -> minecraft.setScreen(new KeybindBindBoardScreen(this)));
+        addRenderableWidget(boardButton);
+
+        resetAllButton = MCButton.create(xReset, 8, resetW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.reset_all"), b -> resetAllMappings());
         addRenderableWidget(resetAllButton);
 
-        layoutHeaderControls();
+        profileStore.addReloadListener(profileReloadListener);
+        com.github.newvisualkeybing.client.keyboard.KeybindComboStore.global().addReloadListener(comboReloadListener);
+
         rebuildEntries();
     }
 
     @Override
-    protected void onFixedScaleMetricsChanged() {
-        layoutHeaderControls();
-        scrollOffset = Mth.clamp(scrollOffset, 0, Math.max(0, totalListH - listHeight()));
+    public void removed() {
+        super.removed();
+        profileStore.removeReloadListener(profileReloadListener);
+        com.github.newvisualkeybing.client.keyboard.KeybindComboStore.global().removeReloadListener(comboReloadListener);
     }
 
-    private void layoutHeaderControls() {
-        searchX = KeybindProfilePanel.WIDTH + 22;
-        int btnGap = 6;
-        int backW = 60;
-        int viewerW = 96;
-        int comboW = 96;
-        int resetW = 110;
-        int xReset = width - 12 - resetW;
-        int xViewer = xReset - btnGap - viewerW;
-        int xCombo = xViewer - btnGap - comboW;
-        int xBack = xCombo - btnGap - backW;
-        buttonLeftX = xBack;
-        searchW = Mth.clamp(xBack - searchX - 14, 130, 330);
+    private void onProfilesReloaded() {
+        rebuildEntries();
+        KeybindProfileStore.Profile selected = profileStore.selectedProfile();
+        String name = selected == null ? "" : selected.name;
+        showNotice(Component.translatable(
+                "screen.newvisualkeybing.viewer.profile.reloaded", name).getString());
+    }
 
-        if (searchBox != null) {
-            searchBox.setX(searchX);
-            searchBox.setY(7);
-            searchBox.setWidth(searchW);
-            searchBox.setHeight(22);
-        }
-        if (backButton != null) {
-            backButton.setX(xBack);
-            backButton.setY(8);
-            backButton.setWidth(backW);
-            backButton.setHeight(20);
-        }
-        if (comboButton != null) {
-            comboButton.setX(xCombo);
-            comboButton.setY(8);
-            comboButton.setWidth(comboW);
-            comboButton.setHeight(20);
-        }
-        if (viewerButton != null) {
-            viewerButton.setX(xViewer);
-            viewerButton.setY(8);
-            viewerButton.setWidth(viewerW);
-            viewerButton.setHeight(20);
-        }
-        if (resetAllButton != null) {
-            resetAllButton.setX(xReset);
-            resetAllButton.setY(8);
-            resetAllButton.setWidth(resetW);
-            resetAllButton.setHeight(20);
-        }
+    private void onCombosReloaded() {
+        rebuildEntries();
+        showNotice(Component.translatable(
+                "screen.newvisualkeybing.viewer.profile.combos_reloaded").getString());
     }
 
     private void rebuildEntries() {
@@ -185,9 +170,13 @@ public class KeybindEditScreen extends FixedScaleScreen {
         String q = searchBox != null ? searchBox.getValue().toLowerCase() : "";
         grouped.forEach((cat, mappings) -> {
             List<KeyMapping> filtered = q.isBlank() ? mappings :
-                    mappings.stream().filter(km ->
-                            Component.translatable(km.getName()).getString().toLowerCase().contains(q)
-                                    || cat.toLowerCase().contains(q)).toList();
+                    mappings.stream().filter(km -> {
+                        String name = Component.translatable(km.getName()).getString();
+                        return name.toLowerCase().contains(q)
+                                || cat.toLowerCase().contains(q)
+                                || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(name, q)
+                                || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(cat, q);
+                    }).toList();
             if (!filtered.isEmpty()) {
                 entries.add(new CategoryEntry(cat));
                 for (KeyMapping km : filtered) entries.add(new KeyEntry(km));
@@ -220,6 +209,10 @@ public class KeybindEditScreen extends FixedScaleScreen {
     private int listHeight() { return height - HEADER_H - FOOTER_H - 8; }
     private int listX() { return KeybindProfilePanel.WIDTH + 14; }
     private int listW() { return width - listX() - 8; }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
@@ -255,9 +248,18 @@ public class KeybindEditScreen extends FixedScaleScreen {
                 : Component.translatable("screen.newvisualkeybing.viewer.edit_title").getString();
         int titleY = 8 + (20 - font.lineHeight) / 2 + 1;
         int titleX = searchX + searchW + 12;
-        int titleRight = backButton == null ? width - 12 : buttonLeftX - 8;
+        int titleRight = backButton == null ? width - 12 : backButton.getX() - 8;
         graphics.text(font, KeybindViewerScreen.fitToWidth(font, title, Math.max(40, titleRight - titleX)),
                 titleX, titleY, colors.textPrimary(), false);
+    }
+
+    private void releaseSearchFocus() {
+        if (searchBox != null && searchBox.isFocused()) {
+            searchBox.setFocused(false);
+        }
+        if (this.getFocused() == searchBox) {
+            this.setFocused(null);
+        }
     }
 
     private boolean handleSearchClearClick(double mouseX, double mouseY) {
@@ -324,10 +326,8 @@ public class KeybindEditScreen extends FixedScaleScreen {
         boolean conflict = isConflicting(ke.mapping, all);
         boolean focusedTarget = focusVirtualKey != null && matchesFocus(ke.mapping);
         boolean comboAware = KeybindViewerConfig.global().comboKeysNonConflicting();
-        KeybindComboStore.ComboBinding comboBinding = KeybindComboStore.global().findByMapping(ke.mapping.getName());
-        boolean storedCombo = comboAware && KeybindComboStore.global().matchesCurrentCombo(ke.mapping);
-        boolean vanillaDebugCombo = comboAware && !isUnbound && VanillaDebugKeybinds.isDebugCombination(ke.mapping);
-        boolean hasCombo = storedCombo || vanillaDebugCombo;
+        KeybindComboStore.ComboBinding combo = KeybindComboStore.global().findByMapping(ke.mapping.getName());
+        boolean hasCombo = comboAware && KeybindComboStore.global().matchesCurrentCombo(ke.mapping);
         int yellow = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
 
         if (focusedTarget) {
@@ -354,10 +354,8 @@ public class KeybindEditScreen extends FixedScaleScreen {
             changeLabel = "> ... <";
         } else if (isUnbound) {
             changeLabel = Component.translatable("screen.newvisualkeybing.viewer.unbound").getString();
-        } else if (vanillaDebugCombo) {
-            changeLabel = VanillaDebugKeybinds.displayCurrentCombo(ke.mapping);
-        } else if (storedCombo && comboBinding != null) {
-            changeLabel = comboBinding.displayFirst() + " + " + ke.mapping.getTranslatedKeyMessage().getString();
+        } else if (hasCombo) {
+            changeLabel = combo.displayFirst() + " + " + ke.mapping.getTranslatedKeyMessage().getString();
         } else {
             changeLabel = ke.mapping.getTranslatedKeyMessage().getString();
         }
@@ -376,10 +374,8 @@ public class KeybindEditScreen extends FixedScaleScreen {
                 : isUnbound ? colors.textMuted()
                 : hasCombo ? yellow
                 : colors.accentLight();
-        int actionH = ENTRY_H - 4;
-        int actionRadius = actionH / 2;
-        UITheme.fillRoundedRectFast(graphics, changeX, y + 1, CHANGE_BTN_W, actionH, actionRadius, chBg);
-        UITheme.drawRoundedBorderFast(graphics, changeX, y + 1, CHANGE_BTN_W, actionH, actionRadius, UITheme.withAlpha(statusColor, 0xB0));
+        UITheme.fillRoundedRectFast(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, chBg);
+        UITheme.drawRoundedBorderFast(graphics, changeX, y + 1, CHANGE_BTN_W, ENTRY_H - 4, 4, UITheme.withAlpha(statusColor, 0xB0));
         UITheme.fillRoundedRectFast(graphics, changeX + 4, y + 1, CHANGE_BTN_W - 8, 2, 1, statusColor);
         int chTextX = changeX + (CHANGE_BTN_W - font.width(changeLabel)) / 2;
         int chTextY = y + (ENTRY_H - font.lineHeight) / 2;
@@ -396,8 +392,8 @@ public class KeybindEditScreen extends FixedScaleScreen {
         int rsBg = isDefault ? UITheme.withAlpha(colors.widgetBg(), 0x60)
                 : rsHover ? UITheme.lerpColor(colors.widgetBg(), colors.successColor(), 0.40f)
                 : colors.widgetBg();
-        UITheme.fillRoundedRectFast(graphics, resetX, y + 1, RESET_BTN_W, actionH, actionRadius, rsBg);
-        UITheme.drawRoundedBorderFast(graphics, resetX, y + 1, RESET_BTN_W, actionH, actionRadius,
+        UITheme.fillRoundedRectFast(graphics, resetX, y + 1, RESET_BTN_W, ENTRY_H - 4, 4, rsBg);
+        UITheme.drawRoundedBorderFast(graphics, resetX, y + 1, RESET_BTN_W, ENTRY_H - 4, 4,
                 isDefault ? UITheme.withAlpha(colors.widgetBorder(), 0x60) : UITheme.withAlpha(colors.successColor(), 0x88));
         String defLabel = ke.mapping.getDefaultKey().getDisplayName().getString();
         if (defLabel.length() > 8) defLabel = defLabel.substring(0, 8) + "..";
@@ -455,11 +451,10 @@ public class KeybindEditScreen extends FixedScaleScreen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
         applyFixedScaleMetrics();
-        MouseButtonEvent fixedEvent = fixedMouseEvent(event);
-        double mouseX = fixedEvent.x();
-        double mouseY = fixedEvent.y();
+        double mouseX = fixedMouseX(event.x());
+        double mouseY = fixedMouseY(event.y());
         int button = event.button();
         if (waitingMapping != null) {
             if (button >= GLFW.GLFW_MOUSE_BUTTON_1 && button <= GLFW.GLFW_MOUSE_BUTTON_LAST) {
@@ -467,9 +462,13 @@ public class KeybindEditScreen extends FixedScaleScreen {
             }
             return true;
         }
+        // Keep exactly one text box focused: blur whichever the click lands outside of (the
+        // container click loop short-circuits and cannot be relied on to blur the trailing box).
+        blurBoxIfOutside(searchBox, mouseX, mouseY);
+        blurBoxIfOutside(profilePanel.nameBox(), mouseX, mouseY);
         if (handleSearchClearClick(mouseX, mouseY)) return true;
-        if (super.mouseClicked(event, doubleClick)) return true;
-        if (profilePanel.mouseClicked(fixedEvent, 8, listTop(), listHeight())) return true;
+        if (super.mouseClicked(fixedMouseEvent(mouseX, mouseY, event), isDoubleClick)) return true;
+        if (profilePanel.mouseClicked(mouseX, mouseY, 8, listTop(), listHeight())) return true;
 
         int x = listX(), w = listW();
         int listTop = listTop();
@@ -516,7 +515,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
                         return true;
                     }
                     if (mouseX >= resetX && mouseX < resetX + RESET_BTN_W) {
-                        ke.mapping.setKey(ke.mapping.getDefaultKey());
+                        KeybindPriorityEnforcer.rebind(ke.mapping, ke.mapping.getDefaultKey());
                         KeybindComboStore.global().removeCombo(ke.mapping.getName());
                         KeybindPriorityEnforcer.resetAndEnforce();
                         Minecraft.getInstance().options.save();
@@ -537,6 +536,8 @@ public class KeybindEditScreen extends FixedScaleScreen {
     public boolean keyPressed(KeyEvent event) {
         applyFixedScaleMetrics();
         int keyCode = event.key();
+        int scanCode = event.scancode();
+        int modifiers = event.modifiers();
         if (waitingMapping != null) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
                 handleCapturePress(InputConstants.UNKNOWN);
@@ -545,7 +546,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
             handleCapturePress(InputConstants.getKey(event));
             return true;
         }
-        if (profilePanel.keyPressed(event)) return true;
+        if (profilePanel.keyPressed(keyCode, scanCode, modifiers)) return true;
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             if (searchBox != null && searchBox.isFocused()) {
                 if (!searchBox.getValue().isEmpty()) {
@@ -576,20 +577,32 @@ public class KeybindEditScreen extends FixedScaleScreen {
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
         applyFixedScaleMetrics();
+        double mouseX = fixedMouseX(event.x());
+        double mouseY = fixedMouseY(event.y());
         int button = event.button();
         if (waitingMapping != null && button >= GLFW.GLFW_MOUSE_BUTTON_1
                 && button <= GLFW.GLFW_MOUSE_BUTTON_LAST) {
             handleCaptureRelease(InputConstants.Type.MOUSE.getOrCreate(button));
             return true;
         }
-        return super.mouseReleased(event);
+        return releaseLogicalMouse(mouseX, mouseY, event);
     }
 
     @Override
     public boolean charTyped(CharacterEvent event) {
         applyFixedScaleMetrics();
-        if (profilePanel.charTyped(event)) return true;
+        // Both the search box and the profile name box are focusable child widgets; super routes
+        // typing to whichever is focused.
         return super.charTyped(event);
+    }
+
+    private void blurBoxIfOutside(MCEditBox box, double mouseX, double mouseY) {
+        if (box == null || !box.isVisible() || !box.isFocused()) return;
+        if (mouseX < box.getX() || mouseX >= box.getX() + box.getWidth()
+                || mouseY < box.getY() || mouseY >= box.getY() + box.getHeight()) {
+            box.setFocused(false);
+            if (getFocused() == box) setFocused(null);
+        }
     }
 
     @Override
@@ -630,7 +643,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
         KeyMapping km = waitingMapping;
         if (km == null) return;
         KeybindComboStore store = KeybindComboStore.global();
-        km.setKey(trigger);
+        KeybindPriorityEnforcer.rebind(km, trigger);
         if (modifier != null && trigger != InputConstants.UNKNOWN) {
             store.putCombo(km, modifier, trigger);
         } else {
@@ -666,7 +679,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
             showNotice(Component.translatable("screen.newvisualkeybing.viewer.wheel_unsupported").getString());
             return;
         }
-        km.setKey(targetInputKey());
+        KeybindPriorityEnforcer.rebind(km, targetInputKey());
         KeybindComboStore.global().removeCombo(km.getName());
         KeybindPriorityEnforcer.resetAndEnforce();
         Minecraft.getInstance().options.save();
@@ -683,7 +696,8 @@ public class KeybindEditScreen extends FixedScaleScreen {
         if (KeyboardLayoutData.isMouse(focusVirtualKey)) {
             return InputConstants.Type.MOUSE.getOrCreate(KeyboardLayoutData.virtualToMouseBtn(focusVirtualKey));
         }
-        return InputConstants.getKey(String.valueOf(focusVirtualKey));
+        // 1.21.10 removed InputConstants.getKey(int,int); a focused keyboard virtual key is a GLFW keysym.
+        return InputConstants.Type.KEYSYM.getOrCreate(focusVirtualKey);
     }
 
     private String targetKeyName() {
@@ -698,7 +712,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
 
     private void resetAllMappings() {
         for (KeyMapping km : Minecraft.getInstance().options.keyMappings) {
-            km.setKey(km.getDefaultKey());
+            KeybindPriorityEnforcer.rebind(km, km.getDefaultKey());
         }
         KeybindComboStore.global().clear();
         KeybindPriorityEnforcer.resetAndEnforce();
@@ -709,11 +723,15 @@ public class KeybindEditScreen extends FixedScaleScreen {
 
     private static boolean isConflicting(KeyMapping km, KeyMapping[] all) {
         if (km.isUnbound()) return false;
+        // Manually-ignored bindings are never shown as conflicting.
+        KeybindProfileStore profiles = KeybindProfileStore.global();
+        if (profiles.isConflictIgnored(km)) return false;
         boolean comboAware = KeybindViewerConfig.global().comboKeysNonConflicting();
         if (!comboAware) {
             for (KeyMapping other : all) {
                 if (other == km) continue;
                 if (other.isUnbound()) continue;
+                if (profiles.isConflictIgnored(other)) continue;
                 if (other.same(km)) return true;
             }
             return false;
@@ -723,14 +741,13 @@ public class KeybindEditScreen extends FixedScaleScreen {
         for (KeyMapping other : all) {
             if (other == km) continue;
             if (other.isUnbound()) continue;
+            if (profiles.isConflictIgnored(other)) continue;
             if (!sameInputKey(km, other)) continue;
-            if (VanillaDebugKeybinds.isDebugCombination(km)
-                    && VanillaDebugKeybinds.isDebugCombination(other)) continue;
             String otherActivator = store.activatorSignature(other, Services.PLATFORM.getKeyModifier(other));
             if (!Objects.equals(currentActivator, otherActivator)) continue;
-            var currentContext = Services.PLATFORM.getConflictContext(km);
-            var otherContext = Services.PLATFORM.getConflictContext(other);
-            if (currentContext != null && otherContext != null && currentContext.conflicts(otherContext)) {
+            // Relational test: Forge delegates to the native IKeyConflictContext.conflicts so custom
+            // mod contexts keep their real mutual-exclusion semantics; other platforms approximate.
+            if (Services.PLATFORM.contextsConflict(km, other)) {
                 return true;
             }
         }
@@ -751,10 +768,10 @@ public class KeybindEditScreen extends FixedScaleScreen {
             if (KeyboardLayoutData.isMouse(virtualKey)) {
                 int btn = KeyboardLayoutData.virtualToMouseBtn(virtualKey);
                 if (key.getType() == InputConstants.Type.MOUSE && key.getValue() == btn) {
-                    mapping.setKey(InputConstants.UNKNOWN);
+                    KeybindPriorityEnforcer.rebind(mapping, InputConstants.UNKNOWN);
                 }
             } else if (key.getType() != InputConstants.Type.MOUSE && key.getValue() == virtualKey) {
-                mapping.setKey(InputConstants.UNKNOWN);
+                KeybindPriorityEnforcer.rebind(mapping, InputConstants.UNKNOWN);
             }
         }
         KeybindPriorityEnforcer.resetAndEnforce();

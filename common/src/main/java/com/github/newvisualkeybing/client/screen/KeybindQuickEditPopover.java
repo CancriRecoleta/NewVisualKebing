@@ -10,8 +10,6 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -183,10 +181,7 @@ final class KeybindQuickEditPopover {
                 c.textMuted(), false);
     }
 
-    boolean mouseClicked(MouseButtonEvent event) {
-        double mx = event.x();
-        double my = event.y();
-        int button = event.button();
+    boolean mouseClicked(double mx, double my, int button) {
         if (!open) return false;
 
         if (listenMapping != null) {
@@ -221,15 +216,17 @@ final class KeybindQuickEditPopover {
         return true;
     }
 
-    boolean keyPressed(KeyEvent event) {
-        int keyCode = event.key();
+    boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (!open) return false;
         if (listenMapping != null) {
             if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
                 listenMapping = null;
                 return true;
             }
-            applyKey(InputConstants.getKey(event));
+            // 1.21.10 removed InputConstants.getKey(int,int); replicate it (unknown keycode -> scancode).
+            applyKey(keyCode == InputConstants.UNKNOWN.getValue()
+                    ? InputConstants.Type.SCANCODE.getOrCreate(scanCode)
+                    : InputConstants.Type.KEYSYM.getOrCreate(keyCode));
             return true;
         }
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
@@ -247,7 +244,7 @@ final class KeybindQuickEditPopover {
         if (listenMapping == null) return;
         Minecraft mc = Minecraft.getInstance();
         String action = Component.translatable(listenMapping.getName()).getString();
-        listenMapping.setKey(key);
+        KeybindPriorityEnforcer.rebind(listenMapping, key);
         KeybindPriorityEnforcer.resetAndEnforce();
         mc.options.save();
         listenMapping = null;
@@ -260,7 +257,7 @@ final class KeybindQuickEditPopover {
     private void unbind(KeyMapping mapping) {
         Minecraft mc = Minecraft.getInstance();
         String action = Component.translatable(mapping.getName()).getString();
-        mapping.setKey(InputConstants.UNKNOWN);
+        KeybindPriorityEnforcer.rebind(mapping, InputConstants.UNKNOWN);
         KeybindPriorityEnforcer.resetAndEnforce();
         mc.options.save();
         if (onMutation != null) onMutation.run();
@@ -300,10 +297,9 @@ final class KeybindQuickEditPopover {
                                       boolean hovered, int idleColor, int hoverColor) {
         var c = UITheme.colors();
         if (hovered) {
-            int radius = size / 2;
-            UITheme.fillRoundedRectFast(g, x, y, size, size, radius,
+            UITheme.fillRoundedRectFast(g, x, y, size, size, 3,
                     UITheme.lerpColor(c.widgetBg(), hoverColor, 0.55f));
-            UITheme.drawRoundedBorderFast(g, x, y, size, size, radius, UITheme.withAlpha(hoverColor, 0xC0));
+            UITheme.drawRoundedBorderFast(g, x, y, size, size, 3, UITheme.withAlpha(hoverColor, 0xC0));
         }
         int cx = x + size / 2;
         int cy = y + size / 2;

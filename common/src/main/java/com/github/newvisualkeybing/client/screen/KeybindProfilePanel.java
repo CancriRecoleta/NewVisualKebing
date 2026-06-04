@@ -5,9 +5,6 @@ import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
@@ -28,6 +25,7 @@ final class KeybindProfilePanel {
     private MCEditBox nameBox;
     private int lastNameSelection = Integer.MIN_VALUE;
     private boolean renaming;
+    private boolean wasNameFocused;
 
     KeybindProfilePanel(KeybindProfileStore profileStore, Runnable rebuildEntries, NoticeSink noticeSink) {
         this(profileStore, rebuildEntries, noticeSink, () -> {});
@@ -41,6 +39,26 @@ final class KeybindProfilePanel {
         this.releaseExternalFocus = releaseExternalFocus == null ? () -> {} : releaseExternalFocus;
     }
 
+    /**
+     * Create the name box so the host screen can register it as a focusable child widget (the same
+     * model as the toolbar/mod search boxes). Idempotent.
+     */
+    MCEditBox createNameBox(Font font) {
+        if (nameBox == null) {
+            nameBox = new MCEditBox(font, 0, 0, WIDTH - 20, NAME_BOX_H,
+                    Component.translatable("screen.newvisualkeybing.viewer.profile.name"))
+                    .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder"));
+            nameBox.setMaxLength(48);
+            nameBox.setVisible(false);
+            syncNameBox(true);
+        }
+        return nameBox;
+    }
+
+    MCEditBox nameBox() {
+        return nameBox;
+    }
+
     void render(GuiGraphicsExtractor graphics, Font font, int x, int y, int h, int mouseX, int mouseY) {
         var colors = UITheme.colors();
         String title = Component.translatable("screen.newvisualkeybing.viewer.profile.title").getString();
@@ -49,11 +67,19 @@ final class KeybindProfilePanel {
         int nameX = x + 10;
         int nameY = contentY + 4;
         ensureNameBox(font, nameX, nameY);
+        // Derive rename mode from focus transitions: gaining focus while a profile is selected
+        // starts a rename; losing focus cancels it and reverts unsaved text.
+        boolean focused = nameBox.isFocused();
+        if (focused && !wasNameFocused) {
+            renaming = profileStore.selectedProfile() != null;
+        } else if (!focused && wasNameFocused) {
+            renaming = false;
+            syncNameBox(true);
+        }
+        wasNameFocused = focused;
         syncNameBox();
-        UITheme.fillRoundedRectFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5, colors.inputBg());
-        UITheme.drawRoundedBorderFast(graphics, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4, 5,
-                renaming || nameBox.isFocused() ? colors.accent() : colors.widgetBorder());
-        nameBox.extractRenderState(graphics, mouseX, mouseY, 1.0f);
+        // The name box is a screen-child MCEditBox that draws its own rounded frame in super.render();
+        // no manual box is drawn here (the old square frame is gone).
 
         int rowY = contentY + 30;
         List<KeybindProfileStore.Profile> profiles = profileStore.profiles();
@@ -110,27 +136,14 @@ final class KeybindProfilePanel {
                 colors.dangerColor(), inside(mouseX, mouseY, x + 8, buttonTop + (BUTTON_H + 5) * 4, WIDTH - 16, BUTTON_H));
     }
 
-    boolean mouseClicked(MouseButtonEvent event, int x, int y, int h) {
-        double mouseX = event.x();
-        double mouseY = event.y();
+    boolean mouseClicked(double mouseX, double mouseY, int x, int y, int h) {
         if (!inside(mouseX, mouseY, x, y, WIDTH, h)) return false;
 
         releaseExternalFocus.run();
 
-        int nameX = x + 10;
         int contentY = y + 28;
-        int nameY = contentY + 4;
-        boolean inNameBg = inside(mouseX, mouseY, nameX - 2, nameY - 2, WIDTH - 16, NAME_BOX_H + 4);
-        if (nameBox != null && inNameBg) {
-            nameBox.mouseClicked(event, false);
-            nameBox.setFocused(true);
-            if (profileStore.selectedProfile() != null) renaming = true;
-            return true;
-        }
-        if (!inNameBg && nameBox != null) {
-            nameBox.setFocused(false);
-        }
-
+        // The name box is a focusable child widget; its click/focus is handled by the screen's
+        // widget dispatch, not here. This method only handles the panel's buttons and profile rows.
         int buttonTop = buttonTop(y, h);
         int halfW = (WIDTH - 22) / 2;
         if (inside(mouseX, mouseY, x + 8, buttonTop, halfW, BUTTON_H)) {
@@ -182,15 +195,15 @@ final class KeybindProfilePanel {
             return true;
         }
         if (inside(mouseX, mouseY, x + 14 + halfW, buttonTop + (BUTTON_H + 5) * 3, halfW, BUTTON_H)) {
-            KeybindProfileStore.Profile profile = profileStore.importLatestExport();
-            if (profile != null) {
-                setNameText(profile.name);
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+            net.minecraft.client.gui.screens.Screen current = mc.screen;
+            mc.setScreen(new KeybindProfileImportScreen(current, imported -> {
+                setNameText(imported.name);
                 renaming = false;
                 rebuildEntries.run();
-                noticeSink.notice(Component.translatable("screen.newvisualkeybing.viewer.profile.imported", profile.name).getString());
-            } else {
-                noticeSink.notice(Component.translatable("screen.newvisualkeybing.viewer.profile.no_exports").getString());
-            }
+                noticeSink.notice(Component.translatable(
+                        "screen.newvisualkeybing.viewer.profile.imported", imported.name).getString());
+            }));
             return true;
         }
         if (inside(mouseX, mouseY, x + 8, buttonTop + (BUTTON_H + 5) * 4, WIDTH - 16, BUTTON_H)) {
@@ -221,12 +234,12 @@ final class KeybindProfilePanel {
         return true;
     }
 
-    boolean charTyped(CharacterEvent event) {
-        return nameBox != null && nameBox.isFocused() && nameBox.charTyped(event);
-    }
-
-    boolean keyPressed(KeyEvent event) {
-        int keyCode = event.key();
+    /**
+     * Handle only the name box's semantic keys (Enter commits/creates, Escape cancels). Normal text
+     * editing is left to the focused child widget via the screen's super.keyPressed, so this returns
+     * false for everything else.
+     */
+    boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (nameBox == null || !nameBox.isFocused()) return false;
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
             renaming = false;
@@ -244,9 +257,10 @@ final class KeybindProfilePanel {
             } else {
                 commitRename();
             }
+            nameBox.setFocused(false);
             return true;
         }
-        return nameBox.keyPressed(event);
+        return false;
     }
 
     private void beginRename() {
@@ -279,17 +293,13 @@ final class KeybindProfilePanel {
     }
 
     private void ensureNameBox(Font font, int x, int y) {
-        int textY = y + (NAME_BOX_H + 4 - font.lineHeight) / 2 - 2;
-        if (nameBox == null) {
-            nameBox = new MCEditBox(font, x, textY, WIDTH - 20, NAME_BOX_H,
-                    Component.translatable("screen.newvisualkeybing.viewer.profile.name"))
-                    .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.profile.name_placeholder"));
-            nameBox.setMaxLength(48);
-            syncNameBox(true);
-        }
-        nameBox.setX(x);
-        nameBox.setY(textY);
-        nameBox.setHeight(NAME_BOX_H);
+        if (nameBox == null) createNameBox(font);
+        // Position the MCEditBox to fill the field rect; it draws its own rounded frame, so it
+        // occupies the same footprint the old manual box used to.
+        nameBox.setX(x - 2);
+        nameBox.setY(y - 2);
+        nameBox.setWidth(WIDTH - 16);
+        nameBox.setHeight(NAME_BOX_H + 4);
     }
 
     private void syncNameBox() {

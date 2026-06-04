@@ -87,10 +87,6 @@ public final class KeyboardLayoutData {
         return isMouse(virtualKey) && !isWheel(virtualKey);
     }
 
-    public static boolean isComboBaseKey(int virtualKey) {
-        return virtualKey == GLFW.GLFW_KEY_F3;
-    }
-
     
     public static int totalWidthPx(float scale) {
         return totalWidthPx(Style.ANSI_104, scale);

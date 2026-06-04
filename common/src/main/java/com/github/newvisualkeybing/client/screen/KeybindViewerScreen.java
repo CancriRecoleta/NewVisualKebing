@@ -9,9 +9,10 @@ import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.MCButton;
 import com.github.newvisualkeybing.client.ui.MCEditBox;
 import com.github.newvisualkeybing.client.ui.UITheme;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import com.mojang.blaze3d.platform.InputConstants;
+import com.github.newvisualkeybing.client.ui.UITextureSlot;
+import com.github.newvisualkeybing.client.ui.UITextureStore;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
@@ -50,6 +51,9 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private static final int PANEL_CONTENT_TOP = 28;
     private static final int ACTION_BTN_H = 22;
     private static final int ACTION_BTN_GAP = 8;
+    // Collapsed right-rail panels shrink to a header-only strip with a toggle chevron.
+    private static final int COLLAPSED_PANEL_H = 24;
+    private static final int PANEL_TOGGLE_SIZE = 14;
 
     private final Screen parent;
     private final KeyBindingScanner scanner = new KeyBindingScanner();
@@ -66,10 +70,12 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private MCEditBox searchBox;
     private MCButton closeButton;
     private MCButton manageButton;
+    private MCButton boardButton;
     private MCButton comboButton;
     private MCButton modToggleButton;
     private MCButton profileToggleButton;
     private MCButton layoutButton;
+    private MCButton skinButton;
 
     private KeyboardLayoutData.Style currentStyle = KeybindViewerConfig.global().defaultLayoutStyle();
 
@@ -91,7 +97,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private boolean modPanelOpen;
     private boolean profilePanelOpen;
     private String selectedModId;
-    private String modSearchQuery = "";
+    private MCEditBox modSearchBox;
     private int modScrollOffset;
 
     private float keyScale;
@@ -109,6 +115,10 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private int detailPanelH;
     private int detailPanelW = DETAIL_PANEL_W;
     private int mousePanelW = MOUSE_PANEL_W;
+    private boolean mousePanelCollapsed;
+    private boolean detailPanelCollapsed;
+    private int mouseToggleX = -1, mouseToggleY = -1;
+    private int detailToggleX = -1, detailToggleY = -1;
     private boolean rightRailStacked;
     private int contentTop;
     private int contentBottom;
@@ -130,12 +140,21 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private List<ModRow> cachedModRows = List.of();
     private final String[] tabLabels = new String[FilterTab.values().length];
     private final int[] tabWidths = new int[FilterTab.values().length];
-    private final String[] legendLabels = new String[4];
-    private final int[] legendLabelWidths = new int[4];
+    private final String[] legendLabels = new String[5];
+    private final int[] legendLabelWidths = new int[5];
     private String hintLabel;
     private String modPanelTitle;
-    private String modSearchPlaceholder;
     private String clearModLabel;
+    // Static band labels cached once (they only change with language/font, i.e. a screen re-init),
+    // so the per-frame band rendering no longer rebuilds them via Component.translatable().getString().
+    private String bandNoModLabel;
+    private String bandHoverHint;
+    private String bandUnboundLabel;
+    private String bandHiddenOnLabel;
+    private String bandHiddenOffLabel;
+    private String legendTitle;
+    // Status-bar middle text (layout | scale) rebuilt only when the layout changes, not every frame.
+    private String statusMiddleText = "";
 
     public KeybindViewerScreen(Screen parent) {
         super(Component.translatable("screen.newvisualkeybing.viewer.title"));
@@ -149,6 +168,8 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         UITheme.setMode(UITheme.Mode.DARK);
         scanner.scan();
         refreshTextCache();
+        mousePanelCollapsed = viewerConfig.mousePanelCollapsed();
+        detailPanelCollapsed = viewerConfig.detailPanelCollapsed();
 
         boolean compact = width < COMPACT_WIDTH_THRESHOLD;
         if (compact) {
@@ -163,6 +184,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         int btnModsW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.mods"), compact ? 38 : 56, compact ? 64 : 78);
         int btnProfilesW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.profiles"), compact ? 52 : 68, compact ? 78 : 94);
         int btnManageW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.manage"), compact ? 48 : 64, compact ? 74 : 86);
+        int btnBoardW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.board.open"), compact ? 48 : 64, compact ? 74 : 90);
         int btnComboW = fitButtonWidth(Component.translatable("screen.newvisualkeybing.viewer.combo.open"), compact ? 56 : 72, compact ? 82 : 96);
         int btnLayoutW = fitButtonWidth(layoutLabel(currentStyle), compact ? 56 : 78, compact ? 86 : 104);
 
@@ -170,10 +192,17 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         int xMods = xClose - btnGap - btnModsW;
         int xProfiles = xMods - btnGap - btnProfilesW;
         int xManage = xProfiles - btnGap - btnManageW;
-        int xCombo = xManage - btnGap - btnComboW;
+        int xBoard = xManage - btnGap - btnBoardW;
+        int xCombo = xBoard - btnGap - btnComboW;
         int xLayout = xCombo - btnGap - btnLayoutW;
+        int skinLabelW = Math.max(
+                font.width(Component.translatable("screen.newvisualkeybing.viewer.skin.modern").getString()),
+                Math.max(font.width(Component.translatable("screen.newvisualkeybing.viewer.skin.vanilla").getString()),
+                        font.width(Component.translatable("screen.newvisualkeybing.viewer.skin.custom").getString())));
+        int btnSkinW = Mth.clamp(skinLabelW + 18, compact ? 44 : 56, compact ? 72 : 94);
+        int xSkin = xLayout - btnGap - btnSkinW;
 
-        computeToolbarGeometry(compact);
+        computeToolbarGeometry(compact, xSkin);
 
         int searchBoxY = HEADER_H + (TOOLBAR_H - SEARCH_BH) / 2;
         searchBox = new MCEditBox(font, toolbarSearchX, searchBoxY, toolbarSearchW, SEARCH_BH,
@@ -183,9 +212,23 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         searchBox.setResponder(value -> markFiltersDirty());
         addRenderableWidget(searchBox);
 
+        // Mod-panel search uses the same MCEditBox paradigm as the toolbar search and the profile
+        // name box, so all three share one focus model. Positioned/shown during mod-panel render.
+        modSearchBox = new MCEditBox(font, BODY_PAD + PANEL_PAD, contentTop + PANEL_CONTENT_TOP + 4,
+                MOD_PANEL_W - PANEL_PAD * 2, 18,
+                Component.translatable("screen.newvisualkeybing.viewer.mod_search"))
+                .withPlaceholder(Component.translatable("screen.newvisualkeybing.viewer.mod_search"))
+                .withClearAffordance(true);
+        modSearchBox.setResponder(value -> modScrollOffset = 0);
+        modSearchBox.setVisible(false);
+        addRenderableWidget(modSearchBox);
+
+        // The profile name box is also an MCEditBox child, sharing the same focus model.
+        addRenderableWidget(profilePanel.createNameBox(font));
+
         layoutButton = MCButton.create(xLayout, btnY, btnLayoutW, btnH,
                 layoutLabel(currentStyle), button -> {
-            if (minecraft.hasShiftDown()) {
+            if (Minecraft.getInstance().hasShiftDown()) {
                 viewerConfig.setDefaultLayoutStyle(currentStyle);
                 showNotice(Component.translatable("screen.newvisualkeybing.viewer.layout.default_set",
                         layoutLabel(currentStyle).getString()).getString());
@@ -196,10 +239,47 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         });
         addRenderableWidget(layoutButton);
 
+        skinButton = MCButton.create(xSkin, btnY, btnSkinW, btnH,
+                skinLabel(), button -> {
+            UITextureStore store = UITextureStore.global();
+            if (Minecraft.getInstance().hasShiftDown()) {
+                // Shift+click: enter Custom and cycle to the next discovered texture pack (folder/zip).
+                UITheme.setSkin(UITheme.Skin.CUSTOM);
+                viewerConfig.setUiSkin(UITheme.Skin.CUSTOM);
+                button.setMessage(skinLabel());
+                store.ensureLoaded(viewerConfig.uiTexturePack());
+                String nextPack = store.nextPackId();
+                if (nextPack != null) viewerConfig.setUiTexturePack(nextPack);
+                store.reload(nextPack != null ? nextPack : viewerConfig.uiTexturePack());
+                showSkinPackNotice(store);
+                return;
+            }
+            UITheme.Skin next = switch (UITheme.getSkin()) {
+                case MODERN -> UITheme.Skin.VANILLA;
+                case VANILLA -> UITheme.Skin.CUSTOM;
+                case CUSTOM -> UITheme.Skin.MODERN;
+            };
+            UITheme.setSkin(next);
+            viewerConfig.setUiSkin(next);
+            button.setMessage(skinLabel());
+            if (next == UITheme.Skin.CUSTOM) {
+                store.reload(viewerConfig.uiTexturePack());
+                showSkinPackNotice(store);
+            } else {
+                showNotice(skinLabel().getString());
+            }
+        });
+        addRenderableWidget(skinButton);
+
         manageButton = MCButton.create(xManage, btnY, btnManageW, btnH,
                 Component.translatable("screen.newvisualkeybing.viewer.manage"),
                 button -> minecraft.setScreen(new KeybindEditScreen(this)));
         addRenderableWidget(manageButton);
+
+        boardButton = MCButton.create(xBoard, btnY, btnBoardW, btnH,
+                Component.translatable("screen.newvisualkeybing.viewer.board.open"),
+                button -> minecraft.setScreen(new KeybindBindBoardScreen(this)));
+        addRenderableWidget(boardButton);
 
         comboButton = MCButton.create(xCombo, btnY, btnComboW, btnH,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.open"),
@@ -229,7 +309,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         refreshFilters();
     }
 
-    private void computeToolbarGeometry(boolean compact) {
+    private void computeToolbarGeometry(boolean compact, int headerButtonLeft) {
         int tabsW = 0;
         for (int w : tabWidths) tabsW += w;
         tabsW += (tabWidths.length - 1) * 4;
@@ -237,7 +317,6 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         int outerPad = 12;
         int innerGap = 12;
         int totalAvail = width - outerPad * 2;
-        int headerButtonLeft = layoutButton == null ? width - 8 : layoutButton.getX();
         int titleReservedRight = Math.max(170, Math.min(headerButtonLeft - 12, width / 3));
         int searchW = Math.min(SEARCH_W_DEFAULT, Math.max(140, width - titleReservedRight - outerPad * 2));
 
@@ -270,14 +349,20 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         legendLabels[0] = Component.translatable("screen.newvisualkeybing.viewer.legend.free").getString();
         legendLabels[1] = Component.translatable("screen.newvisualkeybing.viewer.legend.self").getString();
         legendLabels[2] = Component.translatable("screen.newvisualkeybing.viewer.legend.other").getString();
-        legendLabels[3] = Component.translatable("screen.newvisualkeybing.viewer.legend.conflict").getString();
+        legendLabels[3] = Component.translatable("screen.newvisualkeybing.viewer.legend.combo").getString();
+        legendLabels[4] = Component.translatable("screen.newvisualkeybing.viewer.legend.conflict").getString();
         for (int i = 0; i < legendLabels.length; i++) {
             legendLabelWidths[i] = font.width(legendLabels[i]);
         }
         hintLabel = Component.translatable("screen.newvisualkeybing.viewer.hint").getString();
         modPanelTitle = Component.translatable("screen.newvisualkeybing.viewer.mods").getString();
-        modSearchPlaceholder = Component.translatable("screen.newvisualkeybing.viewer.mod_search").getString();
         clearModLabel = Component.translatable("screen.newvisualkeybing.viewer.clear_mod").getString();
+        bandNoModLabel = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.no_mod").getString();
+        bandHoverHint = Component.translatable("screen.newvisualkeybing.viewer.hover_hint").getString();
+        bandUnboundLabel = Component.translatable("screen.newvisualkeybing.viewer.unbound").getString();
+        bandHiddenOnLabel = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.hidden_on").getString();
+        bandHiddenOffLabel = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.hidden_off").getString();
+        legendTitle = Component.translatable("screen.newvisualkeybing.viewer.legend.title").getString();
     }
 
     @Override
@@ -288,6 +373,10 @@ public class KeybindViewerScreen extends FixedScaleScreen {
             markFiltersDirty();
         }
         if (filtersDirty) refreshFilters();
+    }
+
+    @Override
+    public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
     }
 
     @Override
@@ -304,14 +393,23 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         pushFixedScale(g);
         try {
         var c = UITheme.colors();
-        g.fill(0, 0, width, height, c.panelBg() | 0xFF000000);
+        if (!(UITheme.custom() && UITextureStore.global().draw(UITextureSlot.BACKGROUND, g, 0, 0, width, height))) {
+            g.fill(0, 0, width, height, c.panelBg() | 0xFF000000);
+        }
 
         renderHeaderBar(g);
         renderToolbar(g, fixedMouseX, fixedMouseY);
 
-        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
+        boolean modSearchVisible = modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD;
+        boolean profileVisible = profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD;
+        blurIfHidden(modSearchBox, modSearchVisible);
+        blurIfHidden(profilePanel.nameBox(), profileVisible);
+        if (modSearchBox != null) modSearchBox.setVisible(modSearchVisible);
+        if (profilePanel.nameBox() != null) profilePanel.nameBox().setVisible(profileVisible);
+
+        if (modSearchVisible) {
             renderModPanel(g, fixedMouseX, fixedMouseY);
-        } else if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
+        } else if (profileVisible) {
             int x = BODY_PAD;
             int y = contentTop;
             int h = contentBottom - contentTop;
@@ -360,7 +458,8 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         g.fill(0, HEADER_H - 1, width, HEADER_H, c.divider());
         g.fill(0, HEADER_H, width, HEADER_H + 1, UITheme.withAlpha(c.accent(), 0x70));
 
-        int titleRight = layoutButton == null ? width - 10 : layoutButton.getX() - 10;
+        int titleRight = skinButton != null ? skinButton.getX() - 10
+                : layoutButton == null ? width - 10 : layoutButton.getX() - 10;
         String fittedTitle = fitToWidth(font, title.getString(), Math.max(40, titleRight - 12));
         g.text(font, fittedTitle, 12, (HEADER_H - font.lineHeight) / 2, c.textPrimary(), true);
     }
@@ -425,55 +524,18 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         g.fill(0, y, width, y + 1, c.divider());
 
         int textY = y + (STATUS_H - font.lineHeight) / 2;
-        String scale = Component.translatable("screen.newvisualkeybing.viewer.scale", Math.round(keyScale)).getString();
-        String layoutName = layoutLabel(currentStyle).getString();
-        String middle = layoutName + "  |  " + scale;
+        String middle = statusMiddleText;
         int middleW = font.width(middle);
         int middleX = (width - middleW) / 2;
 
         int hintW = font.width(hintLabel);
         int hintX = width - hintW - 10;
-        KeyBindingScanner.ScanStats stats = scanner.getStats();
-        int chipY = y + (STATUS_H - 14) / 2;
-        int leftLimit = Math.max(10, Math.min(middleX - 8, hintX - 8));
-        int x = 10;
-
-        x = renderStatChip(g, x, chipY, c.widgetBorder(),
-                legendLabels[0],
-                stats.free(), leftLimit);
-        x += 6;
-        x = renderStatChip(g, x, chipY, c.accent(),
-                legendLabels[1],
-                stats.self(), leftLimit);
-        x += 6;
-        x = renderStatChip(g, x, chipY, c.success(),
-                legendLabels[2],
-                stats.other(), leftLimit);
-        x += 6;
-        renderStatChip(g, x, chipY, c.danger(),
-                legendLabels[3],
-                stats.conflict(), leftLimit);
-
-        if (middleX > x + 8 && middleX + middleW < hintX - 8) {
+        if (middleX > 10 && middleX + middleW < hintX - 8) {
             g.text(font, middle, middleX, textY, c.textMuted(), false);
         }
-        if (hintX > Math.max(x, middleX + middleW) + 8) {
+        if (hintX > middleX + middleW + 8) {
             g.text(font, hintLabel, hintX, textY, c.textMuted(), false);
         }
-    }
-
-    private int renderStatChip(GuiGraphicsExtractor g, int x, int y, int dotColor, String label, int count, int maxRight) {
-        var c = UITheme.colors();
-        String text = count + " " + label;
-        int chipW = font.width(text) + 18;
-        if (x + chipW > maxRight) return x;
-        int chipH = 14;
-        int fill = UITheme.lerpColor(c.widgetBg(), dotColor, 0.14f);
-        UITheme.fillRoundedRectFast(g, x, y, chipW, chipH, chipH / 2, fill);
-        UITheme.drawRoundedBorderFast(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dotColor, 0x90));
-        UITheme.fillRoundedRectFast(g, x + 5, y + (chipH - 5) / 2, 5, 5, 2, dotColor);
-        g.text(font, text, x + 13, y + (chipH - font.lineHeight) / 2 + 1, c.textSecondary(), false);
-        return x + chipW;
     }
 
 static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font, int x, int y, int w, int h, String title) {
@@ -497,18 +559,19 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         int fieldX = x + PANEL_PAD;
         int fieldW = w - PANEL_PAD * 2;
         int searchY = contentY + 4;
-        UITheme.fillRoundedRectFast(g, fieldX, searchY, fieldW, 18, 6, c.inputBg());
-        UITheme.drawRoundedBorderFast(g, fieldX, searchY, fieldW, 18, 6, c.widgetBorder());
-        String display = modSearchQuery.isBlank()
-                ? modSearchPlaceholder
-                : modSearchQuery;
-        g.text(font, display, fieldX + 6, searchY + 5,
-                modSearchQuery.isBlank() ? c.textMuted() : c.textPrimary(), false);
+        // The search field is a real MCEditBox (rendered by super.render); just position it here.
+        if (modSearchBox != null) {
+            modSearchBox.setX(fieldX);
+            modSearchBox.setY(searchY);
+            modSearchBox.setWidth(fieldW);
+            modSearchBox.setHeight(18);
+        }
 
         int listY = searchY + 26;
         int clearY = y + h - PANEL_PAD - ACTION_BTN_H;
-        int toggleY = clearY - ACTION_BTN_H - ACTION_BTN_GAP;
-        int listBottom = toggleY - ACTION_BTN_GAP;
+        int hideToggleY = clearY - ACTION_BTN_H - ACTION_BTN_GAP;
+        int comboToggleY = hideToggleY - ACTION_BTN_H - ACTION_BTN_GAP;
+        int listBottom = comboToggleY - ACTION_BTN_GAP;
         List<ModRow> mods = filteredModRows(fieldW);
         int rowH = 18;
         int visibleRows = Math.max(1, (listBottom - listY) / rowH);
@@ -535,11 +598,18 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             rowY += rowH;
         }
 
-        boolean toggleHover = inside(mouseX, mouseY, fieldX, toggleY, fieldW, ACTION_BTN_H);
+        boolean comboToggleHover = inside(mouseX, mouseY, fieldX, comboToggleY, fieldW, ACTION_BTN_H);
+        String comboToggleLabel = Component.translatable(viewerConfig.comboKeysNonConflicting()
+                ? "screen.newvisualkeybing.viewer.combo_non_conflict.on"
+                : "screen.newvisualkeybing.viewer.combo_non_conflict.off").getString();
+        renderActionButton(g, font, fieldX, comboToggleY, fieldW, ACTION_BTN_H,
+                comboToggleLabel, viewerConfig.comboKeysNonConflicting() ? c.warning() : c.widgetBorder(), comboToggleHover);
+
+        boolean toggleHover = inside(mouseX, mouseY, fieldX, hideToggleY, fieldW, ACTION_BTN_H);
         String toggleLabel = Component.translatable(viewerConfig.hideNonSelectedMod()
                 ? "screen.newvisualkeybing.viewer.hide_unselected.on"
                 : "screen.newvisualkeybing.viewer.hide_unselected.off").getString();
-        renderActionButton(g, font, fieldX, toggleY, fieldW, ACTION_BTN_H,
+        renderActionButton(g, font, fieldX, hideToggleY, fieldW, ACTION_BTN_H,
                 toggleLabel, viewerConfig.hideNonSelectedMod() ? c.accent() : c.widgetBorder(), toggleHover);
 
         boolean clearHover = inside(mouseX, mouseY, fieldX, clearY, fieldW, ACTION_BTN_H);
@@ -572,8 +642,9 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x8E));
         int textY = y + (h - font.lineHeight) / 2;
         if (selectedModId == null) {
-            String text = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.no_mod").getString();
-            g.text(font, fitToWidth(font, text, w - 18), x + 9, textY, c.textMuted(), false);
+            // No mod selected: use the band as a persistent color legend so the key colors are
+            // always decodable, instead of a bland "no mod" line.
+            renderInlineLegend(g, x + 9, y, w - 18, h);
             return;
         }
         String modName = scanner.getAllRegisteredMods().getOrDefault(selectedModId, selectedModId);
@@ -581,13 +652,42 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         String left = Component.translatable("screen.newvisualkeybing.viewer.keyboard_band.mod",
                 modName, stats.inputs(), stats.bindings()).getString();
         g.text(font, fitToWidth(font, left, Math.max(80, w / 2)), x + 9, textY, c.textPrimary(), false);
-        String right = Component.translatable(viewerConfig.hideNonSelectedMod()
-                ? "screen.newvisualkeybing.viewer.keyboard_band.hidden_on"
-                : "screen.newvisualkeybing.viewer.keyboard_band.hidden_off").getString();
+        String right = viewerConfig.hideNonSelectedMod() ? bandHiddenOnLabel : bandHiddenOffLabel;
         int rightW = font.width(right);
         if (rightW < w / 2 - 8) {
             g.text(font, right, x + w - rightW - 9, textY,
                     viewerConfig.hideNonSelectedMod() ? c.accentLight() : c.textMuted(), false);
+        }
+    }
+
+    /**
+     * Draws the key-status color legend inline (swatch + label per entry), stopping once it would
+     * overflow {@code w}. Used in the top band when no mod is selected so the colors stay decodable.
+     */
+    private void renderInlineLegend(GuiGraphicsExtractor g, int x, int y, int w, int h) {
+        var c = UITheme.colors();
+        final int sw = 8;          // swatch edge
+        final int gap = 4;         // swatch -> label
+        final int itemGap = 12;    // item -> item
+        int cy = y + (h - font.lineHeight) / 2;
+        int swatchY = y + (h - sw) / 2;
+        int right = x + w;
+        int cx = x;
+        int[] cols = { c.widgetBorderHover(), c.accent(), c.success(), c.warning(), c.danger() };
+        if (legendTitle != null && !legendTitle.isEmpty()) {
+            int tw = font.width(legendTitle);
+            if (cx + tw + 10 < right) {
+                g.text(font, legendTitle, cx, cy, c.textMuted(), false);
+                cx += tw + 10;
+            }
+        }
+        for (int i = 0; i < legendLabels.length; i++) {
+            int itemW = sw + gap + legendLabelWidths[i];
+            if (cx + itemW > right) break;
+            UITheme.fillRoundedRectFast(g, cx, swatchY, sw, sw, 2, cols[i]);
+            UITheme.drawRoundedBorderFast(g, cx, swatchY, sw, sw, 2, UITheme.withAlpha(c.widgetBorder(), 0xC0));
+            g.text(font, legendLabels[i], cx + sw + gap, cy, c.textSecondary(), false);
+            cx += itemW + itemGap;
         }
     }
 
@@ -597,8 +697,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x78));
         int textY = y + (h - font.lineHeight) / 2;
         if (virtualKey == null) {
-            String text = Component.translatable("screen.newvisualkeybing.viewer.hover_hint").getString();
-            g.text(font, fitToWidth(font, text, w - 18), x + 9, textY, c.textMuted(), false);
+            g.text(font, fitToWidth(font, bandHoverHint, w - 18), x + 9, textY, c.textMuted(), false);
             return;
         }
         List<KeyBindingScanner.KeyBindingInfo> bindings = scanner.getVirtualBindings(virtualKey);
@@ -610,8 +709,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         int curX = x + labelW + 14;
         int right = x + w - 8;
         if (bindings.isEmpty()) {
-            String empty = Component.translatable("screen.newvisualkeybing.viewer.unbound").getString();
-            g.text(font, fitToWidth(font, empty, right - curX), curX, textY, c.textMuted(), false);
+            g.text(font, fitToWidth(font, bandUnboundLabel, right - curX), curX, textY, c.textMuted(), false);
             return;
         }
         int max = Math.min(3, bindings.size());
@@ -630,6 +728,25 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     }
 
 
+    private Component skinLabel() {
+        return Component.translatable(switch (UITheme.getSkin()) {
+            case VANILLA -> "screen.newvisualkeybing.viewer.skin.vanilla";
+            case CUSTOM -> "screen.newvisualkeybing.viewer.skin.custom";
+            default -> "screen.newvisualkeybing.viewer.skin.modern";
+        });
+    }
+
+    /** Notice after entering/cycling the custom skin: active pack + texture count, or the empty hint. */
+    private void showSkinPackNotice(UITextureStore store) {
+        if (store.loadedCount() == 0) {
+            showNotice(Component.translatable("screen.newvisualkeybing.viewer.skin.custom_empty",
+                    store.directory().toString()).getString());
+        } else {
+            showNotice(Component.translatable("screen.newvisualkeybing.viewer.skin.pack",
+                    store.activePackName(), store.loadedCount()).getString());
+        }
+    }
+
     private Component layoutLabel(KeyboardLayoutData.Style style) {
         return switch (style) {
             case ANSI_104    -> Component.translatable("screen.newvisualkeybing.viewer.layout.ansi_104");
@@ -642,21 +759,86 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     }
 
     private void renderMousePanel(GuiGraphicsExtractor g, int mouseX, int mouseY, long nowMs) {
+        if (mousePanelCollapsed) {
+            renderCollapsedPanel(g, mousePanelX, mousePanelY, mousePanelW,
+                    Component.translatable("screen.newvisualkeybing.viewer.mouse").getString(),
+                    mouseX, mouseY, true);
+            return;
+        }
         Integer hover = mouseRenderer.render(g, font, mousePanelX, mousePanelY, mousePanelW, mousePanelH,
                 selectedVirtualKey, this::isVisibleKey, this::isHiddenBySelectedMod,
                 this::isSearchMatch,
                 mouseX, mouseY, animTick, nowMs);
         if (hover != null) hoveredVirtualKey = hover;
+        drawPanelToggle(g, mousePanelX, mousePanelY, mousePanelW, PANEL_CONTENT_TOP, mouseX, mouseY, true, false);
     }
 
 
     private void renderDetailPanel(GuiGraphicsExtractor g, Integer virtualKey, int mouseX, int mouseY) {
+        if (detailPanelCollapsed) {
+            renderCollapsedPanel(g, detailPanelX, detailPanelY, detailPanelW,
+                    Component.translatable("screen.newvisualkeybing.viewer.details").getString(),
+                    mouseX, mouseY, false);
+            return;
+        }
         detailPanel.render(g, font, detailPanelX, detailPanelY, detailPanelW, detailPanelH,
                 virtualKey, mouseX, mouseY);
+        drawPanelToggle(g, detailPanelX, detailPanelY, detailPanelW, PANEL_CONTENT_TOP, mouseX, mouseY, false, false);
+    }
+
+    /** Draws a header-only strip standing in for a collapsed right-rail panel. */
+    private void renderCollapsedPanel(GuiGraphicsExtractor g, int x, int y, int w, String title,
+                                      int mouseX, int mouseY, boolean isMouse) {
+        var c = UITheme.colors();
+        UITheme.drawGlassPanel(g, x, y, w, COLLAPSED_PANEL_H, PANEL_RADIUS);
+        g.text(font, fitToWidth(font, title, w - PANEL_PAD * 2 - PANEL_TOGGLE_SIZE - 4),
+                x + PANEL_PAD, y + (COLLAPSED_PANEL_H - font.lineHeight) / 2, c.textPrimary(), false);
+        drawPanelToggle(g, x, y, w, COLLAPSED_PANEL_H, mouseX, mouseY, isMouse, true);
+    }
+
+    /**
+     * Top-right chevron toggle for a right-rail panel. The chevron points up when expanded
+     * (click to fold away) and down when collapsed (click to unfold). The hit rect is cached so
+     * {@link #mouseClicked} can route the click without re-deriving the geometry.
+     */
+    private void drawPanelToggle(GuiGraphicsExtractor g, int x, int y, int w, int headerH,
+                                 int mouseX, int mouseY, boolean isMouse, boolean collapsed) {
+        var c = UITheme.colors();
+        int size = PANEL_TOGGLE_SIZE;
+        int tx = x + w - PANEL_PAD - size;
+        int ty = y + (headerH - size) / 2;
+        if (isMouse) { mouseToggleX = tx; mouseToggleY = ty; }
+        else { detailToggleX = tx; detailToggleY = ty; }
+        boolean hover = inside(mouseX, mouseY, tx, ty, size, size);
+        int fill = hover ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.45f)
+                : UITheme.withAlpha(c.widgetBg(), 0xB0);
+        UITheme.fillRoundedRectFast(g, tx, ty, size, size, 3, fill);
+        UITheme.drawRoundedBorderFast(g, tx, ty, size, size, 3,
+                UITheme.withAlpha(c.widgetBorder(), hover ? 0xC0 : 0x80));
+        drawChevron(g, tx + size / 2, ty + size / 2, collapsed, hover ? 0xFFFFFFFF : c.textSecondary());
+    }
+
+    /** Draws a small chevron centred at (cx, cy): pointing down when {@code down}, else up. */
+    private static void drawChevron(GuiGraphicsExtractor g, int cx, int cy, boolean down, int color) {
+        int oy = down ? -1 : 1;
+        for (int i = 0; i <= 3; i++) {
+            int dy = down ? i : -i;
+            g.fill(cx - 3 + i, cy + dy + oy, cx - 3 + i + 1, cy + dy + oy + 1, color);
+            g.fill(cx + 3 - i, cy + dy + oy, cx + 3 - i + 1, cy + dy + oy + 1, color);
+        }
     }
 
     static String fitToWidth(net.minecraft.client.gui.Font font, String text, int maxW) {
         return TextFitCache.fitByChars(font, text, maxW);
+    }
+
+    /**
+     * Width for a header/toolbar button sized to its label (7px padding each side) and clamped to
+     * [min, max]. Shared by the secondary screens so buttons hug their text instead of using
+     * oversized fixed widths.
+     */
+    static int buttonWidth(net.minecraft.client.gui.Font font, Component label, int min, int max) {
+        return Mth.clamp(font.width(label.getString()) + 14, min, max);
     }
 
     static void renderActionButton(GuiGraphicsExtractor g, net.minecraft.client.gui.Font font,
@@ -736,12 +918,27 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         }
         if (target == null) return;
         KeybindComboStore.global().removeCombo(target.getName());
-        target.setKey(com.mojang.blaze3d.platform.InputConstants.UNKNOWN);
+        com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer.rebind(target, com.mojang.blaze3d.platform.InputConstants.UNKNOWN);
         com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer.resetAndEnforce();
         minecraft.options.save();
         scanner.scan();
         refreshFilters();
         showNotice(Component.translatable("screen.newvisualkeybing.viewer.notice.unbind_one",
+                info.actionName()).getString());
+    }
+
+    private void toggleConflictIgnore(KeyBindingScanner.KeyBindingInfo info) {
+        net.minecraft.client.KeyMapping target = null;
+        for (net.minecraft.client.KeyMapping km : minecraft.options.keyMappings) {
+            if (km.getName().equals(info.translationKey())) { target = km; break; }
+        }
+        if (target == null) return;
+        boolean ignored = profileStore.toggleConflictIgnored(target);
+        scanner.scan();
+        refreshFilters();
+        showNotice(Component.translatable(ignored
+                ? "screen.newvisualkeybing.viewer.conflict_ignore.on"
+                : "screen.newvisualkeybing.viewer.conflict_ignore.off",
                 info.actionName()).getString());
     }
 
@@ -791,19 +988,40 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             mousePanelW = railW;
             mousePanelX = width - BODY_PAD - railW;
             mousePanelY = contentTop;
-            mousePanelH = Math.min(MOUSE_PANEL_STACK_H, Math.max(128, bodyH / 3));
             detailPanelX = mousePanelX;
-            detailPanelY = mousePanelY + mousePanelH + COL_GAP;
-            detailPanelH = Math.max(96, contentBottom - detailPanelY);
+            // A collapsed panel keeps only its header strip; the freed vertical space flows to its
+            // expanded sibling so the remaining panel can show more (e.g. a longer binding list).
+            if (mousePanelCollapsed && detailPanelCollapsed) {
+                mousePanelH = COLLAPSED_PANEL_H;
+                detailPanelY = mousePanelY + COLLAPSED_PANEL_H + COL_GAP;
+                detailPanelH = COLLAPSED_PANEL_H;
+            } else if (mousePanelCollapsed) {
+                mousePanelH = COLLAPSED_PANEL_H;
+                detailPanelY = mousePanelY + COLLAPSED_PANEL_H + COL_GAP;
+                detailPanelH = Math.max(60, contentBottom - detailPanelY);
+            } else if (detailPanelCollapsed) {
+                mousePanelH = Math.max(80, bodyH - COLLAPSED_PANEL_H - COL_GAP);
+                detailPanelY = mousePanelY + mousePanelH + COL_GAP;
+                detailPanelH = COLLAPSED_PANEL_H;
+            } else {
+                // Give the mouse diagram up to ~40% of the column (capped), but never let it push the
+                // info-dense detail panel below a usable minimum or off the bottom. The old fixed-128
+                // minimum could overflow the detail panel past the status bar on small canvases.
+                int mouseDesired = Math.min(MOUSE_PANEL_STACK_H, Math.max(110, bodyH * 2 / 5));
+                int mouseMax = Math.max(60, bodyH - COL_GAP - 80);
+                mousePanelH = Math.min(mouseDesired, mouseMax);
+                detailPanelY = mousePanelY + mousePanelH + COL_GAP;
+                detailPanelH = Math.max(60, contentBottom - detailPanelY);
+            }
         } else {
             detailPanelW = detailW;
             mousePanelW = mouseW;
             detailPanelX = width - BODY_PAD - detailPanelW;
             detailPanelY = contentTop;
-            detailPanelH = bodyH;
+            detailPanelH = detailPanelCollapsed ? COLLAPSED_PANEL_H : bodyH;
             mousePanelX = detailPanelX - COL_GAP - mousePanelW;
             mousePanelY = contentTop;
-            mousePanelH = bodyH;
+            mousePanelH = mousePanelCollapsed ? COLLAPSED_PANEL_H : bodyH;
         }
 
         int leftRailW = profilePanelOpen ? KeybindProfilePanel.WIDTH : MOD_PANEL_W;
@@ -811,7 +1029,13 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         int keyboardLeft = leftMargin;
         int keyboardRight = (rightRailStacked ? detailPanelX : mousePanelX) - COL_GAP;
         int keyboardSpaceW = keyboardRight - keyboardLeft;
-        int infoH = bodyH >= 300 && keyboardSpaceW >= 340 ? 24 : 0;
+        // Keep the info bands on whenever there is any reasonable room (the fixed 2x scale makes the
+        // logical canvas small, so the old bodyH>=300 gate hid them on most non-1080p windows). Fall
+        // back to a compact height when vertical space is tight, and only drop them when truly cramped.
+        int infoH = keyboardSpaceW < 240 ? 0
+                : bodyH >= 260 ? 24
+                : bodyH >= 180 ? 18
+                : 0;
         int infoGap = infoH > 0 ? 6 : 0;
         int keyboardSpaceH = Math.max(90, bodyH - infoH * 2 - infoGap * 2);
         float widthU = currentStyle.widthU();
@@ -828,6 +1052,10 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         keyboardInfoTopH = infoH;
         keyboardInfoBottomY = contentBottom - infoH;
         keyboardInfoBottomH = infoH;
+
+        // Layout|scale string for the status bar; rebuilt only here (on layout change), not per frame.
+        statusMiddleText = layoutLabel(currentStyle).getString() + "  |  "
+                + Component.translatable("screen.newvisualkeybing.viewer.scale", Math.round(keyScale)).getString();
     }
 
     private float fitKeyboardScale(int keyboardSpaceW, int keyboardSpaceH,
@@ -872,7 +1100,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             case FREE -> c.widgetBorder();
             case SELF -> c.accent();
             case OTHER_SINGLE, BOUND -> c.success();
-            case COMBO -> KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
+            case COMBO -> c.warning();
             case CONFLICT -> c.danger();
         };
     }
@@ -883,7 +1111,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         return switch (status) {
             case CONFLICT -> 0xFFFFFFFF;
             case SELF -> 0xFFFFFFFF;
-            case COMBO -> 0xFFFFFFFF;
+            case COMBO -> c.textPrimary();
             case OTHER_SINGLE, BOUND -> c.textPrimary();
             case FREE -> c.textSecondary();
         };
@@ -895,7 +1123,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             case FREE -> c.widgetBg();
             case SELF -> UITheme.lerpColor(c.widgetBg(), c.accent(), 0.68f);
             case OTHER_SINGLE, BOUND -> UITheme.lerpColor(c.widgetBg(), c.success(), 0.62f);
-            case COMBO -> UITheme.lerpColor(c.widgetBg(), KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0.72f);
+            case COMBO -> UITheme.lerpColor(c.widgetBg(), c.warning(), 0.68f);
             case CONFLICT -> UITheme.lerpColor(c.widgetBg(), c.danger(), 0.82f);
         };
     }
@@ -927,8 +1155,28 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         return filter == null || filter.contains(virtualKey);
     }
 
+    private String modSearchText() {
+        return modSearchBox == null ? "" : modSearchBox.getValue();
+    }
+
+    private void blurSearchBoxIfOutside(MCEditBox box, double mouseX, double mouseY) {
+        if (box == null || !box.isVisible() || !box.isFocused()) return;
+        if (!inside(mouseX, mouseY, box.getX(), box.getY(), box.getWidth(), box.getHeight())) {
+            box.setFocused(false);
+            if (getFocused() == box) setFocused(null);
+        }
+    }
+
+    /** Blur a box that is about to be hidden, so it cannot keep focus/keyboard input off-screen. */
+    private void blurIfHidden(MCEditBox box, boolean willBeVisible) {
+        if (box != null && box.isVisible() && !willBeVisible && box.isFocused()) {
+            box.setFocused(false);
+            if (getFocused() == box) setFocused(null);
+        }
+    }
+
     private List<Map.Entry<String, String>> filteredModEntries() {
-        String query = modSearchQuery.toLowerCase(Locale.ROOT);
+        String query = modSearchText().toLowerCase(Locale.ROOT);
         long version = scanner.version();
         if (version == cachedModEntriesVersion && query.equals(cachedModEntriesQuery)) {
             return cachedModEntries;
@@ -937,7 +1185,8 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         for (Map.Entry<String, String> entry : scanner.getAllRegisteredMods().entrySet()) {
             if (query.isBlank()
                     || entry.getValue().toLowerCase(Locale.ROOT).contains(query)
-                    || entry.getKey().toLowerCase(Locale.ROOT).contains(query)) {
+                    || entry.getKey().toLowerCase(Locale.ROOT).contains(query)
+                    || com.github.newvisualkeybing.client.keyboard.Pinyin.matches(entry.getValue(), query)) {
                 entries.add(entry);
             }
         }
@@ -948,7 +1197,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     }
 
     private List<ModRow> filteredModRows(int fieldW) {
-        String query = modSearchQuery.toLowerCase(Locale.ROOT);
+        String query = modSearchText().toLowerCase(Locale.ROOT);
         long version = scanner.version();
         if (version == cachedModRowsVersion
                 && query.equals(cachedModRowsQuery)
@@ -985,16 +1234,43 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
         applyFixedScaleMetrics();
-        MouseButtonEvent fixedEvent = fixedMouseEvent(event);
-        double mouseX = fixedEvent.x();
-        double mouseY = fixedEvent.y();
+        double mouseX = fixedMouseX(event.x());
+        double mouseY = fixedMouseY(event.y());
         int button = event.button();
-        if (quickEdit.isOpen()) return quickEdit.mouseClicked(fixedEvent);
+        if (quickEdit.isOpen()) return quickEdit.mouseClicked(mouseX, mouseY, button);
+        // Keep exactly one text box focused: blur any whose bounds this click is outside of. The
+        // container's click loop stops at the first handling child, so it cannot be relied on to
+        // blur a box that sits after the clicked one in the children list. Covers the toolbar
+        // search, the mod-panel search, and the profile name box (all MCEditBox children now).
+        blurSearchBoxIfOutside(searchBox, mouseX, mouseY);
+        blurSearchBoxIfOutside(modSearchBox, mouseX, mouseY);
+        blurSearchBoxIfOutside(profilePanel.nameBox(), mouseX, mouseY);
         if (handleSearchClearClick(mouseX, mouseY)) return true;
-        if (super.mouseClicked(event, doubleClick)) return true;
+        if (modSearchBox != null && modSearchBox.isVisible()
+                && modSearchBox.clearAffordanceClicked(mouseX, mouseY)) {
+            modSearchBox.setValue("");
+            modSearchBox.setFocused(true);
+            this.setFocused(modSearchBox);
+            modScrollOffset = 0;
+            return true;
+        }
+        if (super.mouseClicked(fixedMouseEvent(mouseX, mouseY, event), isDoubleClick)) return true;
         if (button != 0) return false;
+
+        if (inside(mouseX, mouseY, mouseToggleX, mouseToggleY, PANEL_TOGGLE_SIZE, PANEL_TOGGLE_SIZE)) {
+            mousePanelCollapsed = !mousePanelCollapsed;
+            viewerConfig.setMousePanelCollapsed(mousePanelCollapsed);
+            invalidateLayoutCache();
+            return true;
+        }
+        if (inside(mouseX, mouseY, detailToggleX, detailToggleY, PANEL_TOGGLE_SIZE, PANEL_TOGGLE_SIZE)) {
+            detailPanelCollapsed = !detailPanelCollapsed;
+            viewerConfig.setDetailPanelCollapsed(detailPanelCollapsed);
+            invalidateLayoutCache();
+            return true;
+        }
 
         FilterTab[] tabs = FilterTab.values();
         int x = toolbarTabsX;
@@ -1017,14 +1293,20 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             int px = BODY_PAD;
             int py = contentTop;
             int ph = contentBottom - contentTop;
-            if (profilePanel.mouseClicked(fixedEvent, px, py, ph)) return true;
+            if (profilePanel.mouseClicked(mouseX, mouseY, px, py, ph)) return true;
         }
 
         boolean wheelSelected = selectedVirtualKey != null && KeyboardLayoutData.isWheel(selectedVirtualKey);
-        if (selectedVirtualKey != null && !wheelSelected) {
+        boolean detailActive = !detailPanelCollapsed && selectedVirtualKey != null && !wheelSelected;
+        if (detailActive) {
             KeybindDetailPanel.PriorityHit priorityHit = detailPanel.getRowPriorityHit(mouseX, mouseY);
             if (priorityHit != null) {
                 changeMappingPriority(priorityHit.info(), priorityHit.delta());
+                return true;
+            }
+            KeyBindingScanner.KeyBindingInfo ignoreInfo = detailPanel.getRowIgnoreHit(mouseX, mouseY);
+            if (ignoreInfo != null) {
+                toggleConflictIgnore(ignoreInfo);
                 return true;
             }
             KeyBindingScanner.KeyBindingInfo rowInfo = detailPanel.getRowUnbindHit(mouseX, mouseY);
@@ -1033,11 +1315,11 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
                 return true;
             }
         }
-        if (selectedVirtualKey != null && !wheelSelected && detailPanel.isModifyHit(mouseX, mouseY)) {
+        if (detailActive && detailPanel.isModifyHit(mouseX, mouseY)) {
             quickEdit.open(selectedVirtualKey);
             return true;
         }
-        if (selectedVirtualKey != null && !wheelSelected && detailPanel.isUnbindHit(mouseX, mouseY)) {
+        if (detailActive && detailPanel.isUnbindHit(mouseX, mouseY)) {
             int virtualKey = selectedVirtualKey;
             int countBefore = (KeyboardLayoutData.isMouse(virtualKey)
                     ? scanner.getMouseBindings(KeyboardLayoutData.virtualToMouseBtn(virtualKey))
@@ -1064,12 +1346,14 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             }
         }
 
-        Integer mouseHit = mouseRenderer.hitTest(mouseX, mouseY);
-        if (mouseHit != null) {
-            if (isHiddenBySelectedMod(mouseHit)) return false;
-            selectedVirtualKey = mouseHit;
-            detailPanel.resetScroll();
-            return true;
+        if (!mousePanelCollapsed) {
+            Integer mouseHit = mouseRenderer.hitTest(mouseX, mouseY);
+            if (mouseHit != null) {
+                if (isHiddenBySelectedMod(mouseHit)) return false;
+                selectedVirtualKey = mouseHit;
+                detailPanel.resetScroll();
+                return true;
+            }
         }
 
         selectedVirtualKey = null;
@@ -1087,14 +1371,12 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         int searchY = contentY + 4;
         int listY = searchY + 26;
         int clearY = y + h - PANEL_PAD - ACTION_BTN_H;
-        int toggleY = clearY - ACTION_BTN_H - ACTION_BTN_GAP;
+        int hideToggleY = clearY - ACTION_BTN_H - ACTION_BTN_GAP;
+        int comboToggleY = hideToggleY - ACTION_BTN_H - ACTION_BTN_GAP;
         int rowH = 18;
-        int visibleRows = Math.max(1, (toggleY - ACTION_BTN_GAP - listY) / rowH);
+        int visibleRows = Math.max(1, (comboToggleY - ACTION_BTN_GAP - listY) / rowH);
 
-        if (inside(mouseX, mouseY, fieldX, searchY, fieldW, 18)) {
-            modSearchQuery = "";
-            return true;
-        }
+        // The search field itself is an MCEditBox handled by super.mouseClicked; nothing to do here.
 
         List<Map.Entry<String, String>> mods = filteredModEntries();
         int rowY = listY;
@@ -1108,7 +1390,17 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             rowY += rowH;
         }
 
-        if (inside(mouseX, mouseY, fieldX, toggleY, fieldW, ACTION_BTN_H)) {
+        if (inside(mouseX, mouseY, fieldX, comboToggleY, fieldW, ACTION_BTN_H)) {
+            boolean enabled = viewerConfig.toggleComboKeysNonConflicting();
+            scanner.scan();
+            refreshFilters();
+            showNotice(Component.translatable(enabled
+                    ? "screen.newvisualkeybing.viewer.combo_non_conflict.enabled"
+                    : "screen.newvisualkeybing.viewer.combo_non_conflict.disabled").getString());
+            return true;
+        }
+
+        if (inside(mouseX, mouseY, fieldX, hideToggleY, fieldW, ACTION_BTN_H)) {
             boolean enabled = viewerConfig.toggleHideNonSelectedMod();
             showNotice(Component.translatable(enabled
                     ? "screen.newvisualkeybing.viewer.hide_unselected.enabled"
@@ -1126,14 +1418,9 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
 
     @Override
     public boolean charTyped(CharacterEvent event) {
-        int codePoint = event.codepoint();
         applyFixedScaleMetrics();
-        if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.charTyped(event)) return true;
-        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused() && codePoint >= 32) {
-            modSearchQuery += event.codepointAsString();
-            modScrollOffset = 0;
-            return true;
-        }
+        // All text boxes (toolbar search, mod search, profile name) are focusable child widgets now,
+        // so super.charTyped routes to whichever is focused.
         return super.charTyped(event);
     }
 
@@ -1141,23 +1428,23 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
     public boolean keyPressed(KeyEvent event) {
         applyFixedScaleMetrics();
         int keyCode = event.key();
-        if (quickEdit.isOpen()) return quickEdit.keyPressed(event);
-        if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.keyPressed(event)) return true;
-        if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD && !searchBox.isFocused()) {
-            if (keyCode == 259 && !modSearchQuery.isEmpty()) {
-                modSearchQuery = modSearchQuery.substring(0, modSearchQuery.length() - 1);
+        int scanCode = event.scancode();
+        int modifiers = event.modifiers();
+        if (quickEdit.isOpen()) return quickEdit.keyPressed(keyCode, scanCode, modifiers);
+        if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.keyPressed(keyCode, scanCode, modifiers)) return true;
+        if (keyCode == 256) {
+            // Escape clears, then blurs, whichever search box is focused.
+            MCEditBox focused = searchBox != null && searchBox.isFocused() ? searchBox
+                    : modSearchBox != null && modSearchBox.isFocused() ? modSearchBox : null;
+            if (focused != null) {
+                if (!focused.getValue().isEmpty()) {
+                    focused.setValue("");
+                    return true;
+                }
+                focused.setFocused(false);
+                this.setFocused(null);
                 return true;
             }
-            if (keyCode == 256) modSearchQuery = "";
-        }
-        if (keyCode == 256 && searchBox != null && searchBox.isFocused()) {
-            if (!searchBox.getValue().isEmpty()) {
-                searchBox.setValue("");
-                return true;
-            }
-            searchBox.setFocused(false);
-            this.setFocused(null);
-            return true;
         }
         return super.keyPressed(event);
     }
@@ -1168,13 +1455,14 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
         mouseX = fixedMouseX(mouseX);
         mouseY = fixedMouseY(mouseY);
         if (quickEdit.isOpen()) return quickEdit.mouseScrolled(mouseX, mouseY, scrollY);
-        if (selectedVirtualKey != null
+        if (!detailPanelCollapsed && selectedVirtualKey != null
                 && mouseX >= detailPanelX && mouseX <= detailPanelX + detailPanelW
                 && mouseY >= detailPanelY && mouseY <= detailPanelY + detailPanelH) {
             detailPanel.scroll((int) Math.signum(scrollY));
             return true;
         }
-        if (mouseX >= mousePanelX && mouseX <= mousePanelX + mousePanelW
+        if (!mousePanelCollapsed
+                && mouseX >= mousePanelX && mouseX <= mousePanelX + mousePanelW
                 && mouseY >= mousePanelY && mouseY <= mousePanelY + mousePanelH) {
             selectedVirtualKey = scrollY > 0 ? KeyboardLayoutData.WHEEL_UP_VIRTUAL : KeyboardLayoutData.WHEEL_DOWN_VIRTUAL;
             return true;
@@ -1183,10 +1471,11 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
             int x = BODY_PAD;
             if (mouseX >= x && mouseX <= x + MOD_PANEL_W) {
                 int clearY = contentTop + (contentBottom - contentTop) - PANEL_PAD - ACTION_BTN_H;
-                int toggleY = clearY - ACTION_BTN_H - ACTION_BTN_GAP;
+                int hideToggleY = clearY - ACTION_BTN_H - ACTION_BTN_GAP;
+                int comboToggleY = hideToggleY - ACTION_BTN_H - ACTION_BTN_GAP;
                 int searchY = contentTop + PANEL_CONTENT_TOP + 4;
                 int listY = searchY + 26;
-                int visibleRows = Math.max(1, (toggleY - ACTION_BTN_GAP - listY) / 18);
+                int visibleRows = Math.max(1, (comboToggleY - ACTION_BTN_GAP - listY) / 18);
                 modScrollOffset = Mth.clamp(modScrollOffset - (int) Math.signum(scrollY), 0,
                         Math.max(0, filteredModEntries().size() - visibleRows));
                 return true;
