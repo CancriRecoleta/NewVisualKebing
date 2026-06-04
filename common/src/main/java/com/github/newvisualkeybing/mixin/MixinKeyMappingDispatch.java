@@ -1,9 +1,11 @@
 package com.github.newvisualkeybing.mixin;
 
+import com.github.newvisualkeybing.Constants;
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeybindPriorityEnforcer;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.ToggleKeyMapping;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -28,9 +30,17 @@ import java.util.Set;
  *       priority tier fires, but a tier that cannot trigger in the current scene is skipped so a
  *       lower tier that can fires instead (see {@link KeybindPriorityEnforcer#resolveByPriority}).</li>
  * </ul>
+ *
+ * <p>Each {@code KeyMapping.click}/{@code set}/{@code setAll} callback delegates to an {@code *Impl}
+ * body wrapped in {@code try/catch(Throwable)}: a dispatch error must never propagate into vanilla's
+ * input handling (it would break <em>all</em> key input). On failure the {@code HEAD cancellable}
+ * paths simply skip {@code ci.cancel()}, so vanilla's own handling still runs.
  */
 @Mixin(KeyMapping.class)
 public class MixinKeyMappingDispatch {
+
+    /** Logged-once guard so a recurring dispatch error on the per-key hot path cannot spam the log. */
+    private static volatile boolean newvisualkeybing$loggedDispatchError;
 
     /**
      * Invalidate the priority enforcer's bound-key index whenever mappings are reset. Both vanilla
@@ -55,6 +65,16 @@ public class MixinKeyMappingDispatch {
     @Inject(method = "click(Lcom/mojang/blaze3d/platform/InputConstants$Key;)V",
             at = @At("HEAD"), cancellable = true)
     private static void newvisualkeybing$onClick(InputConstants.Key key, CallbackInfo ci) {
+        try {
+            newvisualkeybing$clickImpl(key, ci);
+        } catch (Throwable t) {
+            // Never let a dispatch error escape into vanilla KeyMapping.click and break input; on
+            // failure we just don't cancel, so vanilla's normal single-winner click still runs.
+            newvisualkeybing$logDispatchError(t);
+        }
+    }
+
+    private static void newvisualkeybing$clickImpl(InputConstants.Key key, CallbackInfo ci) {
         KeybindComboStore store = KeybindComboStore.global();
         boolean hasCombos = store.hasCombos();
         List<KeybindComboStore.Match> matches = hasCombos
@@ -79,6 +99,16 @@ public class MixinKeyMappingDispatch {
     @Inject(method = "set(Lcom/mojang/blaze3d/platform/InputConstants$Key;Z)V",
             at = @At("HEAD"), cancellable = true)
     private static void newvisualkeybing$onSet(InputConstants.Key key, boolean held, CallbackInfo ci) {
+        try {
+            newvisualkeybing$setImpl(key, held, ci);
+        } catch (Throwable t) {
+            // Don't let a dispatch error escape into vanilla KeyMapping.set; fall back to vanilla by
+            // not cancelling. Any partial state written is corrected on the next key event / setAll.
+            newvisualkeybing$logDispatchError(t);
+        }
+    }
+
+    private static void newvisualkeybing$setImpl(InputConstants.Key key, boolean held, CallbackInfo ci) {
         KeybindComboStore store = KeybindComboStore.global();
         boolean hasCombos = store.hasCombos();
         List<KeybindComboStore.Match> matches = hasCombos
@@ -115,7 +145,12 @@ public class MixinKeyMappingDispatch {
             if (emitClicks) {
                 for (int i = 0; i < triggerMatches.size(); i++) {
                     KeyMapping mapping = triggerMatches.get(i).mapping();
-                    if (!downBefore[i] && mapping.isDown()) {
+                    // Rising edge read from the raw isDown field, not mapping.isDown(): on
+                    // Forge/NeoForge the latter also gates on getKeyModifier().isActive(), which would
+                    // mask a chord whose mapping additionally declares a stray native KeyModifier
+                    // (already modifier-resolved by the mod's own first/second-key mechanism — see
+                    // resolveCombosByPriority), losing the click that onClick fires unconditionally.
+                    if (!downBefore[i] && newvisualkeybing$rawDown(mapping)) {
                         newvisualkeybing$incrementClick(mapping);
                     }
                 }
@@ -145,6 +180,14 @@ public class MixinKeyMappingDispatch {
      */
     @Inject(method = "setAll()V", at = @At("TAIL"))
     private static void newvisualkeybing$onSetAll(CallbackInfo ci) {
+        try {
+            newvisualkeybing$setAllImpl();
+        } catch (Throwable t) {
+            newvisualkeybing$logDispatchError(t);
+        }
+    }
+
+    private static void newvisualkeybing$setAllImpl() {
         KeybindComboStore store = KeybindComboStore.global();
         boolean hasCombos = store.hasCombos();
         for (InputConstants.Key key : KeybindPriorityEnforcer.boundKeys()) {
@@ -157,8 +200,19 @@ public class MixinKeyMappingDispatch {
             // Unmanaged keys (no chord, <=1 binding) already hold vanilla's correct per-key poll.
             if (matches.isEmpty() && singles.size() <= 1) continue;
             boolean held = KeybindComboStore.isKeyHeld(key.getName());
-            newvisualkeybing$syncTrigger(matches, singles, held);
+            // preserveToggleState=true: vanilla setAll has already driven each ToggleKeyMapping once,
+            // and ToggleKeyMapping.setDown(true) FLIPS rather than sets, so re-applying it here would
+            // double-flip (cancelling vanilla's flip) for a winner while leaving a suppressed toggle
+            // flipped — an asymmetric divergence from vanilla. Leave toggles exactly as vanilla left
+            // them (the mod cannot drive a toggle's on/off state through setDown anyway).
+            newvisualkeybing$syncTrigger(matches, singles, held, true);
         }
+    }
+
+    /** (Re)compute the {@code isDown} state for one trigger key, re-applying toggle state too. */
+    private static void newvisualkeybing$syncTrigger(List<KeybindComboStore.Match> matches,
+                                                     List<KeyMapping> singles, boolean held) {
+        newvisualkeybing$syncTrigger(matches, singles, held, false);
     }
 
     /**
@@ -166,33 +220,51 @@ public class MixinKeyMappingDispatch {
      * key (single keys suppressed); otherwise the single keys take it. Within whichever category
      * wins, {@link KeybindPriorityEnforcer#resolveByPriority} decides the firing set by priority
      * tier (same tier all fire, higher tier wins, scene-aware fall-through).
+     *
+     * @param preserveToggleState when {@code true}, {@link ToggleKeyMapping}s are left untouched
+     *     instead of having {@code setDown} re-applied (see {@code onSetAll} — avoids double-flipping
+     *     a toggle vanilla's {@code setAll} already drove). Live dispatch keeps it {@code false} so it
+     *     still drives the toggle's single flip (there vanilla's {@code set} is cancelled).
      */
     private static void newvisualkeybing$syncTrigger(List<KeybindComboStore.Match> matches,
-                                                     List<KeyMapping> singles, boolean held) {
+                                                     List<KeyMapping> singles, boolean held,
+                                                     boolean preserveToggleState) {
         if (!held) {
-            for (KeybindComboStore.Match match : matches) match.mapping().setDown(false);
-            for (KeyMapping single : singles) single.setDown(false);
+            for (KeybindComboStore.Match match : matches) newvisualkeybing$applyDown(match.mapping(), false, preserveToggleState);
+            for (KeyMapping single : singles) newvisualkeybing$applyDown(single, false, preserveToggleState);
             return;
         }
         List<KeyMapping> activeCombos = newvisualkeybing$activeComboMappings(matches);
         if (!activeCombos.isEmpty()) {
             Set<KeyMapping> winners = new HashSet<>(KeybindPriorityEnforcer.resolveCombosByPriority(activeCombos));
             for (KeybindComboStore.Match match : matches) {
-                match.mapping().setDown(winners.contains(match.mapping()));
+                newvisualkeybing$applyDown(match.mapping(), winners.contains(match.mapping()), preserveToggleState);
             }
-            for (KeyMapping single : singles) single.setDown(false);
+            for (KeyMapping single : singles) newvisualkeybing$applyDown(single, false, preserveToggleState);
         } else {
-            for (KeybindComboStore.Match match : matches) match.mapping().setDown(false);
+            for (KeybindComboStore.Match match : matches) newvisualkeybing$applyDown(match.mapping(), false, preserveToggleState);
             Set<KeyMapping> winners = new HashSet<>(KeybindPriorityEnforcer.resolveByPriority(singles));
-            for (KeyMapping single : singles) single.setDown(winners.contains(single));
+            for (KeyMapping single : singles) newvisualkeybing$applyDown(single, winners.contains(single), preserveToggleState);
         }
     }
 
-    /** Snapshot each chord mapping's {@code isDown} before a re-sync, for rising-edge click detection. */
+    /**
+     * Apply {@code setDown}, optionally skipping {@link ToggleKeyMapping}s. {@code ToggleKeyMapping}
+     * treats {@code setDown(true)} as a <em>flip</em> of its logical on/off state and {@code
+     * setDown(false)} as a no-op, so the mod cannot drive a toggle's state the way it drives a
+     * momentary key. In the post-{@code setAll} re-sync (where vanilla has already flipped it once)
+     * the only correct choice is to leave it untouched.
+     */
+    private static void newvisualkeybing$applyDown(KeyMapping mapping, boolean down, boolean preserveToggleState) {
+        if (preserveToggleState && mapping instanceof ToggleKeyMapping) return;
+        mapping.setDown(down);
+    }
+
+    /** Snapshot each chord mapping's raw {@code isDown} before a re-sync, for rising-edge click detection. */
     private static boolean[] newvisualkeybing$downStates(List<KeybindComboStore.Match> matches) {
         boolean[] states = new boolean[matches.size()];
         for (int i = 0; i < matches.size(); i++) {
-            states[i] = matches.get(i).mapping().isDown();
+            states[i] = newvisualkeybing$rawDown(matches.get(i).mapping());
         }
         return states;
     }
@@ -214,5 +286,22 @@ public class MixinKeyMappingDispatch {
         if (mapping == null) return;
         KeyMappingAccessor accessor = (KeyMappingAccessor) (Object) mapping;
         accessor.newvisualkeybing$setClickCount(accessor.newvisualkeybing$getClickCount() + 1);
+    }
+
+    /**
+     * The raw {@code isDown} field, bypassing the loader's {@code isDown()} accessor. On Forge/NeoForge
+     * {@code KeyMapping.isDown()} additionally requires {@code getKeyModifier().isActive()}; reading the
+     * field instead reflects exactly what {@link #newvisualkeybing$syncTrigger}'s {@code setDown} wrote,
+     * which is the state the mod's own chord/priority resolution decided.
+     */
+    private static boolean newvisualkeybing$rawDown(KeyMapping mapping) {
+        return ((KeyMappingAccessor) (Object) mapping).newvisualkeybing$isDown();
+    }
+
+    private static void newvisualkeybing$logDispatchError(Throwable t) {
+        if (newvisualkeybing$loggedDispatchError) return;
+        newvisualkeybing$loggedDispatchError = true;
+        Constants.LOG.warn("NewVisualKeybing key dispatch error (falling back to vanilla; logged once): {}",
+                t.toString());
     }
 }

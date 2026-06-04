@@ -69,7 +69,11 @@ public final class KeybindProfileStore {
 
     private final Path storeFile;
     private final Path exportDir;
-    private StoreData data = new StoreData();
+    // volatile + every structural mutator below is synchronized(this), so the watcher daemon thread's
+    // synchronized serializeForCompare() (GSON.toJson over these collections) can never run concurrently
+    // with a put/clear/add that structurally modifies them. The dispatch read path (priorityOf) only
+    // does a HashMap get and runs on the same (client) thread as every mutator, so it stays lock-free.
+    private volatile StoreData data = new StoreData();
     private final java.util.List<Runnable> reloadListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     public KeybindProfileStore() {
@@ -105,7 +109,7 @@ public final class KeybindProfileStore {
         reloadListeners.remove(listener);
     }
 
-    public void load() {
+    public synchronized void load() {
         if (!Files.isRegularFile(storeFile)) {
             data = new StoreData();
             return;
@@ -119,7 +123,7 @@ public final class KeybindProfileStore {
         }
     }
 
-    public void save() {
+    public synchronized void save() {
         try {
             Files.createDirectories(storeFile.getParent());
             try (Writer writer = Files.newBufferedWriter(storeFile, StandardCharsets.UTF_8)) {
@@ -145,7 +149,7 @@ public final class KeybindProfileStore {
         return Math.max(0, Math.min(data.selectedProfile, Math.max(0, profiles().size() - 1)));
     }
 
-    public void select(int index) {
+    public synchronized void select(int index) {
         data.selectedProfile = Math.max(0, Math.min(index, Math.max(0, profiles().size() - 1)));
         save();
     }
@@ -154,7 +158,7 @@ public final class KeybindProfileStore {
         return saveCurrentProfile(null);
     }
 
-    public Profile saveCurrentProfile(String requestedName) {
+    public synchronized Profile saveCurrentProfile(String requestedName) {
         Profile profile = selectedProfile();
         if (profile == null) {
             profile = new Profile(normalizeProfileName(requestedName, -1));
@@ -174,7 +178,7 @@ public final class KeybindProfileStore {
         return createProfileFromCurrent(null);
     }
 
-    public Profile createProfileFromCurrent(String requestedName) {
+    public synchronized Profile createProfileFromCurrent(String requestedName) {
         Profile profile = new Profile(normalizeProfileName(requestedName, -1));
         profile.updatedAt = LocalDateTime.now().toString();
         profile.bindings = captureBindings();
@@ -185,7 +189,7 @@ public final class KeybindProfileStore {
         return profile;
     }
 
-    public Profile renameSelectedProfile(String requestedName) {
+    public synchronized Profile renameSelectedProfile(String requestedName) {
         Profile profile = selectedProfile();
         if (profile == null) return null;
         profile.name = normalizeProfileName(requestedName, selectedIndex());
@@ -194,7 +198,7 @@ public final class KeybindProfileStore {
         return profile;
     }
 
-    public boolean deleteSelectedProfile() {
+    public synchronized boolean deleteSelectedProfile() {
         if (profiles().isEmpty()) return false;
         data.profiles.remove(selectedIndex());
         data.selectedProfile = Math.max(0, Math.min(data.selectedProfile, Math.max(0, data.profiles.size() - 1)));
@@ -202,7 +206,7 @@ public final class KeybindProfileStore {
         return true;
     }
 
-    public boolean applySelectedProfile() {
+    public synchronized boolean applySelectedProfile() {
         Profile profile = selectedProfile();
         if (profile == null) return false;
         Map<String, KeyMapping> byName = currentMappingsByName();
@@ -235,7 +239,7 @@ public final class KeybindProfileStore {
         return true;
     }
 
-    public Path exportSelectedProfile() {
+    public synchronized Path exportSelectedProfile() {
         Profile profile = selectedProfile();
         if (profile == null) return null;
         profile.combos = KeybindComboStore.global().snapshot();
@@ -306,7 +310,7 @@ public final class KeybindProfileStore {
      * the imported profile (or {@code null} on failure). Does not apply automatically;
      * the caller still drives the Apply action.
      */
-    public Profile importExport(Path path) {
+    public synchronized Profile importExport(Path path) {
         if (path == null || !Files.isRegularFile(path)) return null;
         try (Reader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             Profile imported = GSON.fromJson(reader, Profile.class);
@@ -332,7 +336,7 @@ public final class KeybindProfileStore {
         return data.priorities.getOrDefault(mappingName, 0);
     }
 
-    public void changePriority(KeyMapping mapping, int delta) {
+    public synchronized void changePriority(KeyMapping mapping, int delta) {
         int priority = Math.max(-999, Math.min(999, priorityOf(mapping) + delta));
         data.priorities.put(mapping.getName(), priority);
         Profile profile = selectedProfile();
@@ -358,7 +362,7 @@ public final class KeybindProfileStore {
     }
 
     /** Toggle the ignore-in-conflict flag for a mapping; returns the new state. */
-    public boolean toggleConflictIgnored(KeyMapping mapping) {
+    public synchronized boolean toggleConflictIgnored(KeyMapping mapping) {
         if (mapping == null) return false;
         String name = mapping.getName();
         boolean nowIgnored;
