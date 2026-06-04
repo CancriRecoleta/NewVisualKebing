@@ -4,6 +4,8 @@ import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
+import com.github.newvisualkeybing.client.ui.UITextureSlot;
+import com.github.newvisualkeybing.client.ui.UITextureStore;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 
@@ -26,6 +28,7 @@ final class KeybindKeyboardRenderer {
     private float cachedKeyScale = Float.NaN;
     private KeyDrawState[] drawStates = new KeyDrawState[0];
     private long lastFrameMs;
+    private int cachedThemeVersion = Integer.MIN_VALUE;
     private long cachedComboVersion = Long.MIN_VALUE;
     private Set<Integer> cachedComboKeys = java.util.Collections.emptySet();
 
@@ -46,6 +49,9 @@ final class KeybindKeyboardRenderer {
         refreshDrawStates(font, style, keyboardX, keyboardY, keyScale);
 
         long scannerVersion = scanner.version();
+        int themeVersion = UITheme.themeVersion();
+        boolean themeChanged = themeVersion != cachedThemeVersion;
+        cachedThemeVersion = themeVersion;
         float dt = lastFrameMs > 0 ? Math.min((nowMs - lastFrameMs) / 1000f, 0.05f) : 0.016f;
         lastFrameMs = nowMs;
         Set<Integer> comboKeys = comboParticipantKeys();
@@ -74,6 +80,8 @@ final class KeybindKeyboardRenderer {
                 state.bindingCount = scanner.getBindingCount(state.glfwKey);
                 state.cachedBindings = scanner.getBindings(state.glfwKey);
                 state.cachedInlineMaxW = Integer.MIN_VALUE;
+                refreshCachedColors(state);
+            } else if (themeChanged) {
                 refreshCachedColors(state);
             }
             state.hoverProgress = advanceProgress(state.hoverProgress,
@@ -166,6 +174,7 @@ final class KeybindKeyboardRenderer {
                                        int pulseAccent, int searchPulseColor, int searchPulseAlpha,
                                        int accentAlt, int conflictBorder, int widgetBorder,
                                        int hiddenGhost, int hiddenBorder, int normalBorder) {
+        if (UITheme.custom() && drawCustomKey(g, state)) return;
         int x = state.x;
         int y = state.y;
         int w = state.w;
@@ -243,6 +252,43 @@ final class KeybindKeyboardRenderer {
         }
     }
 
+    /**
+     * Custom skin: paint the key cap from the user's texture (per-status override or the tinted
+     * generic {@code key}), keeping match/hidden dimming and a selection/hover outline. Labels and
+     * badges are drawn by the caller's later pass. Returns false (→ procedural) if no key texture.
+     */
+    private static boolean drawCustomKey(GuiGraphics g, KeyDrawState state) {
+        UITextureStore store = UITextureStore.global();
+        if (!store.hasAnyKeyTexture()) return false;
+        int x = state.x;
+        int y = state.y;
+        int w = state.w;
+        int faceH = state.h - 1;
+        boolean full = state.matched && !state.hidden;
+        UITextureSlot override = full ? perStatusSlot(state.status) : null;
+        int base = state.matched ? state.cachedTopFill : state.cachedGhostFill;
+        int tint = state.hidden ? UITheme.withAlpha(base, 0x40)
+                : full ? base : UITheme.withAlpha(base, 0x88);
+        if (!store.drawKeyFace(g, x, y, w, faceH, override, tint)) return false;
+        if (state.comboParticipant && !state.hidden) renderComboTopBar(g, state, !full);
+        if (state.selected) {
+            UITheme.drawRoundedBorderFast(g, x - 1, y - 1, w + 2, faceH + 2, 2, 0xFFFFFFFF);
+        } else if (state.hover && state.matched) {
+            UITheme.drawRoundedBorderFast(g, x, y, w, faceH, 2, UITheme.colors().accentLight());
+        }
+        return true;
+    }
+
+    private static UITextureSlot perStatusSlot(KeyBindingScanner.KeyStatus status) {
+        return switch (status) {
+            case FREE -> UITextureSlot.KEY_FREE;
+            case SELF -> UITextureSlot.KEY_SELF;
+            case OTHER_SINGLE, BOUND -> UITextureSlot.KEY_OTHER;
+            case COMBO -> UITextureSlot.KEY_COMBO;
+            case CONFLICT -> UITextureSlot.KEY_CONFLICT;
+        };
+    }
+
     private static void renderStatusEdge(GuiGraphics g, int x, int y, int w, int faceH,
                                          int edgeH, int radius, int color) {
         UITheme.fillRoundedRectEx(g, x + 3, y + faceH - edgeH - 1, w - 6, edgeH,
@@ -286,6 +332,10 @@ final class KeybindKeyboardRenderer {
         int w = kbW + pad * 2;
         int h = kbH + pad * 2;
         int radius = 8;
+
+        if (UITheme.custom() && UITextureStore.global().draw(UITextureSlot.KEYBOARD_CHASSIS, g, x, y, w, h)) {
+            return;
+        }
 
         int chassisOuter = UITheme.lerpColor(c.panelBg(), 0x000000, 0.35f);
         UITheme.fillRoundedRectFast(g, x, y, w, h, radius, chassisOuter);

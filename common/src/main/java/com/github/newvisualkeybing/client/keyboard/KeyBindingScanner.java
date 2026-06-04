@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -48,9 +49,7 @@ public class KeyBindingScanner {
             String baseKeyName,
             String currentKeyName,
             String defaultKeyName,
-            String searchText,
-            boolean currentCombo,
-            String activatorSignature
+            boolean conflictIgnored
     ) {
         public String contextDescription() {
             return switch (conflictContext) {
@@ -65,23 +64,28 @@ public class KeyBindingScanner {
     public record ScanStats(int total, int free, int self, int other, int combo, int bound, int conflict) {}
     public record ModStats(int bindings, int inputs, int conflicts) {}
 
-    private static final Set<String> VANILLA_CATEGORIES = Set.of(
-            "gameplay", "inventory", "movement", "multiplayer", "ui", "misc", "narrator", "creative"
-    );
+    /** The only namespaces vanilla uses inside a 3-segment key name (e.g. {@code key.hotbar.1}). */
+    private static final Set<String> VANILLA_KEY_NAMESPACES = Set.of("hotbar");
+
+    /** Tokens that appear in keybind translation keys but are never a mod id, so they must not be
+     *  fuzzily matched to a loaded mod (which would create bogus groups like "gui"). */
+    private static final Set<String> GENERIC_TOKENS = Set.of(
+            "key", "keys", "keybind", "keybinds", "keybinding", "keybindings", "binding", "bindings",
+            "categories", "category", "minecraft", "gui", "hud", "misc", "mod", "mods", "client",
+            "common", "main", "input", "inputs", "control", "controls", "setting", "settings",
+            "options", "option", "menu", "menus", "screen", "screens", "action", "actions",
+            "toggle", "open", "close", "show", "hide");
+
+    /** Lazily-cached lower-cased ids of all loaded mods (fixed for the JVM run). */
+    private static volatile Set<String> cachedLoadedModIds;
 
     private final Map<Integer, List<KeyBindingInfo>> keyboardBindings = new LinkedHashMap<>();
     private final Map<Integer, List<KeyBindingInfo>> mouseBindings = new LinkedHashMap<>();
     private final Map<Integer, KeyStatus> keyboardStatuses = new HashMap<>();
     private final Map<Integer, KeyStatus> mouseStatuses = new HashMap<>();
     private final Map<Integer, String> keyLabelCache = new HashMap<>();
-    private final Map<String, String> actionNameCache = new HashMap<>();
-    private final Map<String, String> categoryNameCache = new HashMap<>();
-    private final Map<String, String> displayNameCache = new HashMap<>();
-    private final Map<String, String> resolvedModIdCache = new HashMap<>();
-    private final Map<String, String> resolvedModNameCache = new HashMap<>();
     private final Map<String, String> registeredMods = new LinkedHashMap<>();
     private final Map<String, ModStats> modStats = new HashMap<>();
-    private final Map<String, Set<Integer>> modKeys = new HashMap<>();
     private Map<String, String> sortedRegisteredMods = Collections.emptyMap();
     private ScanStats stats = new ScanStats(0, 0, 0, 0, 0, 0, 0);
     private long version;
@@ -112,7 +116,6 @@ public class KeyBindingScanner {
         mouseStatuses.clear();
         registeredMods.clear();
         modStats.clear();
-        modKeys.clear();
 
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.options == null) {
@@ -123,12 +126,17 @@ public class KeyBindingScanner {
             return;
         }
 
-        KeybindComboStore comboStore = KeybindComboStore.global();
         for (KeyMapping mapping : minecraft.options.keyMappings) {
             String actionKey = mapping.getName();
-            String categoryKey = categoryKey(mapping);
+            // 1.21.10: getCategory() is now a KeyMapping.Category (ResourceLocation-backed) instead of a
+            // raw translation-key String. id() gives "<namespace>:<path>" (vanilla under "minecraft",
+            // mods under their own namespace — the most reliable attribution signal); label() resolves
+            // the display name. categoryKey feeds the mod-id heuristics; categoryName is for display.
+            KeyMapping.Category category = mapping.getCategory();
+            String categoryKey = category.id().toString();
+            String categoryName = category.label().getString();
             String modId = resolveModId(actionKey, categoryKey);
-            String modName = resolveModName(modId, categoryKey);
+            String modName = resolveModName(modId, categoryKey, categoryName);
             registeredMods.putIfAbsent(modId, modName);
 
             InputConstants.Key key = ((KeyMappingAccessor) (Object) mapping).newvisualkeybing$getKey();
@@ -137,16 +145,11 @@ public class KeyBindingScanner {
             ConflictContext ctx = Services.PLATFORM.getConflictContext(mapping);
             InputModifier modifier = Services.PLATFORM.getKeyModifier(mapping);
             InputModifier defaultModifier = Services.PLATFORM.getDefaultKeyModifier(mapping);
-            String baseKeyName = displayName(key);
-            String defaultBaseKeyName = displayName(mapping.getDefaultKey());
-            String actionName = actionName(actionKey);
-            String categoryName = categoryName(categoryKey, mapping);
-            String currentKeyName = displayKeyName(modifier, baseKeyName);
-            String defaultKeyName = displayKeyName(defaultModifier, defaultBaseKeyName);
-            boolean currentCombo = comboStore.matchesCurrentCombo(mapping);
+            String baseKeyName = key.getDisplayName().getString();
+            String defaultBaseKeyName = mapping.getDefaultKey().getDisplayName().getString();
             KeyBindingInfo info = new KeyBindingInfo(
                     actionKey,
-                    actionName,
+                    Component.translatable(actionKey).getString(),
                     categoryKey,
                     categoryName,
                     modId,
@@ -156,11 +159,9 @@ public class KeyBindingScanner {
                     modifier,
                     defaultModifier,
                     baseKeyName,
-                    currentKeyName,
-                    defaultKeyName,
-                    searchText(actionName, actionKey, categoryName, categoryKey, modId, modName, currentKeyName),
-                    currentCombo,
-                    comboStore.activatorSignature(mapping, modifier)
+                    displayKeyName(modifier, baseKeyName),
+                    displayKeyName(defaultModifier, defaultBaseKeyName),
+                    KeybindProfileStore.globalConflictIgnored(actionKey)
             );
 
             if (key.getType() == InputConstants.Type.MOUSE) {
@@ -184,13 +185,9 @@ public class KeyBindingScanner {
             mouseStatuses.put(entry.getKey(), computeStatus(entry.getValue()));
         }
 
-        List<Map.Entry<String, String>> sortedMods = new ArrayList<>(registeredMods.entrySet());
-        sortedMods.sort(Map.Entry.comparingByValue(String.CASE_INSENSITIVE_ORDER));
-        LinkedHashMap<String, String> sorted = new LinkedHashMap<>();
-        for (Map.Entry<String, String> entry : sortedMods) {
-            sorted.put(entry.getKey(), entry.getValue());
-        }
-        sortedRegisteredMods = sorted;
+        sortedRegisteredMods = registeredMods.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue(String.CASE_INSENSITIVE_ORDER))
+                .collect(LinkedHashMap::new, (map, entry) -> map.put(entry.getKey(), entry.getValue()), LinkedHashMap::putAll);
         rebuildModStats();
         stats = computeStats();
         version++;
@@ -243,8 +240,10 @@ public class KeyBindingScanner {
 
     public boolean hasBindingForMod(int virtualKey, String modId) {
         if (modId == null || modId.isBlank()) return false;
-        Set<Integer> keys = modKeys.get(modId);
-        return keys != null && keys.contains(virtualKey);
+        for (KeyBindingInfo info : getVirtualBindings(virtualKey)) {
+            if (modId.equals(info.modId())) return true;
+        }
+        return false;
     }
 
     public String primaryModId(int virtualKey) {
@@ -302,7 +301,20 @@ public class KeyBindingScanner {
         if (cachedFilterModVersion == version && modId.equals(cachedFilterModId)) {
             return cachedFilterMod;
         }
-        Set<Integer> matches = modKeys.getOrDefault(modId, Collections.emptySet());
+        Set<Integer> matches = new LinkedHashSet<>();
+        for (Map.Entry<Integer, List<KeyBindingInfo>> entry : keyboardBindings.entrySet()) {
+            for (KeyBindingInfo info : entry.getValue()) {
+                if (modId.equals(info.modId())) { matches.add(entry.getKey()); break; }
+            }
+        }
+        for (Map.Entry<Integer, List<KeyBindingInfo>> entry : mouseBindings.entrySet()) {
+            for (KeyBindingInfo info : entry.getValue()) {
+                if (modId.equals(info.modId())) {
+                    matches.add(KeyboardLayoutData.mouseToVirtual(entry.getKey()));
+                    break;
+                }
+            }
+        }
         cachedFilterModVersion = version;
         cachedFilterModId = modId;
         cachedFilterMod = matches;
@@ -375,25 +387,18 @@ public class KeyBindingScanner {
 
     private void rebuildModStats() {
         Map<String, MutableModStats> mutable = new HashMap<>();
-        Map<String, LinkedHashSet<Integer>> mutableModKeys = new HashMap<>();
-        collectModStats(keyboardBindings, keyboardStatuses, mutable, mutableModKeys, false);
-        collectModStats(mouseBindings, mouseStatuses, mutable, mutableModKeys, true);
+        collectModStats(keyboardBindings, keyboardStatuses, mutable);
+        collectModStats(mouseBindings, mouseStatuses, mutable);
         modStats.clear();
         for (Map.Entry<String, MutableModStats> entry : mutable.entrySet()) {
             MutableModStats s = entry.getValue();
             modStats.put(entry.getKey(), new ModStats(s.bindings, s.inputs, s.conflicts));
         }
-        modKeys.clear();
-        for (Map.Entry<String, LinkedHashSet<Integer>> entry : mutableModKeys.entrySet()) {
-            modKeys.put(entry.getKey(), Collections.unmodifiableSet(entry.getValue()));
-        }
     }
 
     private static void collectModStats(Map<Integer, List<KeyBindingInfo>> bindings,
                                         Map<Integer, KeyStatus> statuses,
-                                        Map<String, MutableModStats> out,
-                                        Map<String, LinkedHashSet<Integer>> modKeys,
-                                        boolean mouse) {
+                                        Map<String, MutableModStats> out) {
         for (Map.Entry<Integer, List<KeyBindingInfo>> entry : bindings.entrySet()) {
             KeyStatus status = statuses.getOrDefault(entry.getKey(), KeyStatus.FREE);
             Set<String> seenMods = new LinkedHashSet<>();
@@ -402,12 +407,10 @@ public class KeyBindingScanner {
                 stats.bindings++;
                 seenMods.add(info.modId());
             }
-            int virtualKey = mouse ? KeyboardLayoutData.mouseToVirtual(entry.getKey()) : entry.getKey();
             for (String modId : seenMods) {
                 MutableModStats stats = out.computeIfAbsent(modId, ignored -> new MutableModStats());
                 stats.inputs++;
                 if (status == KeyStatus.CONFLICT) stats.conflicts++;
-                modKeys.computeIfAbsent(modId, ignored -> new LinkedHashSet<>()).add(virtualKey);
             }
         }
     }
@@ -470,44 +473,70 @@ public class KeyBindingScanner {
     }
 
     private static boolean matches(KeyBindingInfo info, String query) {
-        return info.searchText().contains(query);
+        return info.actionName().toLowerCase(Locale.ROOT).contains(query)
+                || info.translationKey().toLowerCase(Locale.ROOT).contains(query)
+                || info.categoryName().toLowerCase(Locale.ROOT).contains(query)
+                || info.categoryKey().toLowerCase(Locale.ROOT).contains(query)
+                || info.modId().toLowerCase(Locale.ROOT).contains(query)
+                || info.modName().toLowerCase(Locale.ROOT).contains(query)
+                || info.currentKeyName().toLowerCase(Locale.ROOT).contains(query)
+                || Pinyin.matches(info.actionName(), query)
+                || Pinyin.matches(info.categoryName(), query)
+                || Pinyin.matches(info.modName(), query);
     }
 
 
     private static KeyStatus computeStatus(List<KeyBindingInfo> infos) {
         if (infos.isEmpty()) return KeyStatus.FREE;
         boolean comboAware = KeybindViewerConfig.global().comboKeysNonConflicting();
-        boolean hasCombo = false;
-        boolean hasSelf = false;
-        boolean hasOther = false;
-        for (KeyBindingInfo info : infos) {
-            hasCombo |= isCombination(info) || info.currentCombo();
-            if (info.self()) {
-                hasSelf = true;
-            } else {
-                hasOther = true;
-            }
-        }
+        boolean hasCombo = infos.stream().anyMatch(info -> isCombination(info) || hasStoredCombo(info));
         if (infos.size() == 1) {
             if (comboAware && hasCombo) return KeyStatus.COMBO;
             return infos.get(0).self() ? KeyStatus.SELF : KeyStatus.OTHER_SINGLE;
         }
 
+        // Bindings manually marked as ignore-in-conflict never contribute to a CONFLICT verdict.
         for (int i = 0; i < infos.size(); i++) {
+            if (infos.get(i).conflictIgnored()) continue;
             for (int j = i + 1; j < infos.size(); j++) {
+                if (infos.get(j).conflictIgnored()) continue;
                 if (comboAware && !sameActivator(infos.get(i), infos.get(j))) continue;
-                ConflictContext ci = infos.get(i).conflictContext();
-                ConflictContext cj = infos.get(j).conflictContext();
-                if (ci != null && cj != null && ci.conflicts(cj)) return KeyStatus.CONFLICT;
+                if (contextsConflict(infos.get(i), infos.get(j))) return KeyStatus.CONFLICT;
             }
         }
         if (comboAware && hasCombo) return KeyStatus.COMBO;
+        boolean hasSelf = infos.stream().anyMatch(info -> info.self() && !info.conflictIgnored());
+        boolean hasOther = infos.stream().anyMatch(info -> !info.self() && !info.conflictIgnored());
         if (hasSelf && hasOther) return KeyStatus.CONFLICT;
-        return hasSelf ? KeyStatus.SELF : KeyStatus.OTHER_SINGLE;
+        boolean anySelf = infos.stream().anyMatch(KeyBindingInfo::self);
+        return anySelf ? KeyStatus.SELF : KeyStatus.OTHER_SINGLE;
+    }
+
+    private static boolean hasStoredCombo(KeyBindingInfo info) {
+        return KeybindComboStore.global().hasCurrentCombo(info.translationKey());
+    }
+
+    /**
+     * Relational conflict test between two same-key bindings. Resolves the live {@link KeyMapping}s
+     * and delegates to {@code Services.PLATFORM.contextsConflict} so Forge uses the authoritative
+     * native {@code IKeyConflictContext.conflicts} (custom mod contexts keep their real semantics).
+     * Falls back to the captured 4-value context approximation if either mapping cannot be resolved.
+     */
+    private static boolean contextsConflict(KeyBindingInfo a, KeyBindingInfo b) {
+        KeyMapping ma = KeybindComboStore.findMapping(a.translationKey());
+        KeyMapping mb = KeybindComboStore.findMapping(b.translationKey());
+        if (ma != null && mb != null) {
+            return Services.PLATFORM.contextsConflict(ma, mb);
+        }
+        ConflictContext ca = a.conflictContext();
+        ConflictContext cb = b.conflictContext();
+        return ca != null && cb != null && ca.conflicts(cb);
     }
 
     private static boolean sameActivator(KeyBindingInfo a, KeyBindingInfo b) {
-        return a.activatorSignature().equals(b.activatorSignature());
+        KeybindComboStore store = KeybindComboStore.global();
+        return store.activatorSignature(a.translationKey(), a.modifier())
+                .equals(store.activatorSignature(b.translationKey(), b.modifier()));
     }
 
     private static boolean matchesStatus(KeyStatus status, FilterTab tab) {
@@ -526,112 +555,143 @@ public class KeyBindingScanner {
         return modifier.displayName() + " + " + keyName;
     }
 
-    private static String categoryKey(KeyMapping mapping) {
-        return mapping.getCategory().id().toString();
-    }
-
     private static boolean isCombination(KeyBindingInfo info) {
         return info.modifier() != null && info.modifier().isCombination();
     }
 
 
-    private String resolveModId(String name, String category) {
-        String cacheKey = String.valueOf(name) + '\u001F' + String.valueOf(category);
-        return resolvedModIdCache.computeIfAbsent(cacheKey, ignored -> resolveModIdUncached(name, category));
+    /** Resolve the owning mod id for a mapping, using the same heuristics as the scan. */
+    public static String modIdOf(KeyMapping mapping) {
+        if (mapping == null) return "minecraft";
+        return resolveModId(mapping.getName(), mapping.getCategory().id().toString());
     }
 
-    private static String resolveModIdUncached(String name, String category) {
-        
-        if (name != null && name.startsWith("key.")) {
-            int start = "key.".length();
-            int end = name.indexOf('.', start);
-            if (end > start) {
-                String candidate = name.substring(start, end);
-                if (!"minecraft".equals(candidate) && Services.PLATFORM.isModLoaded(candidate)) return candidate;
-            }
-        }
-        
-        if (category != null && category.indexOf(':') > 0) {
-            String namespace = category.substring(0, category.indexOf(':'));
-            if (!"minecraft".equals(namespace) && Services.PLATFORM.isModLoaded(namespace)) return namespace;
-        }
+    private static String resolveModId(String name, String category) {
+        Set<String> loaded = loadedModIds();
 
-        if (category != null && (category.startsWith("key.categories.") || category.startsWith("key.category."))) {
-            String suffix = category.substring("key.categories.".length());
-            if (category.startsWith("key.category.")) {
-                suffix = category.substring("key.category.".length());
-            }
-            String suffixLower = suffix.toLowerCase(Locale.ROOT);
-            if (!VANILLA_CATEGORIES.contains(suffixLower)) {
-                if (Services.PLATFORM.isModLoaded(suffix))      return suffix;
-                if (Services.PLATFORM.isModLoaded(suffixLower)) return suffixLower;
-            }
-        }
-        
-        if (name != null) {
-            String found = loadedModIdFromDotted(name, false);
-            if (found != null) return found;
-        }
-        
-        if (category != null) {
-            String found = loadedModIdFromDotted(category, true);
-            if (found != null) return found;
-        }
+        // 1) Any token that IS a loaded mod id (exact). Safe even for vanilla keys and the most
+        //    reliable signal — classify strictly by real modid whenever the key names it. Skip the
+        //    built-in "minecraft" id: since 1.21.10 a vanilla category id is "minecraft:<path>" (and
+        //    tokenize splits on ':'), so it emits a literal "minecraft" token that "minecraft" is in
+        //    the loaded set; without this guard a modded key reusing a vanilla category (e.g.
+        //    KeyMapping.Category.MISC) would short-circuit to "minecraft" before the name-based
+        //    heuristics in steps 2-4 run. Vanilla keys still reach "minecraft" via the step-2 fallback.
+        for (String t : tokenize(name)) if (!"minecraft".equals(t) && loaded.contains(t)) return t;
+        for (String t : tokenize(category)) if (!"minecraft".equals(t) && loaded.contains(t)) return t;
+
+        // 2) Decide whether this even looks modded. Vanilla keys are key.<flat> / key.hotbar.N with a
+        //    vanilla category and must never be fuzzily matched to a mod (avoids false positives).
+        String ns = deriveNamespace(name);
+        String catNs = customCategoryNamespace(category);
+        boolean modded = ns != null || catNs != null || (name != null && !name.startsWith("key."));
+        if (!modded) return "minecraft";
+
+        // 3) Map a name/category token onto a real loaded mod id by prefix/substring, so e.g. an
+        //    "xaero"/"worldmap" token resolves to the actual "xaerominimap"/"xaeroworldmap" id.
+        String matched = matchLoadedModId(loaded, tokenize(name), tokenize(category));
+        if (matched != null) return matched;
+
+        // 4) No loaded id matched: fall back to a non-generic namespace so the binding still groups
+        //    under the mod (never a generic token like "gui").
+        if (ns != null && !isGenericToken(ns)) return ns;
+        if (catNs != null && !isGenericToken(catNs)) return catNs;
         return "minecraft";
     }
 
-    private String resolveModName(String modId, String categoryKey) {
-        String cacheKey = modId + '\u001F' + String.valueOf(categoryKey);
-        return resolvedModNameCache.computeIfAbsent(cacheKey, ignored -> resolveModNameUncached(modId, categoryKey));
+    private static Set<String> loadedModIds() {
+        Set<String> cached = cachedLoadedModIds;
+        if (cached == null) {
+            cached = new HashSet<>();
+            for (String id : Services.PLATFORM.getLoadedModIds()) {
+                if (id != null && !id.isBlank()) cached.add(id.toLowerCase(Locale.ROOT));
+            }
+            cachedLoadedModIds = cached;
+        }
+        return cached;
     }
 
-    private static String resolveModNameUncached(String modId, String categoryKey) {
+    private static List<String> tokenize(String s) {
+        List<String> tokens = new ArrayList<>();
+        if (s == null) return tokens;
+        // 1.21.10 category keys are ResourceLocation strings ("namespace:path"); split on ':' and '/'
+        // too so the namespace/path segments become individual tokens for mod-id matching.
+        for (String part : s.toLowerCase(Locale.ROOT).split("[._:/]")) {
+            if (!part.isEmpty()) tokens.add(part);
+        }
+        return tokens;
+    }
+
+    private static boolean isGenericToken(String t) {
+        return t == null || t.length() < 3 || GENERIC_TOKENS.contains(t);
+    }
+
+    /** Best loaded mod id matching any non-generic token by prefix/substring; longest token wins. */
+    private static String matchLoadedModId(Set<String> loaded, List<String> nameTokens, List<String> catTokens) {
+        if (loaded.isEmpty()) return null;
+        List<String> tokens = new ArrayList<>(nameTokens);
+        tokens.addAll(catTokens);
+        tokens.sort((a, b) -> b.length() - a.length()); // most specific tokens first
+        for (String t : tokens) {
+            if (t.length() < 4 || isGenericToken(t)) continue;
+            String best = null;
+            for (String mid : loaded) {
+                if ("minecraft".equals(mid)) continue;
+                if (mid.equals(t) || mid.startsWith(t) || t.startsWith(mid) || mid.contains(t)) {
+                    if (best == null || mid.length() < best.length()) best = mid;
+                }
+            }
+            if (best != null) return best;
+        }
+        return null;
+    }
+
+    /** Best-effort mod namespace from a key name known not to be a confirmed-loaded mod, or null. */
+    private static String deriveNamespace(String name) {
+        if (name == null || name.isEmpty()) return null;
+        String[] parts = name.split("\\.");
+        if (!name.startsWith("key.")) {
+            // "<modid>.keybind.<action>" style (e.g. Iris): the first segment is the namespace.
+            String t = parts[0].toLowerCase(Locale.ROOT);
+            return t.isEmpty() || "minecraft".equals(t) ? null : t;
+        }
+        if (parts.length >= 3) {
+            // "key.<modid>.<action>".
+            String t = parts[1].toLowerCase(Locale.ROOT);
+            return t.isEmpty() || "minecraft".equals(t) || VANILLA_KEY_NAMESPACES.contains(t) ? null : t;
+        }
+        if (parts.length == 2) {
+            // "key.<word>": vanilla flat keys never contain an underscore, so only a modid-prefixed
+            // word (e.g. xaero_open_settings) is treated as modded — grouped by that prefix.
+            String w = parts[1].toLowerCase(Locale.ROOT);
+            int underscore = w.indexOf('_');
+            if (underscore > 1) return w.substring(0, underscore);
+        }
+        return null;
+    }
+
+    /** The namespace of a non-vanilla category, or null for vanilla. 1.21.10 categories are
+     *  ResourceLocation strings ("namespace:path"); the namespace is the custom-category signal
+     *  (vanilla categories live under "minecraft"). */
+    private static String customCategoryNamespace(String category) {
+        if (category == null) return null;
+        int colon = category.indexOf(':');
+        if (colon <= 0) return null;
+        String ns = category.substring(0, colon).toLowerCase(Locale.ROOT);
+        return ns.isEmpty() || "minecraft".equals(ns) ? null : ns;
+    }
+
+    private static String resolveModName(String modId, String categoryKey, String categoryName) {
         if ("minecraft".equals(modId)) return "Minecraft";
         String fromPlatform = Services.PLATFORM.getModName(modId);
         if (fromPlatform != null && !fromPlatform.isBlank()) return fromPlatform;
-        if (categoryKey != null) {
-            String translated = Component.translatable(categoryKey).getString();
-            if (translated != null && !translated.equals(categoryKey) && !translated.isBlank()) return translated;
+        // Only borrow the category's display name when it is a mod's own custom category; reusing a
+        // vanilla category label (e.g. "Gameplay") would mislabel the mod. An unresolved label falls
+        // back to the raw "key.category.<ns>.<path>" lang key, so reject those.
+        if (customCategoryNamespace(categoryKey) != null
+                && categoryName != null && !categoryName.isBlank()
+                && !categoryName.startsWith("key.category")) {
+            return categoryName;
         }
         return modId;
-    }
-
-    private String actionName(String actionKey) {
-        return actionNameCache.computeIfAbsent(actionKey, key -> Component.translatable(key).getString());
-    }
-
-    private String categoryName(String categoryKey, KeyMapping mapping) {
-        return categoryNameCache.computeIfAbsent(categoryKey, ignored -> mapping.getCategory().label().getString());
-    }
-
-    private String displayName(InputConstants.Key key) {
-        return displayNameCache.computeIfAbsent(key.getName(), ignored -> key.getDisplayName().getString());
-    }
-
-    private static String searchText(String actionName, String actionKey, String categoryName, String categoryKey,
-                                     String modId, String modName, String currentKeyName) {
-        return (actionName + '\n' + actionKey + '\n' + categoryName + '\n' + categoryKey + '\n'
-                + modId + '\n' + modName + '\n' + currentKeyName).toLowerCase(Locale.ROOT);
-    }
-
-    private static String loadedModIdFromDotted(String value, boolean skipCategories) {
-        int start = 0;
-        while (start <= value.length()) {
-            int end = value.indexOf('.', start);
-            if (end < 0) end = value.length();
-            if (end > start) {
-                String part = value.substring(start, end);
-                String lower = part.toLowerCase(Locale.ROOT);
-                if (!"key".equals(lower)
-                        && !"minecraft".equals(lower)
-                        && (!skipCategories || !"categories".equals(lower))
-                        && Services.PLATFORM.isModLoaded(lower)) {
-                    return lower;
-                }
-            }
-            if (end == value.length()) break;
-            start = end + 1;
-        }
-        return null;
     }
 }

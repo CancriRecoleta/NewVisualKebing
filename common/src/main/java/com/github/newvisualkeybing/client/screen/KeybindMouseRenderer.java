@@ -4,6 +4,8 @@ import com.github.newvisualkeybing.client.keyboard.KeyBindingScanner;
 import com.github.newvisualkeybing.client.keyboard.KeybindComboStore;
 import com.github.newvisualkeybing.client.keyboard.KeyboardLayoutData;
 import com.github.newvisualkeybing.client.ui.UITheme;
+import com.github.newvisualkeybing.client.ui.UITextureSlot;
+import com.github.newvisualkeybing.client.ui.UITextureStore;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -52,9 +54,9 @@ final class KeybindMouseRenderer {
     private final float[] hoverProgress = new float[KeyboardLayoutData.MOUSE_KEYS.size()];
     private final float[] selectProgress = new float[KeyboardLayoutData.MOUSE_KEYS.size()];
     private long cachedDataVersion = Long.MIN_VALUE;
-    private long lastFrameMs;
     private long cachedComboVersion = Long.MIN_VALUE;
     private Set<Integer> cachedComboKeys = java.util.Collections.emptySet();
+    private long lastFrameMs;
 
     KeybindMouseRenderer(KeyBindingScanner scanner) {
         this.scanner = scanner;
@@ -93,33 +95,38 @@ final class KeybindMouseRenderer {
         updateBounds(bodyX, bodyY, bodyW, bodyH, mouseScale);
         refreshInputData();
 
-        int shadow = UITheme.withAlpha(0x000000, 0x40);
-        UITheme.fillRoundedRectEx(g, bodyX - 1, bodyY + 3, bodyW + 2, bodyH,
-                rTop + 1, rTop + 1, rBot + 1, rBot + 1, shadow);
+        boolean customBody = UITheme.custom() && UITextureStore.global().has(UITextureSlot.MOUSE_BODY);
+        if (customBody) {
+            UITextureStore.global().draw(UITextureSlot.MOUSE_BODY, g, bodyX, bodyY, bodyW, bodyH);
+        } else {
+            int shadow = UITheme.withAlpha(0x000000, 0x40);
+            UITheme.fillRoundedRectEx(g, bodyX - 1, bodyY + 3, bodyW + 2, bodyH,
+                    rTop + 1, rTop + 1, rBot + 1, rBot + 1, shadow);
 
-        int frameFill = UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.42f);
-        UITheme.fillRoundedRectEx(g, bodyX, bodyY, bodyW, bodyH,
-                rTop, rTop, rBot, rBot, frameFill);
+            int frameFill = UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.42f);
+            UITheme.fillRoundedRectEx(g, bodyX, bodyY, bodyW, bodyH,
+                    rTop, rTop, rBot, rBot, frameFill);
 
-        int hlH = Math.max(4, Math.round(MOUSE_TOP_AREA_H * mouseScale * 0.7f));
-        UITheme.fillRoundedRectEx(g, bodyX + 2, bodyY + 2, bodyW - 4, hlH,
-                rTop - 2, rTop - 2, 2, 2, UITheme.withAlpha(0xFFFFFF, 0x10));
+            int hlH = Math.max(4, Math.round(MOUSE_TOP_AREA_H * mouseScale * 0.7f));
+            UITheme.fillRoundedRectEx(g, bodyX + 2, bodyY + 2, bodyW - 4, hlH,
+                    rTop - 2, rTop - 2, 2, 2, UITheme.withAlpha(0xFFFFFF, 0x10));
 
-        int splitY = bodyY + Math.round(MOUSE_TOP_AREA_H * mouseScale);
-        g.fill(bodyX + 8, splitY, bodyX + bodyW - 8, splitY + 1,
-                UITheme.withAlpha(c.divider(), 0xC0));
-        g.fill(bodyX + 8, splitY + 1, bodyX + bodyW - 8, splitY + 2,
-                UITheme.withAlpha(0x000000, 0x20));
+            int splitY = bodyY + Math.round(MOUSE_TOP_AREA_H * mouseScale);
+            g.fill(bodyX + 8, splitY, bodyX + bodyW - 8, splitY + 1,
+                    UITheme.withAlpha(c.divider(), 0xC0));
+            g.fill(bodyX + 8, splitY + 1, bodyX + bodyW - 8, splitY + 2,
+                    UITheme.withAlpha(0x000000, 0x20));
 
-        int leftW = (bodyW - WHEEL_COL_W) / 2;
-        int wheelX = bodyX + leftW;
-        int wheelDepthColor = UITheme.lerpColor(frameFill, 0x000000, 0.45f);
-        UITheme.fillRoundedRectFast(g, wheelX, bodyY + 1, WHEEL_COL_W,
-                Math.round(MOUSE_TOP_AREA_H * mouseScale) - 1, 4, wheelDepthColor);
+            int leftW = (bodyW - WHEEL_COL_W) / 2;
+            int wheelX = bodyX + leftW;
+            int wheelDepthColor = UITheme.lerpColor(frameFill, 0x000000, 0.45f);
+            UITheme.fillRoundedRectFast(g, wheelX, bodyY + 1, WHEEL_COL_W,
+                    Math.round(MOUSE_TOP_AREA_H * mouseScale) - 1, 4, wheelDepthColor);
 
-        UITheme.drawRoundedBorderEx(g, bodyX, bodyY, bodyW, bodyH,
-                rTop, rTop, rBot, rBot,
-                UITheme.withAlpha(c.widgetBorder(), 0xD0));
+            UITheme.drawRoundedBorderEx(g, bodyX, bodyY, bodyW, bodyH,
+                    rTop, rTop, rBot, rBot,
+                    UITheme.withAlpha(c.widgetBorder(), 0xD0));
+        }
 
         float dt = lastFrameMs > 0 ? Math.min((nowMs - lastFrameMs) / 1000f, 0.05f) : 0.016f;
         lastFrameMs = nowMs;
@@ -178,14 +185,22 @@ final class KeybindMouseRenderer {
 
             int fill = KeybindViewerScreen.keyStatusColor(status, matched);
             if (hidden) fill = UITheme.withAlpha(c.widgetBg(), 0x24);
-            UITheme.fillRoundedRectFast(g, b.x, b.y, b.w, b.h, radius, fill);
-            renderMouseButtonSurface(g, b, radius, status, hover || selected, wheel, hidden);
-            int baseBorder = matched && !hidden ? c.widgetBorder()
-                    : UITheme.withAlpha(c.widgetBorder(), hidden ? 0x28 : 0x60);
-            int targetBorder = selectProgress[i] > hoverProgress[i]
-                    ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
-                    : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
-            UITheme.drawRoundedBorderFast(g, b.x, b.y, b.w, b.h, radius, targetBorder);
+            boolean texturedBtn = false;
+            if (UITheme.custom() && !wheel) {
+                UITextureStore store = UITextureStore.global();
+                texturedBtn = store.drawTinted(UITextureSlot.MOUSE_BUTTON, g, b.x, b.y, b.w, b.h, fill)
+                        || store.drawTinted(UITextureSlot.KEY, g, b.x, b.y, b.w, b.h, fill);
+            }
+            if (!texturedBtn) {
+                UITheme.fillRoundedRectFast(g, b.x, b.y, b.w, b.h, radius, fill);
+                renderMouseButtonSurface(g, b, radius, status, hover || selected, wheel, hidden);
+                int baseBorder = matched && !hidden ? c.widgetBorder()
+                        : UITheme.withAlpha(c.widgetBorder(), hidden ? 0x28 : 0x60);
+                int targetBorder = selectProgress[i] > hoverProgress[i]
+                        ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
+                        : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
+                UITheme.drawRoundedBorderFast(g, b.x, b.y, b.w, b.h, radius, targetBorder);
+            }
 
             if (!hidden && b.w >= 14 && b.h >= 10) {
                 int textColor = matched ? KeybindViewerScreen.labelColorForStatus(status)
@@ -209,11 +224,16 @@ final class KeybindMouseRenderer {
         return hovered;
     }
 
+    /**
+     * Combo participant keys, recomputed only when the store changes. Mirrors the keyboard
+     * renderer's caching so a frame no longer rebuilds the participant set (with its string
+     * parsing and a store-monitor acquisition) once per mouse button.
+     */
     private Set<Integer> comboParticipantKeys() {
         KeybindComboStore store = KeybindComboStore.global();
-        long version = store.version();
-        if (version != cachedComboVersion) {
-            cachedComboVersion = version;
+        long v = store.version();
+        if (v != cachedComboVersion) {
+            cachedComboVersion = v;
             cachedComboKeys = store.participantVirtualKeys();
         }
         return cachedComboKeys;
