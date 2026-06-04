@@ -16,4 +16,12 @@ public interface KeyMappingAccessor {
 
     @Accessor("clickCount")
     void newvisualkeybing$setClickCount(int clickCount);
+
+    /**
+     * Raw {@code isDown} field. Read directly to bypass the loader's {@code isDown()} accessor, which
+     * on Forge/NeoForge additionally gates on {@code getKeyModifier().isActive()} (see
+     * {@code MixinKeyMappingDispatch#newvisualkeybing$rawDown}).
+     */
+    @Accessor("isDown")
+    boolean newvisualkeybing$isDown();
 }

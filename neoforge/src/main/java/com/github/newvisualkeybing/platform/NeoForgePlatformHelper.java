@@ -21,6 +21,14 @@ public class NeoForgePlatformHelper implements IPlatformHelper {
     }
 
     @Override
+    public java.util.Set<String> getLoadedModIds() {
+        // Lambda (not IModInfo::getModId) so we don't import net.neoforged.neoforgespi.language.IModInfo.
+        return ModList.get().getMods().stream()
+                .map(info -> info.getModId())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Override
     public boolean isDevelopmentEnvironment() {
         return !FMLLoader.isProduction();
     }
@@ -43,6 +51,32 @@ public class NeoForgePlatformHelper implements IPlatformHelper {
             return ConflictContext.UNKNOWN;
         } catch (Throwable ignored) {
             return ConflictContext.UNIVERSAL;
+        }
+    }
+
+    @Override
+    public boolean isContextActive(KeyMapping mapping, com.github.newvisualkeybing.client.keyboard.SceneProbe scene) {
+        try {
+            return mapping.getKeyConflictContext().isActive();
+        } catch (Throwable ignored) {
+            return IPlatformHelper.super.isContextActive(mapping, scene);
+        }
+    }
+
+    /**
+     * Delegate the relational conflict test to NeoForge's authoritative {@code IKeyConflictContext},
+     * instead of collapsing custom contexts to {@code UNKNOWN} and approximating with the 4-value
+     * enum. NeoForge allows asymmetric {@code conflicts}, so we OR both directions (favour not missing
+     * a real conflict). Falls back to the enum approximation if the native call fails.
+     */
+    @Override
+    public boolean contextsConflict(KeyMapping a, KeyMapping b) {
+        try {
+            IKeyConflictContext ca = a.getKeyConflictContext();
+            IKeyConflictContext cb = b.getKeyConflictContext();
+            return ca.conflicts(cb) || cb.conflicts(ca);
+        } catch (Throwable ignored) {
+            return IPlatformHelper.super.contextsConflict(a, b);
         }
     }
 
