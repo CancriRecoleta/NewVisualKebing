@@ -1376,6 +1376,7 @@ public class KeybindBindBoardScreen extends FixedScaleScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         applyFixedScaleMetrics();
+        if (consumeUiScaleScroll(scrollY)) return true;
         double mx = fixedMouseX(mouseX);
         if (modDropdownOpen) {
             modDropdownScroll = Math.max(0, modDropdownScroll - (int) Math.signum(scrollY));

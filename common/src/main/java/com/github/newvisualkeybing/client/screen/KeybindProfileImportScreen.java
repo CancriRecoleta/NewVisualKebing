@@ -263,6 +263,7 @@ public class KeybindProfileImportScreen extends FixedScaleScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         applyFixedScaleMetrics();
+        if (consumeUiScaleScroll(scrollY)) return true;
         scrollOffset = Mth.clamp(scrollOffset - (int) (scrollY * ROW_H * 2), 0,
                 Math.max(0, totalListH - listHeight()));
         return true;
