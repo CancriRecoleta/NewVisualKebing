@@ -27,7 +27,7 @@ public class NewVisualKeybingFabricClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (openViewerKey.consumeClick()) {
-                client.setScreen(new KeybindViewerScreen(client.screen));
+                client.gui.setScreen(new KeybindViewerScreen(client.gui.screen()));
             }
         });
     }

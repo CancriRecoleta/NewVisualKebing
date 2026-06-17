@@ -115,17 +115,17 @@ public class KeybindEditScreen extends FixedScaleScreen {
 
         comboButton = MCButton.create(xCombo, 8, comboW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.open"),
-                b -> minecraft.setScreen(new KeybindComboManageScreen(this)));
+                b -> minecraft.gui.setScreen(new KeybindComboManageScreen(this)));
         addRenderableWidget(comboButton);
 
         viewerButton = MCButton.create(xViewer, 8, viewerW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.open_visual"),
-                b -> minecraft.setScreen(new KeybindViewerScreen(parent)));
+                b -> minecraft.gui.setScreen(new KeybindViewerScreen(parent)));
         addRenderableWidget(viewerButton);
 
         boardButton = MCButton.create(xBoard, 8, boardW, 20,
                 Component.translatable("screen.newvisualkeybing.viewer.board.open"),
-                b -> minecraft.setScreen(new KeybindBindBoardScreen(this)));
+                b -> minecraft.gui.setScreen(new KeybindBindBoardScreen(this)));
         addRenderableWidget(boardButton);
 
         resetAllButton = MCButton.create(xReset, 8, resetW, 20,
@@ -780,7 +780,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
     }
 
     @Override
-    public void onClose() { minecraft.setScreen(parent); }
+    public void onClose() { minecraft.gui.setScreen(parent); }
 
     @Override
     public boolean isPauseScreen() { return false; }

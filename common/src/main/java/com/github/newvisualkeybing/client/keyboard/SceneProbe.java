@@ -23,6 +23,6 @@ public record SceneProbe(boolean hasLevel, boolean screenOpen) {
         Minecraft mc = Minecraft.getInstance();
         if (mc == null) return EMPTY;
         boolean hasLevel = mc.level != null && mc.player != null;
-        return new SceneProbe(hasLevel, mc.screen != null);
+        return new SceneProbe(hasLevel, mc.gui.screen() != null);
     }
 }

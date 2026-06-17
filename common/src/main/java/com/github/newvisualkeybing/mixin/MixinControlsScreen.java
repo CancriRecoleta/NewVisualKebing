@@ -29,6 +29,6 @@ public abstract class MixinControlsScreen extends OptionsSubScreen {
     )
     private Button.Builder newvisualkeybing$replaceVanillaKeybindButton(Component message, Button.OnPress onPress) {
         return Button.builder(message, button ->
-                Minecraft.getInstance().setScreen(new KeybindViewerScreen((Screen) (Object) this)));
+                Minecraft.getInstance().gui.setScreen(new KeybindViewerScreen((Screen) (Object) this)));
     }
 }

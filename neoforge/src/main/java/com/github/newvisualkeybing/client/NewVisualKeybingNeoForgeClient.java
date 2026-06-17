@@ -41,7 +41,7 @@ public final class NewVisualKeybingNeoForgeClient {
         public static void onClientTick(ClientTickEvent.Post event) {
             Minecraft minecraft = Minecraft.getInstance();
             while (OPEN_VIEWER_KEY.consumeClick()) {
-                minecraft.setScreen(new KeybindViewerScreen(minecraft.screen));
+                minecraft.gui.setScreen(new KeybindViewerScreen(minecraft.gui.screen()));
             }
         }
     }

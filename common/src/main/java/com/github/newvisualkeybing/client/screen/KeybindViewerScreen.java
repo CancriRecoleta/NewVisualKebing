@@ -299,17 +299,17 @@ public class KeybindViewerScreen extends FixedScaleScreen {
 
         manageButton = MCButton.create(xManage, btnY, btnManageW, btnH,
                 Component.translatable("screen.newvisualkeybing.viewer.manage"),
-                button -> minecraft.setScreen(new KeybindEditScreen(this)));
+                button -> minecraft.gui.setScreen(new KeybindEditScreen(this)));
         addRenderableWidget(manageButton);
 
         boardButton = MCButton.create(xBoard, btnY, btnBoardW, btnH,
                 Component.translatable("screen.newvisualkeybing.viewer.board.open"),
-                button -> minecraft.setScreen(new KeybindBindBoardScreen(this)));
+                button -> minecraft.gui.setScreen(new KeybindBindBoardScreen(this)));
         addRenderableWidget(boardButton);
 
         comboButton = MCButton.create(xCombo, btnY, btnComboW, btnH,
                 Component.translatable("screen.newvisualkeybing.viewer.combo.open"),
-                button -> minecraft.setScreen(new KeybindComboManageScreen(this)));
+                button -> minecraft.gui.setScreen(new KeybindComboManageScreen(this)));
         addRenderableWidget(comboButton);
 
         profileToggleButton = MCButton.create(xProfiles, btnY, btnProfilesW, btnH,
@@ -1794,7 +1794,7 @@ static int paintPanelBase(GuiGraphicsExtractor g, net.minecraft.client.gui.Font 
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     @Override

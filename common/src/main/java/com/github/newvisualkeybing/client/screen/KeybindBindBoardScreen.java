@@ -1450,7 +1450,7 @@ public class KeybindBindBoardScreen extends FixedScaleScreen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     @Override

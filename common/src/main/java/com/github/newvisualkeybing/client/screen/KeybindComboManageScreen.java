@@ -588,7 +588,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
 
     @Override
     public void onClose() {
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     @Override

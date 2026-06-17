@@ -196,8 +196,8 @@ final class KeybindProfilePanel {
         }
         if (inside(mouseX, mouseY, x + 14 + halfW, buttonTop + (BUTTON_H + 5) * 3, halfW, BUTTON_H)) {
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-            net.minecraft.client.gui.screens.Screen current = mc.screen;
-            mc.setScreen(new KeybindProfileImportScreen(current, imported -> {
+            net.minecraft.client.gui.screens.Screen current = mc.gui.screen();
+            mc.gui.setScreen(new KeybindProfileImportScreen(current, imported -> {
                 setNameText(imported.name);
                 renaming = false;
                 rebuildEntries.run();
