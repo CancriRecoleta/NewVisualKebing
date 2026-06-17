@@ -230,7 +230,10 @@ final class KeybindQuickEditPopover {
             close();
             return true;
         }
-        return true;
+        // Browse mode only owns Escape; report other keys as unhandled so the host screen can act on
+        // them (e.g. the global Ctrl +/- /0 UI-scale shortcuts on FixedScaleScreen). Listening mode
+        // above still consumes everything while capturing a binding.
+        return false;
     }
 
     boolean mouseScrolled(double mx, double my, double delta) {

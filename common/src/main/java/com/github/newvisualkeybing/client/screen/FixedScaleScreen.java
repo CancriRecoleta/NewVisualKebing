@@ -8,11 +8,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.lwjgl.glfw.GLFW;
 
 abstract class FixedScaleScreen extends Screen {
 
-    private static final float FIXED_GUI_SCALE = 2.0f;
     private static final float MIN_RENDER_SCALE = 0.001f;
+    /** Step applied to the global UI scale per Ctrl+wheel notch or Ctrl +/- press. */
+    private static final float UI_SCALE_STEP = 0.25f;
 
     private float fixedRenderScale = 1.0f;
 
@@ -38,7 +40,8 @@ abstract class FixedScaleScreen extends Screen {
         }
 
         double vanillaScale = Math.max(1.0d, window.getGuiScale());
-        fixedRenderScale = Math.max(MIN_RENDER_SCALE, FIXED_GUI_SCALE / (float) vanillaScale);
+        float uiScale = KeybindViewerConfig.global().uiScale();
+        fixedRenderScale = Math.max(MIN_RENDER_SCALE, uiScale / (float) vanillaScale);
 
         int fixedWidth = Math.max(1, Math.round(window.getGuiScaledWidth() / fixedRenderScale));
         int fixedHeight = Math.max(1, Math.round(window.getGuiScaledHeight() / fixedRenderScale));
@@ -67,6 +70,67 @@ abstract class FixedScaleScreen extends Screen {
                 (int) Math.floor(minY * fixedRenderScale),
                 (int) Math.ceil(maxX * fixedRenderScale),
                 (int) Math.ceil(maxY * fixedRenderScale));
+    }
+
+    // ---- Global UI scale control (Ctrl + wheel, Ctrl +/-, Ctrl + 0 reset) -------------------------
+    // Subclasses each own their mouseScrolled (some never fall through to super), so they call
+    // consumeUiScaleScroll() at the very top to give Ctrl+wheel priority over panel/list scrolling.
+    // Zoom keys are handled centrally here and reached via each subclass's super.keyPressed() tail.
+
+    protected final boolean consumeUiScaleScroll(double scrollY) {
+        if (!Screen.hasControlDown() || scrollY == 0.0d) return false;
+        adjustUiScale(scrollY > 0 ? UI_SCALE_STEP : -UI_SCALE_STEP);
+        return true;
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (Screen.hasControlDown() && handleUiScaleKey(keyCode)) {
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    private boolean handleUiScaleKey(int keyCode) {
+        switch (keyCode) {
+            case GLFW.GLFW_KEY_EQUAL, GLFW.GLFW_KEY_KP_ADD -> {
+                adjustUiScale(UI_SCALE_STEP);
+                return true;
+            }
+            case GLFW.GLFW_KEY_MINUS, GLFW.GLFW_KEY_KP_SUBTRACT -> {
+                adjustUiScale(-UI_SCALE_STEP);
+                return true;
+            }
+            case GLFW.GLFW_KEY_0, GLFW.GLFW_KEY_KP_0 -> {
+                setUiScale(KeybindViewerConfig.DEFAULT_UI_SCALE);
+                return true;
+            }
+            default -> {
+                return false;
+            }
+        }
+    }
+
+    protected final void adjustUiScale(float delta) {
+        setUiScale(KeybindViewerConfig.global().uiScale() + delta);
+    }
+
+    private void setUiScale(float scale) {
+        KeybindViewerConfig config = KeybindViewerConfig.global();
+        float clamped = Math.max(KeybindViewerConfig.MIN_UI_SCALE,
+                Math.min(KeybindViewerConfig.MAX_UI_SCALE, scale));
+        if (clamped == config.uiScale()) return;
+        config.setUiScale(clamped);
+        onUiScaleChanged();
+    }
+
+    /**
+     * Re-applies the fixed-scale metrics and rebuilds child widgets so a mid-session scale change
+     * reflows every layout (header buttons, search boxes, …) at the new logical canvas size.
+     */
+    protected void onUiScaleChanged() {
+        applyFixedScaleMetrics();
+        rebuildWidgets();
     }
 
     @Override

@@ -152,6 +152,32 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     // Status-bar middle text (layout | scale) rebuilt only when the layout changes, not every frame.
     private String statusMiddleText = "";
 
+    // ---- Layout-edit mode: drag top-level panels to reposition them (offsets persisted in config) --
+    private static final String PANEL_MOUSE = "mouse";
+    private static final String PANEL_DETAIL = "detail";
+    private static final String PANEL_LEFT = "left";
+    // Keep at least this much of a dragged panel on-screen so it can never be lost off an edge.
+    private static final int PANEL_DRAG_MARGIN = 28;
+    private static final float KEYBOARD_ZOOM_STEP = 0.1f;
+    private boolean layoutEditMode;
+    private String draggingPanel;
+    private double dragGrabX;
+    private double dragGrabY;
+    private int dragBaseOffsetX;
+    private int dragBaseOffsetY;
+    // Left-rail (mod/profile) panel origin: auto-layout base plus the persisted drag offset.
+    private int leftPanelX;
+    private int leftPanelY;
+    // Pre-offset auto-layout origins, captured each relayout so drags can clamp the stored offset
+    // against the live base (keeps panels on-screen without a "drag past the edge" dead zone).
+    private int mousePanelBaseX, mousePanelBaseY;
+    private int detailPanelBaseX, detailPanelBaseY;
+    private int leftPanelBaseX, leftPanelBaseY;
+    // Status-bar interactive chips (layout-edit toggle + reset); hit rects cached during render.
+    private int editToggleX = -1, editToggleY = -1, editToggleW;
+    private int resetChipX = -1, resetChipY = -1, resetChipW;
+    private int statusChipH;
+
     public KeybindViewerScreen(Screen parent) {
         super(Component.translatable("screen.newvisualkeybing.viewer.title"));
         this.parent = parent;
@@ -406,8 +432,8 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         if (modSearchVisible) {
             renderModPanel(g, fixedMouseX, fixedMouseY);
         } else if (profileVisible) {
-            int x = BODY_PAD;
-            int y = contentTop;
+            int x = leftPanelX;
+            int y = leftPanelY;
             int h = contentBottom - contentTop;
             profilePanel.render(g, font, x, y, h, fixedMouseX, fixedMouseY);
         }
@@ -416,7 +442,8 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         renderKeyboardInfoBands(g, fixedMouseX, fixedMouseY);
         renderMousePanel(g, fixedMouseX, fixedMouseY, nowMs);
         renderDetailPanel(g, selectedVirtualKey != null ? selectedVirtualKey : hoveredVirtualKey, fixedMouseX, fixedMouseY);
-        renderStatusBar(g);
+        renderStatusBar(g, fixedMouseX, fixedMouseY);
+        renderLayoutEditOverlay(g, fixedMouseX, fixedMouseY);
 
         super.render(g, fixedMouseX, fixedMouseY, partialTick);
 
@@ -513,24 +540,91 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         return false;
     }
 
-    private void renderStatusBar(GuiGraphics g) {
+    private void renderStatusBar(GuiGraphics g, int mouseX, int mouseY) {
         var c = UITheme.colors();
         int y = height - STATUS_H;
         g.fill(0, y, width, height, c.headerBg());
         g.fill(0, y, width, y + 1, c.divider());
 
         int textY = y + (STATUS_H - font.lineHeight) / 2;
+
+        // Right-aligned interactive chips: layout-edit toggle, plus a reset chip while editing.
+        statusChipH = STATUS_H - 8;
+        int chipY = y + (STATUS_H - statusChipH) / 2;
+        int rightEdge = width - 8;
+
+        String editLabel = Component.translatable("screen.newvisualkeybing.viewer.layout_edit.toggle").getString();
+        editToggleW = font.width(editLabel) + 16;
+        editToggleX = rightEdge - editToggleW;
+        editToggleY = chipY;
+        renderStatusChip(g, editToggleX, chipY, editToggleW, statusChipH, editLabel, layoutEditMode,
+                inside(mouseX, mouseY, editToggleX, chipY, editToggleW, statusChipH));
+        int chipsLeft = editToggleX;
+
+        if (layoutEditMode) {
+            String resetLabel = Component.translatable("screen.newvisualkeybing.viewer.layout_edit.reset_chip").getString();
+            resetChipW = font.width(resetLabel) + 16;
+            resetChipX = editToggleX - 6 - resetChipW;
+            resetChipY = chipY;
+            boolean canReset = viewerConfig.hasPanelOffsets();
+            renderStatusChip(g, resetChipX, chipY, resetChipW, statusChipH, resetLabel, false,
+                    canReset && inside(mouseX, mouseY, resetChipX, chipY, resetChipW, statusChipH));
+            chipsLeft = resetChipX;
+        } else {
+            resetChipX = -1;
+        }
+
+        // Hint text sits to the left of the chips when there is room.
+        int hintW = font.width(hintLabel);
+        int hintX = chipsLeft - 8 - hintW;
+        boolean hintVisible = hintX > 10;
+        if (hintVisible) {
+            g.drawString(font, hintLabel, hintX, textY, c.textMuted(), false);
+        }
+
+        // Centered status text (layout | key px | UI scale | keyboard zoom) when it clears the sides.
         String middle = statusMiddleText;
         int middleW = font.width(middle);
         int middleX = (width - middleW) / 2;
-
-        int hintW = font.width(hintLabel);
-        int hintX = width - hintW - 10;
-        if (middleX > 10 && middleX + middleW < hintX - 8) {
+        int rightBound = hintVisible ? hintX - 8 : chipsLeft - 8;
+        if (middleX > 10 && middleX + middleW < rightBound) {
             g.drawString(font, middle, middleX, textY, c.textMuted(), false);
         }
-        if (hintX > middleX + middleW + 8) {
-            g.drawString(font, hintLabel, hintX, textY, c.textMuted(), false);
+    }
+
+    /** A small pill used for the status-bar layout-edit and reset affordances. */
+    private void renderStatusChip(GuiGraphics g, int x, int y, int w, int h,
+                                  String label, boolean active, boolean hover) {
+        var c = UITheme.colors();
+        int accent = active ? c.accent() : c.widgetBorder();
+        float blend = active ? 0.55f : hover ? 0.42f : 0.24f;
+        UITheme.fillRoundedRectFast(g, x, y, w, h, h / 3, UITheme.lerpColor(c.widgetBg(), accent, blend));
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 3,
+                UITheme.withAlpha(accent, hover || active ? 0xE0 : 0xA0));
+        g.drawString(font, label, x + (w - font.width(label)) / 2, y + (h - font.lineHeight) / 2,
+                active ? 0xFFFFFFFF : c.textSecondary(), false);
+    }
+
+    /** Highlights the draggable panels and draws grip handles while layout-edit mode is active. */
+    private void renderLayoutEditOverlay(GuiGraphics g, int mouseX, int mouseY) {
+        if (!layoutEditMode) return;
+        var c = UITheme.colors();
+        for (PanelRect rect : draggablePanelRects()) {
+            boolean active = rect.id().equals(draggingPanel);
+            boolean hover = inside(mouseX, mouseY, rect.x(), rect.y(), rect.w(), rect.h());
+            int border = active ? c.accentLight()
+                    : hover ? c.accent() : UITheme.withAlpha(c.accent(), 0xB0);
+            UITheme.drawRoundedBorder(g, rect.x() - 1, rect.y() - 1, rect.w() + 2, rect.h() + 2,
+                    PANEL_RADIUS, border);
+            int gripW = 18;
+            int gripH = 8;
+            int gx = rect.x() + (rect.w() - gripW) / 2;
+            int gy = rect.y() + 2;
+            UITheme.fillRoundedRectFast(g, gx, gy, gripW, gripH, 3, UITheme.withAlpha(c.accent(), 0xCC));
+            for (int i = 0; i < 2; i++) {
+                g.fill(gx + 4, gy + 3 + i * 2, gx + gripW - 4, gy + 4 + i * 2,
+                        UITheme.withAlpha(0xFFFFFF, 0x90));
+            }
         }
     }
 
@@ -546,8 +640,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
 
     private void renderModPanel(GuiGraphics g, int mouseX, int mouseY) {
         var c = UITheme.colors();
-        int x = BODY_PAD;
-        int y = contentTop;
+        int x = leftPanelX;
+        int y = leftPanelY;
         int w = MOD_PANEL_W;
         int h = contentBottom - contentTop;
         int contentY = paintPanelBase(g, font, x, y, w, h, modPanelTitle);
@@ -1049,16 +1143,70 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         keyboardInfoBottomY = contentBottom - infoH;
         keyboardInfoBottomH = infoH;
 
+        // Layer the user's dragged offsets on top of the responsive auto-layout. They are applied
+        // AFTER the keyboard geometry above, so moving a panel never reflows the keyboard — dragged
+        // panels simply float over the canvas. Each panel is then clamped so a grabbable strip always
+        // stays on-screen. With no offsets (the default) every panelOffset* is 0 and clampPanel() is a
+        // no-op on the in-bounds base positions, so behaviour is unchanged.
+        mousePanelBaseX = mousePanelX;
+        mousePanelBaseY = mousePanelY;
+        detailPanelBaseX = detailPanelX;
+        detailPanelBaseY = detailPanelY;
+        leftPanelBaseX = BODY_PAD;
+        leftPanelBaseY = contentTop;
+        mousePanelX += viewerConfig.panelOffsetX(PANEL_MOUSE);
+        mousePanelY += viewerConfig.panelOffsetY(PANEL_MOUSE);
+        detailPanelX += viewerConfig.panelOffsetX(PANEL_DETAIL);
+        detailPanelY += viewerConfig.panelOffsetY(PANEL_DETAIL);
+        leftPanelX = leftPanelBaseX + viewerConfig.panelOffsetX(PANEL_LEFT);
+        leftPanelY = leftPanelBaseY + viewerConfig.panelOffsetY(PANEL_LEFT);
+
+        int mouseEffH = mousePanelCollapsed ? COLLAPSED_PANEL_H : mousePanelH;
+        int detailEffH = detailPanelCollapsed ? COLLAPSED_PANEL_H : detailPanelH;
+        int[] clampedMouse = clampPanel(mousePanelX, mousePanelY, mousePanelW, mouseEffH);
+        mousePanelX = clampedMouse[0];
+        mousePanelY = clampedMouse[1];
+        int[] clampedDetail = clampPanel(detailPanelX, detailPanelY, detailPanelW, detailEffH);
+        detailPanelX = clampedDetail[0];
+        detailPanelY = clampedDetail[1];
+        int leftRailWidth = profilePanelOpen ? KeybindProfilePanel.WIDTH : MOD_PANEL_W;
+        int[] clampedLeft = clampPanel(leftPanelX, leftPanelY, leftRailWidth, contentBottom - contentTop);
+        leftPanelX = clampedLeft[0];
+        leftPanelY = clampedLeft[1];
+
         // Layout|scale string for the status bar; rebuilt only here (on layout change), not per frame.
         statusMiddleText = layoutLabel(currentStyle).getString() + "  |  "
-                + Component.translatable("screen.newvisualkeybing.viewer.scale", Math.round(keyScale)).getString();
+                + Component.translatable("screen.newvisualkeybing.viewer.scale", Math.round(keyScale)).getString()
+                + "  |  "
+                + Component.translatable("screen.newvisualkeybing.viewer.ui_scale",
+                        String.format(Locale.ROOT, "%.2f", viewerConfig.uiScale())).getString()
+                + "  |  "
+                + Component.translatable("screen.newvisualkeybing.viewer.kb_zoom",
+                        Math.round(viewerConfig.keyboardZoom() * 100)).getString();
+    }
+
+    /** Clamps a panel's top-left so at least {@link #PANEL_DRAG_MARGIN}px stays inside the canvas. */
+    private int[] clampPanel(int x, int y, int w, int h) {
+        int aX = PANEL_DRAG_MARGIN - w;
+        int bX = width - PANEL_DRAG_MARGIN;
+        int aY = HEADER_H + TOOLBAR_H;
+        int bY = height - STATUS_H - PANEL_DRAG_MARGIN;
+        // Order both axes' bounds so a tiny canvas (where the max can dip below the min) never inverts.
+        return new int[] {
+                Mth.clamp(x, Math.min(aX, bX), Math.max(aX, bX)),
+                Mth.clamp(y, Math.min(aY, bY), Math.max(aY, bY)),
+        };
     }
 
     private float fitKeyboardScale(int keyboardSpaceW, int keyboardSpaceH,
                                    float widthU, float heightU, float gapW, float gapH) {
         float widthScale = (keyboardSpaceW - gapW) / widthU;
         float heightScale = (keyboardSpaceH - gapH) / heightU;
-        float fittedScale = Math.min(FIXED_KEY_UNIT, Math.min(widthScale, heightScale));
+        // The user keyboard-zoom scales the per-key cap rather than the fitted result, so zooming in
+        // only grows the diagram until it fills the available space (never overflowing onto panels),
+        // while zooming out always shrinks it. Width/height remain the hard upper bounds.
+        float cap = FIXED_KEY_UNIT * viewerConfig.keyboardZoom();
+        float fittedScale = Math.min(cap, Math.min(widthScale, heightScale));
         return Math.max(1.0f, fittedScale);
     }
 
@@ -1235,6 +1383,16 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         mouseX = fixedMouseX(mouseX);
         mouseY = fixedMouseY(mouseY);
         if (quickEdit.isOpen()) return quickEdit.mouseClicked(mouseX, mouseY, button);
+        // Status-bar chips (layout-edit toggle + reset) stay clickable in every mode.
+        if (button == 0 && handleStatusChipClick(mouseX, mouseY)) return true;
+        // In layout-edit mode a left-drag on a panel repositions it; the keyboard/panel-content hit-tests
+        // below are skipped so clicks can't accidentally select keys or fold panels while rearranging.
+        // Header/toolbar widgets (Done, Mods, …) still receive the click via super so the user is never
+        // trapped in edit mode.
+        if (layoutEditMode) {
+            if (button == 0 && beginPanelDrag(mouseX, mouseY)) return true;
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
         // Keep exactly one text box focused: blur any whose bounds this click is outside of. The
         // container's click loop stops at the first handling child, so it cannot be relied on to
         // blur a box that sits after the clicked one in the children list. Covers the toolbar
@@ -1285,8 +1443,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
             if (handleModPanelClick(mouseX, mouseY)) return true;
         } else if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
-            int px = BODY_PAD;
-            int py = contentTop;
+            int px = leftPanelX;
+            int py = leftPanelY;
             int ph = contentBottom - contentTop;
             if (profilePanel.mouseClicked(mouseX, mouseY, px, py, ph)) return true;
         }
@@ -1356,8 +1514,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     }
 
     private boolean handleModPanelClick(double mouseX, double mouseY) {
-        int x = BODY_PAD;
-        int y = contentTop;
+        int x = leftPanelX;
+        int y = leftPanelY;
         int w = MOD_PANEL_W;
         int h = contentBottom - contentTop;
         int contentY = y + PANEL_CONTENT_TOP;
@@ -1422,7 +1580,10 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         applyFixedScaleMetrics();
-        if (quickEdit.isOpen()) return quickEdit.keyPressed(keyCode, scanCode, modifiers);
+        // Consume only when the popover actually handles the key; otherwise fall through so global
+        // shortcuts (Ctrl +/- /0 UI scale on FixedScaleScreen via super.keyPressed) still work while
+        // the popover is open in browse mode.
+        if (quickEdit.isOpen() && quickEdit.keyPressed(keyCode, scanCode, modifiers)) return true;
         if (profilePanelOpen && width >= COMPACT_WIDTH_THRESHOLD && profilePanel.keyPressed(keyCode, scanCode, modifiers)) return true;
         if (keyCode == 256) {
             // Escape clears, then blurs, whichever search box is focused.
@@ -1444,8 +1605,14 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         applyFixedScaleMetrics();
+        if (consumeUiScaleScroll(scrollY)) return true;
         mouseX = fixedMouseX(mouseX);
         mouseY = fixedMouseY(mouseY);
+        // Alt + wheel over the keyboard zooms the keyboard diagram alone (independent of the UI scale).
+        if (Screen.hasAltDown() && overKeyboard(mouseX, mouseY)) {
+            adjustKeyboardZoom(scrollY > 0 ? KEYBOARD_ZOOM_STEP : -KEYBOARD_ZOOM_STEP);
+            return true;
+        }
         if (quickEdit.isOpen()) return quickEdit.mouseScrolled(mouseX, mouseY, scrollY);
         if (!detailPanelCollapsed && selectedVirtualKey != null
                 && mouseX >= detailPanelX && mouseX <= detailPanelX + detailPanelW
@@ -1460,12 +1627,12 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             return true;
         }
         if (modPanelOpen && width >= COMPACT_WIDTH_THRESHOLD) {
-            int x = BODY_PAD;
+            int x = leftPanelX;
             if (mouseX >= x && mouseX <= x + MOD_PANEL_W) {
-                int clearY = contentTop + (contentBottom - contentTop) - PANEL_PAD - ACTION_BTN_H;
+                int clearY = leftPanelY + (contentBottom - contentTop) - PANEL_PAD - ACTION_BTN_H;
                 int hideToggleY = clearY - ACTION_BTN_H - ACTION_BTN_GAP;
                 int comboToggleY = hideToggleY - ACTION_BTN_H - ACTION_BTN_GAP;
-                int searchY = contentTop + PANEL_CONTENT_TOP + 4;
+                int searchY = leftPanelY + PANEL_CONTENT_TOP + 4;
                 int listY = searchY + 26;
                 int visibleRows = Math.max(1, (comboToggleY - ACTION_BTN_GAP - listY) / 18);
                 modScrollOffset = Mth.clamp(modScrollOffset - (int) Math.signum(scrollY), 0,
@@ -1474,6 +1641,143 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             }
         }
         return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    @Override
+    protected void onUiScaleChanged() {
+        // A scale change rebuilds the whole layout; abandon any in-progress drag so its stale base
+        // position can't be applied against the new metrics.
+        draggingPanel = null;
+        super.onUiScaleChanged();
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        applyFixedScaleMetrics();
+        if (draggingPanel != null) {
+            double fx = fixedMouseX(mouseX);
+            double fy = fixedMouseY(mouseY);
+            int rawOffsetX = dragBaseOffsetX + (int) Math.round(fx - dragGrabX);
+            int rawOffsetY = dragBaseOffsetY + (int) Math.round(fy - dragGrabY);
+            int[] base = panelBase(draggingPanel);
+            int[] size = panelSize(draggingPanel);
+            // Clamp the offset (not just the rendered position) so dragging past an edge and back has
+            // no dead zone: the stored offset can never push the panel out of the visible bounds.
+            int offsetX = clampOffsetX(base[0], rawOffsetX, size[0]);
+            int offsetY = clampOffsetY(base[1], rawOffsetY, size[1]);
+            viewerConfig.setPanelOffset(draggingPanel, offsetX, offsetY);
+            invalidateLayoutCache();
+            return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    private int clampOffsetX(int baseX, int rawOffsetX, int w) {
+        int minX = PANEL_DRAG_MARGIN - w;
+        int maxX = width - PANEL_DRAG_MARGIN;
+        return Mth.clamp(baseX + rawOffsetX, minX, maxX) - baseX;
+    }
+
+    private int clampOffsetY(int baseY, int rawOffsetY, int h) {
+        int a = HEADER_H + TOOLBAR_H;
+        int b = height - STATUS_H - PANEL_DRAG_MARGIN;
+        // On an absurdly short canvas b can fall below a; order the bounds so the clamp range never inverts.
+        return Mth.clamp(baseY + rawOffsetY, Math.min(a, b), Math.max(a, b)) - baseY;
+    }
+
+    private int[] panelBase(String id) {
+        return switch (id) {
+            case PANEL_MOUSE -> new int[] {mousePanelBaseX, mousePanelBaseY};
+            case PANEL_DETAIL -> new int[] {detailPanelBaseX, detailPanelBaseY};
+            default -> new int[] {leftPanelBaseX, leftPanelBaseY};
+        };
+    }
+
+    private int[] panelSize(String id) {
+        return switch (id) {
+            case PANEL_MOUSE -> new int[] {mousePanelW, mousePanelCollapsed ? COLLAPSED_PANEL_H : mousePanelH};
+            case PANEL_DETAIL -> new int[] {detailPanelW, detailPanelCollapsed ? COLLAPSED_PANEL_H : detailPanelH};
+            default -> new int[] {profilePanelOpen ? KeybindProfilePanel.WIDTH : MOD_PANEL_W,
+                    contentBottom - contentTop};
+        };
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (draggingPanel != null) {
+            draggingPanel = null;
+            viewerConfig.save();   // persist the final offset once the drag ends
+            return true;
+        }
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    /** Starts dragging whichever draggable panel sits under the cursor (topmost first). */
+    private boolean beginPanelDrag(double mouseX, double mouseY) {
+        for (PanelRect rect : draggablePanelRects()) {
+            if (inside(mouseX, mouseY, rect.x(), rect.y(), rect.w(), rect.h())) {
+                draggingPanel = rect.id();
+                dragGrabX = mouseX;
+                dragGrabY = mouseY;
+                dragBaseOffsetX = viewerConfig.panelOffsetX(rect.id());
+                dragBaseOffsetY = viewerConfig.panelOffsetY(rect.id());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** On-screen rects of the draggable panels, topmost (right rail) first for hit priority. */
+    private List<PanelRect> draggablePanelRects() {
+        List<PanelRect> rects = new ArrayList<>(3);
+        int mouseH = mousePanelCollapsed ? COLLAPSED_PANEL_H : mousePanelH;
+        int detailH = detailPanelCollapsed ? COLLAPSED_PANEL_H : detailPanelH;
+        rects.add(new PanelRect(PANEL_DETAIL, detailPanelX, detailPanelY, detailPanelW, detailH));
+        rects.add(new PanelRect(PANEL_MOUSE, mousePanelX, mousePanelY, mousePanelW, mouseH));
+        if ((modPanelOpen || profilePanelOpen) && width >= COMPACT_WIDTH_THRESHOLD) {
+            int leftW = profilePanelOpen ? KeybindProfilePanel.WIDTH : MOD_PANEL_W;
+            rects.add(new PanelRect(PANEL_LEFT, leftPanelX, leftPanelY, leftW, contentBottom - contentTop));
+        }
+        return rects;
+    }
+
+    private record PanelRect(String id, int x, int y, int w, int h) {}
+
+    private boolean overKeyboard(double mouseX, double mouseY) {
+        int kbW = KeyboardLayoutData.totalWidthPx(currentStyle, keyScale);
+        int kbH = KeyboardLayoutData.totalHeightPx(currentStyle, keyScale);
+        return inside(mouseX, mouseY, keyboardX, keyboardY, kbW, kbH);
+    }
+
+    private void adjustKeyboardZoom(float delta) {
+        float clamped = Mth.clamp(viewerConfig.keyboardZoom() + delta,
+                KeybindViewerConfig.MIN_KEYBOARD_ZOOM, KeybindViewerConfig.MAX_KEYBOARD_ZOOM);
+        if (clamped == viewerConfig.keyboardZoom()) return;
+        viewerConfig.setKeyboardZoom(clamped);
+        invalidateLayoutCache();
+        showNotice(Component.translatable("screen.newvisualkeybing.viewer.kb_zoom",
+                Math.round(clamped * 100)).getString());
+    }
+
+    /** Handles clicks on the status-bar layout-edit toggle and (while editing) the reset chip. */
+    private boolean handleStatusChipClick(double mouseX, double mouseY) {
+        if (editToggleX >= 0 && inside(mouseX, mouseY, editToggleX, editToggleY, editToggleW, statusChipH)) {
+            layoutEditMode = !layoutEditMode;
+            draggingPanel = null;
+            showNotice(Component.translatable(layoutEditMode
+                    ? "screen.newvisualkeybing.viewer.layout_edit.on"
+                    : "screen.newvisualkeybing.viewer.layout_edit.off").getString());
+            return true;
+        }
+        if (layoutEditMode && resetChipX >= 0
+                && inside(mouseX, mouseY, resetChipX, resetChipY, resetChipW, statusChipH)
+                && viewerConfig.hasPanelOffsets()) {
+            viewerConfig.resetPanelOffsets();
+            invalidateLayoutCache();
+            showNotice(Component.translatable("screen.newvisualkeybing.viewer.layout_edit.reset").getString());
+            return true;
+        }
+        return false;
     }
 
     static boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {

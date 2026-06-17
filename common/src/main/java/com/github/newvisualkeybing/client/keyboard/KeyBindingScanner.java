@@ -284,7 +284,10 @@ public class KeyBindingScanner {
             if (matchesStatus(getStatus(key.glfwKey()), tab)) matches.add(key.glfwKey());
         }
         for (KeyboardLayoutData.KeyDef key : KeyboardLayoutData.MOUSE_KEYS) {
-            if (matchesStatus(getMouseStatus(KeyboardLayoutData.virtualToMouseBtn(key.glfwKey())), tab)) {
+            // getVirtualStatus guards wheels (FREE) before converting to a mouse-button index, matching
+            // getVirtualBindings/getVirtualStatus elsewhere. Calling virtualToMouseBtn on a wheel
+            // virtual key yields an out-of-range button number, so go through the guarded accessor.
+            if (matchesStatus(getVirtualStatus(key.glfwKey()), tab)) {
                 matches.add(key.glfwKey());
             }
         }
@@ -338,13 +341,17 @@ public class KeyBindingScanner {
             }
         }
         for (KeyboardLayoutData.KeyDef key : KeyboardLayoutData.MOUSE_KEYS) {
-            int btn = KeyboardLayoutData.virtualToMouseBtn(key.glfwKey());
-            if (getMouseButtonLabel(btn).toLowerCase(Locale.ROOT).contains(q) || key.label().toLowerCase(Locale.ROOT).contains(q)) {
-                matches.add(key.glfwKey());
+            int virtual = key.glfwKey();
+            // Wheels have no mouse-button index; only their own label is searchable (getVirtualBindings
+            // returns empty for them). Real buttons keep the mouse-button label + their bindings.
+            boolean wheel = KeyboardLayoutData.isWheel(virtual);
+            String btnLabel = wheel ? "" : getMouseButtonLabel(KeyboardLayoutData.virtualToMouseBtn(virtual));
+            if (btnLabel.toLowerCase(Locale.ROOT).contains(q) || key.label().toLowerCase(Locale.ROOT).contains(q)) {
+                matches.add(virtual);
                 continue;
             }
-            for (KeyBindingInfo info : getMouseBindings(btn)) {
-                if (matches(info, q)) { matches.add(key.glfwKey()); break; }
+            for (KeyBindingInfo info : getVirtualBindings(virtual)) {
+                if (matches(info, q)) { matches.add(virtual); break; }
             }
         }
         cachedFilterKeysVersion = version;
@@ -371,7 +378,8 @@ public class KeyBindingScanner {
             }
         }
         for (KeyboardLayoutData.KeyDef key : KeyboardLayoutData.MOUSE_KEYS) {
-            switch (getMouseStatus(KeyboardLayoutData.virtualToMouseBtn(key.glfwKey()))) {
+            // getVirtualStatus guards wheels (never converts a wheel virtual key to a mouse button).
+            switch (getVirtualStatus(key.glfwKey())) {
                 case FREE -> free++;
                 case SELF -> self++;
                 case OTHER_SINGLE -> other++;

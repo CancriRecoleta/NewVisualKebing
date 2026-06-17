@@ -161,10 +161,18 @@ public final class UITheme {
         int skip = 0;
         while (skip < radius && insets[skip] > 0) skip++;
         g.fill(x, y + skip, x + w, y + h - skip, color);
-        for (int i = 0; i < skip; i++) {
+        // Emit one fill per RUN of equal-inset corner rows instead of one per row. The FAST path uses a
+        // binary inset profile, so consecutive rows that share an inset cover an identical x-span and
+        // merge into a single taller fill — pixel-identical output, far fewer g.fill calls (each fill is
+        // a GuiRenderState quad). Mirrors the run-merge drawCornerSpans already does for the coverage path.
+        int i = 0;
+        while (i < skip) {
             int inset = insets[i];
-            g.fill(x + inset, y + i, x + w - inset, y + i + 1, color);
-            g.fill(x + inset, y + h - 1 - i, x + w - inset, y + h - i, color);
+            int j = i + 1;
+            while (j < skip && insets[j] == inset) j++;
+            g.fill(x + inset, y + i, x + w - inset, y + j, color);
+            g.fill(x + inset, y + h - j, x + w - inset, y + h - i, color);
+            i = j;
         }
     }
 
@@ -229,12 +237,19 @@ public final class UITheme {
         g.fill(x + outerInset, y + h - 1, x + w - outerInset, y + h, color);
         g.fill(x, y + skip, x + 1, y + h - skip, color);
         g.fill(x + w - 1, y + skip, x + w, y + h - skip, color);
-        for (int i = 1; i < skip; i++) {
+        // Run-merge consecutive equal-inset corner rows into a single vertical fill per corner: the
+        // border pixel sits at the same column across those rows, so this is pixel-identical with fewer
+        // g.fill calls.
+        int i = 1;
+        while (i < skip) {
             int inset = insets[i];
-            g.fill(x + inset, y + i, x + inset + 1, y + i + 1, color);
-            g.fill(x + w - inset - 1, y + i, x + w - inset, y + i + 1, color);
-            g.fill(x + inset, y + h - 1 - i, x + inset + 1, y + h - i, color);
-            g.fill(x + w - inset - 1, y + h - 1 - i, x + w - inset, y + h - i, color);
+            int j = i + 1;
+            while (j < skip && insets[j] == inset) j++;
+            g.fill(x + inset, y + i, x + inset + 1, y + j, color);
+            g.fill(x + w - inset - 1, y + i, x + w - inset, y + j, color);
+            g.fill(x + inset, y + h - j, x + inset + 1, y + h - i, color);
+            g.fill(x + w - inset - 1, y + h - j, x + w - inset, y + h - i, color);
+            i = j;
         }
     }
 

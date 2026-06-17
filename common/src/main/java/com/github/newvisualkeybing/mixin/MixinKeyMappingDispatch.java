@@ -86,10 +86,8 @@ public class MixinKeyMappingDispatch {
             return;
         }
 
-        List<KeyMapping> activeCombos = newvisualkeybing$activeComboMappings(matches);
-        List<KeyMapping> winners = activeCombos.isEmpty()
-                ? KeybindPriorityEnforcer.resolveByPriority(singles)
-                : KeybindPriorityEnforcer.resolveCombosByPriority(activeCombos);
+        List<KeyMapping> winners =
+                newvisualkeybing$resolveWinners(newvisualkeybing$activeComboMappings(matches), singles);
         for (KeyMapping winner : winners) {
             newvisualkeybing$incrementClick(winner);
         }
@@ -234,17 +232,16 @@ public class MixinKeyMappingDispatch {
             for (KeyMapping single : singles) newvisualkeybing$applyDown(single, false, preserveToggleState);
             return;
         }
-        List<KeyMapping> activeCombos = newvisualkeybing$activeComboMappings(matches);
-        if (!activeCombos.isEmpty()) {
-            Set<KeyMapping> winners = new HashSet<>(KeybindPriorityEnforcer.resolveCombosByPriority(activeCombos));
-            for (KeybindComboStore.Match match : matches) {
-                newvisualkeybing$applyDown(match.mapping(), winners.contains(match.mapping()), preserveToggleState);
-            }
-            for (KeyMapping single : singles) newvisualkeybing$applyDown(single, false, preserveToggleState);
-        } else {
-            for (KeybindComboStore.Match match : matches) newvisualkeybing$applyDown(match.mapping(), false, preserveToggleState);
-            Set<KeyMapping> winners = new HashSet<>(KeybindPriorityEnforcer.resolveByPriority(singles));
-            for (KeyMapping single : singles) newvisualkeybing$applyDown(single, winners.contains(single), preserveToggleState);
+        // Same precedence as the click path: an active chord claims the key only if it can fire in the
+        // current scene; otherwise the trigger key's plain single bindings win (chord mappings and
+        // single mappings are disjoint, so one set's winners never overlap the other's).
+        Set<KeyMapping> winners = new HashSet<>(
+                newvisualkeybing$resolveWinners(newvisualkeybing$activeComboMappings(matches), singles));
+        for (KeybindComboStore.Match match : matches) {
+            newvisualkeybing$applyDown(match.mapping(), winners.contains(match.mapping()), preserveToggleState);
+        }
+        for (KeyMapping single : singles) {
+            newvisualkeybing$applyDown(single, winners.contains(single), preserveToggleState);
         }
     }
 
@@ -267,6 +264,24 @@ public class MixinKeyMappingDispatch {
             states[i] = newvisualkeybing$rawDown(matches.get(i).mapping());
         }
         return states;
+    }
+
+    /**
+     * Decide the firing set for a trigger key. Active chords (their modifier held) take precedence,
+     * but ONLY when at least one can actually fire in the current scene: {@code resolveCombosByPriority}
+     * scene-gates them, so if every active chord is inactive here (e.g. a GUI-only {@code Shift+Left}
+     * chord while in the in-game/movement scene) it returns empty and dispatch falls through to the
+     * key's plain single bindings — they must still trigger independently instead of being swallowed by
+     * a chord that cannot run in this scene. When the modifier is not held at all, {@code activeCombos}
+     * is empty and the single bindings win directly (unchanged behaviour).
+     */
+    private static List<KeyMapping> newvisualkeybing$resolveWinners(
+            List<KeyMapping> activeCombos, List<KeyMapping> singles) {
+        if (!activeCombos.isEmpty()) {
+            List<KeyMapping> comboWinners = KeybindPriorityEnforcer.resolveCombosByPriority(activeCombos);
+            if (!comboWinners.isEmpty()) return comboWinners;
+        }
+        return KeybindPriorityEnforcer.resolveByPriority(singles);
     }
 
     /** Mappings of every chord on this trigger whose modifier is currently held. */

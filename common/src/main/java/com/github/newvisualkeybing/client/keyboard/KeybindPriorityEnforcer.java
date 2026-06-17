@@ -110,31 +110,36 @@ public final class KeybindPriorityEnforcer {
     }
 
     /**
-     * Resolve which of {@code candidates} (all bound to the same key) should actually fire. The
-     * candidate set is narrowed in three stages, then the highest surviving priority tier fires:
+     * Resolve which of {@code candidates} (all bound to the same key) should actually fire, honouring
+     * the held modifier, the conflict-context scene, and priority tier:
      * <ol>
-     *   <li><b>Modifier gating</b> — replicate Forge's {@code KeyMappingLookup.getAll}: only the
-     *       bucket matching the currently-held modifier (Ctrl &gt; Shift &gt; Alt precedence) is
-     *       eligible, falling back to the plain (no-modifier) bucket only when no binding requires
-     *       the held modifier. This stops a bare-key press from also firing a native {@code Ctrl+G}
-     *       binding once this mixin has taken over dispatch.</li>
-     *   <li><b>Scene gating</b> — drop bindings whose conflict context cannot trigger in the current
-     *       scene, so a higher-priority binding that is inactive here never blocks a lower one that
-     *       can fire (scene-aware fall-through).</li>
-     *   <li><b>Priority tiering</b> — among what survives, only the highest priority tier fires;
-     *       equal-priority bindings in that tier all fire together.</li>
+     *   <li><b>Modifier gating</b> — replicate Forge's {@code KeyMappingLookup.getAll}: prefer the
+     *       bucket whose native key modifier matches the currently-held one (Ctrl &gt; Shift &gt; Alt
+     *       precedence). This stops a bare-key press from also firing a native {@code Ctrl+G} binding.</li>
+     *   <li><b>Scene gating + modifier fall-through</b> — scene-gate the held-modifier bucket; if NONE
+     *       of its bindings can fire in the current scene (e.g. a GUI-only {@code Shift+RMB} binding
+     *       while in-game), fall through to the plain (no-modifier) bucket so the key's plain binding
+     *       (use item, attack, sneak-place, …) still fires instead of being swallowed by a modified
+     *       binding that cannot run in this scene. Mirrors the chord→single fall-through in
+     *       {@code MixinKeyMappingDispatch}.</li>
+     *   <li><b>Priority tiering</b> — among what survives in the chosen bucket, only the highest
+     *       priority tier fires; equal-priority bindings in that tier all fire together.</li>
      * </ol>
-     * Stages 1 and 2 use a single shared {@link SceneProbe} snapshot so dispatch and display agree.
      * Returns every member of the winning tier (possibly empty).
      */
     public static List<KeyMapping> resolveByPriority(List<KeyMapping> candidates) {
         if (candidates.isEmpty()) return candidates;
-        return resolveActive(activeModifierBucket(candidates));
+        InputModifier active = currentModifier();
+        if (active != InputModifier.NONE) {
+            List<KeyMapping> modified = resolveActive(filterByModifier(candidates, active));
+            if (!modified.isEmpty()) return modified;
+        }
+        return resolveActive(filterByModifier(candidates, InputModifier.NONE));
     }
 
     /**
      * Priority resolution for chord (combo) candidates. Chords are already modifier-resolved by the
-     * mod's own first/second-key mechanism, so native {@link #activeModifierBucket modifier gating}
+     * mod's own first/second-key mechanism, so native modifier gating (see {@link #resolveByPriority})
      * is skipped (it would wrongly drop a chord whose mapping also declares a native key modifier);
      * scene gating and priority tiering still apply.
      */
@@ -163,23 +168,11 @@ public final class KeybindPriorityEnforcer {
     }
 
     /**
-     * The subset of {@code candidates} whose key modifier matches the currently-held one, mirroring
-     * Forge's {@code KeyMappingLookup.getAll}. The single active modifier follows Forge's
-     * Ctrl&gt;Shift&gt;Alt precedence (via {@link Screen#hasControlDown()} etc., which work on both
-     * loaders); when a modifier is held but no candidate requires it, dispatch falls back to the
-     * plain bucket so an unrelated held modifier never swallows a plain binding. On Fabric every
-     * mapping reports {@link InputModifier#NONE}, so this collapses to the plain bucket and is a
-     * no-op — preserving vanilla behaviour there.
+     * The subset of {@code candidates} whose native key modifier matches {@code wanted}. On Fabric
+     * every mapping reports {@link InputModifier#NONE}, so the {@code NONE} bucket holds everything and
+     * the held-modifier bucket is empty — collapsing {@link #resolveByPriority} to the plain bucket
+     * (vanilla behaviour preserved there).
      */
-    private static List<KeyMapping> activeModifierBucket(List<KeyMapping> candidates) {
-        InputModifier active = currentModifier();
-        List<KeyMapping> primary = filterByModifier(candidates, active);
-        if (active != InputModifier.NONE && primary.isEmpty()) {
-            return filterByModifier(candidates, InputModifier.NONE);
-        }
-        return primary;
-    }
-
     private static List<KeyMapping> filterByModifier(List<KeyMapping> candidates, InputModifier wanted) {
         List<KeyMapping> result = new ArrayList<>(candidates.size());
         for (KeyMapping km : candidates) {

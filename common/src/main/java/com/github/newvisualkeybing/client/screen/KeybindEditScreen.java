@@ -599,6 +599,7 @@ public class KeybindEditScreen extends FixedScaleScreen {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         applyFixedScaleMetrics();
+        if (consumeUiScaleScroll(scrollY)) return true;
         mouseX = fixedMouseX(mouseX);
         mouseY = fixedMouseY(mouseY);
         if (waitingMapping != null) {
