@@ -156,7 +156,7 @@ final class KeybindMouseRenderer {
 
             KeyBindingScanner.KeyStatus status = cachedStatuses[i];
             int bindingCount = cachedBindingCounts[i];
-            int radius = Math.max(3, Math.min(6, Math.min(b.w, b.h) / 4));
+            int radius = UITheme.radius(UITheme.Shape.XS, b.w, b.h);
 
             boolean searchMatch = matched && !hidden && isSearchMatch.test(key.glfwKey());
             if (searchMatch && hoverEase < 0.99f && selectEase < 0.99f) {

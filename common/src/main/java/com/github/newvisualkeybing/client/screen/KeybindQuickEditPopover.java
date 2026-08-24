@@ -92,7 +92,7 @@ final class KeybindQuickEditPopover {
         cardX = (screenW - cardW) / 2;
         cardY = (screenH - cardH) / 2;
 
-        UITheme.drawGlassPanel(g, cardX, cardY, cardW, cardH, 10);
+        UITheme.drawGlassPanel(g, cardX, cardY, cardW, cardH, UITheme.radius(UITheme.Shape.LG, cardW, cardH));
 
         String keyLabel = scanner.getVirtualKeyLabel(virtualKey);
         String title = titleLabel + ": " + keyLabel;
@@ -148,7 +148,8 @@ final class KeybindQuickEditPopover {
             KeyMapping km = mappings.get(i);
             int rowY = rowsTop + i * (ROW_H + ROW_GAP);
 
-            UITheme.fillRoundedRectFast(g, rowX, rowY, rowW, ROW_H, 4,
+            UITheme.fillRoundedRectFast(g, rowX, rowY, rowW, ROW_H,
+                    UITheme.radius(UITheme.Shape.SM, rowW, ROW_H),
                     UITheme.withAlpha(c.widgetBg(), 0x66));
 
             int rebindBtnX = rowX + rowW - BTN_UNBIND_W - BTN_GAP - BTN_REBIND_W;
@@ -305,9 +306,10 @@ final class KeybindQuickEditPopover {
                                       boolean hovered, int idleColor, int hoverColor) {
         var c = UITheme.colors();
         if (hovered) {
-            UITheme.fillRoundedRectFast(g, x, y, size, size, 3,
+            int iconR = UITheme.radius(UITheme.Shape.XS, size, size);
+            UITheme.fillRoundedRectFast(g, x, y, size, size, iconR,
                     UITheme.lerpColor(c.widgetBg(), hoverColor, 0.55f));
-            UITheme.drawRoundedBorderFast(g, x, y, size, size, 3, UITheme.withAlpha(hoverColor, 0xC0));
+            UITheme.drawRoundedBorderFast(g, x, y, size, size, iconR, UITheme.withAlpha(hoverColor, 0xC0));
         }
         int cx = x + size / 2;
         int cy = y + size / 2;

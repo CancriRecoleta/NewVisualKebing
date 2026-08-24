@@ -156,7 +156,8 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
 
     private void renderHeader(GuiGraphics graphics) {
         var colors = UITheme.colors();
-        UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4, 8);
+        UITheme.drawGlassPanel(graphics, 4, 4, width - 8, HEADER_H - 4,
+                UITheme.radius(UITheme.Shape.MD, width - 8, HEADER_H - 4));
 
         int searchX = 12;
         int searchW = Mth.clamp(width / 3, 180, 320);
@@ -199,8 +200,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int x = listX();
         int w = listW();
 
-        UITheme.fillRoundedRectFast(graphics, x, listTop, w, listH, 8, UITheme.withAlpha(colors.headerBg(), 0xC0));
-        UITheme.drawRoundedBorderFast(graphics, x, listTop, w, listH, 8, colors.widgetBorder());
+        int listR = UITheme.radius(UITheme.Shape.MD, w, listH);
+        UITheme.fillRoundedRectFast(graphics, x, listTop, w, listH, listR, UITheme.withAlpha(colors.headerBg(), 0xC0));
+        UITheme.drawRoundedBorderFast(graphics, x, listTop, w, listH, listR, colors.widgetBorder());
 
         if (rows.isEmpty()) {
             String empty = Component.translatable("screen.newvisualkeybing.viewer.combo.empty").getString();
@@ -239,8 +241,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int rowH = ROW_H - 3;
         int bg = hovered ? UITheme.lerpColor(colors.widgetBg(), HIGHLIGHT_COLOR, 0.10f)
                 : UITheme.withAlpha(colors.widgetBg(), 0xA0);
-        UITheme.fillRoundedRectFast(graphics, x, rowTop, w, rowH, 6, bg);
-        UITheme.drawRoundedBorderFast(graphics, x, rowTop, w, rowH, 6,
+        int rowR = UITheme.radius(UITheme.Shape.SM, w, rowH);
+        UITheme.fillRoundedRectFast(graphics, x, rowTop, w, rowH, rowR, bg);
+        UITheme.drawRoundedBorderFast(graphics, x, rowTop, w, rowH, rowR,
                 UITheme.withAlpha(HIGHLIGHT_COLOR, 0xA0));
 
         UITheme.fillRoundedRectFast(graphics, x + 3, rowTop + 3, 2, rowH - 6, 1, HIGHLIGHT_COLOR);
@@ -285,8 +288,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         boolean rcHover = hovered && mouseX >= recordX && mouseX < recordX + RECORD_BTN_W
                 && mouseY >= btnTop && mouseY < btnTop + 16;
         int rcFill = rcHover ? UITheme.lerpColor(colors.widgetBg(), HIGHLIGHT_COLOR, 0.40f) : colors.widgetBg();
-        UITheme.fillRoundedRectFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, 4, rcFill);
-        UITheme.drawRoundedBorderFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, 4,
+        int recR = UITheme.radius(UITheme.Shape.XS, RECORD_BTN_W, 16);
+        UITheme.fillRoundedRectFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, recR, rcFill);
+        UITheme.drawRoundedBorderFast(graphics, recordX, btnTop, RECORD_BTN_W, 16, recR,
                 UITheme.withAlpha(HIGHLIGHT_COLOR, 0xC0));
         String reLabel = Component.translatable("screen.newvisualkeybing.viewer.combo.rerecord").getString();
         graphics.drawString(font, reLabel,
@@ -299,8 +303,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
                 && mouseY >= btnTop && mouseY < btnTop + 16;
         int delFill = delHover ? UITheme.lerpColor(colors.widgetBg(), colors.dangerColor(), 0.50f)
                 : colors.widgetBg();
-        UITheme.fillRoundedRectFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, 4, delFill);
-        UITheme.drawRoundedBorderFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, 4,
+        int delR = UITheme.radius(UITheme.Shape.XS, DELETE_BTN_W, 16);
+        UITheme.fillRoundedRectFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, delR, delFill);
+        UITheme.drawRoundedBorderFast(graphics, deleteX, btnTop, DELETE_BTN_W, 16, delR,
                 UITheme.withAlpha(colors.dangerColor(), 0xB0));
         String del = Component.translatable("screen.newvisualkeybing.viewer.combo.delete").getString();
         graphics.drawString(font, del,
@@ -328,7 +333,7 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int bh = capture.stage == CaptureStage.SELECT_MAPPING ? Math.min(360, height - 80) : 120;
         int bx = (width - bw) / 2;
         int by = (height - bh) / 2;
-        UITheme.drawGlassPanel(graphics, bx, by, bw, bh, 10);
+        UITheme.drawGlassPanel(graphics, bx, by, bw, bh, UITheme.radius(UITheme.Shape.LG, bw, bh));
         UITheme.fillRoundedRectFast(graphics, bx + 8, by, bw - 16, 1, 1, HIGHLIGHT_COLOR);
 
         String title = capture.titleMessage();
@@ -361,9 +366,10 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int listY = by + 32;
         int listW = bw - 24;
         int listH = bh - 56;
-        UITheme.fillRoundedRectFast(graphics, listX, listY, listW, listH, 6,
+        int pickerR = UITheme.radius(UITheme.Shape.SM, listW, listH);
+        UITheme.fillRoundedRectFast(graphics, listX, listY, listW, listH, pickerR,
                 UITheme.withAlpha(colors.widgetBg(), 0xC0));
-        UITheme.drawRoundedBorderFast(graphics, listX, listY, listW, listH, 6, colors.widgetBorder());
+        UITheme.drawRoundedBorderFast(graphics, listX, listY, listW, listH, pickerR, colors.widgetBorder());
 
         List<KeyMapping> mappings = capture.filteredMappings();
         int rowH = 16;
@@ -395,8 +401,9 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int w = font.width(noticeMessage) + 24;
         int x = (width - w) / 2;
         int y = height - FOOTER_H - 26;
-        UITheme.fillRoundedRectFast(graphics, x, y, w, 20, 6, UITheme.withAlpha(colors.headerBg(), 0xE0));
-        UITheme.drawRoundedBorderFast(graphics, x, y, w, 20, 6, HIGHLIGHT_COLOR);
+        int noticeR = UITheme.radius(UITheme.Shape.SM, w, 20);
+        UITheme.fillRoundedRectFast(graphics, x, y, w, 20, noticeR, UITheme.withAlpha(colors.headerBg(), 0xE0));
+        UITheme.drawRoundedBorderFast(graphics, x, y, w, 20, noticeR, HIGHLIGHT_COLOR);
         graphics.drawString(font, noticeMessage, x + 12, y + 6, colors.textPrimary(), false);
     }
 

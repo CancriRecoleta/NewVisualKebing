@@ -153,7 +153,7 @@ final class KeybindKeyboardRenderer {
             state.y = key.screenY(keyboardY, keyScale);
             state.w = key.screenW(keyScale);
             state.h = key.screenH(keyScale);
-            state.radius = state.w >= 34 || state.h >= 34 ? 4 : 3;
+            state.radius = UITheme.radius(UITheme.Shape.XS, state.w, state.h);
             int labelMaxW = Math.max(0, state.w - 4);
             state.mainLabel = KeybindViewerScreen.fitToWidth(font, key.label(), labelMaxW);
             state.mainLabelW = font.width(state.mainLabel);
@@ -331,7 +331,7 @@ final class KeybindKeyboardRenderer {
         int y = keyboardY - pad;
         int w = kbW + pad * 2;
         int h = kbH + pad * 2;
-        int radius = 8;
+        int radius = UITheme.radius(UITheme.Shape.MD, w, h);
 
         if (UITheme.custom() && UITextureStore.global().draw(UITextureSlot.KEYBOARD_CHASSIS, g, x, y, w, h)) {
             return;
@@ -390,7 +390,8 @@ final class KeybindKeyboardRenderer {
         int chipX = x + (w - chipW) / 2;
         int chipY = y + h - font.lineHeight - 3;
         int fill = UITheme.lerpColor(c.widgetBg(), c.accent(), 0.20f);
-        UITheme.fillRoundedRectFast(g, chipX, chipY, chipW, font.lineHeight + 1, 3,
+        UITheme.fillRoundedRectFast(g, chipX, chipY, chipW, font.lineHeight + 1,
+                UITheme.radius(UITheme.Shape.XS, chipW, font.lineHeight + 1),
                 UITheme.withAlpha(fill, 0xCC));
         g.drawString(font, text, chipX + 3, chipY + 1, c.textPrimary(), false);
     }
@@ -411,7 +412,7 @@ final class KeybindKeyboardRenderer {
             int chipColor = status == KeyBindingScanner.KeyStatus.CONFLICT ? c.danger()
                     : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
                     : c.accent();
-            UITheme.fillRoundedRectFast(g, bx, by, bw, bh, bh / 2, chipColor);
+            UITheme.fillRoundedRectFast(g, bx, by, bw, bh, UITheme.pill(bw, bh), chipColor);
             g.drawString(font, s, bx + 3, by + 1, 0xFFFFFFFF, false);
         } else if (w >= 16) {
             int dotColor = status == KeyBindingScanner.KeyStatus.SELF ? c.accent()

@@ -109,9 +109,10 @@ final class KeybindTooltipRenderer {
                 KeyBindingScanner.KeyBindingInfo info = row.info();
                 int rowH = row.rowH();
                 int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
-                UITheme.fillSoftRoundedRect(g, curX, curY, innerW, rowH - 2, 6,
+                int rowR = UITheme.radius(UITheme.Shape.SM, innerW, rowH - 2);
+                UITheme.fillSoftRoundedRect(g, curX, curY, innerW, rowH - 2, rowR,
                         UITheme.withAlpha(c.widgetBg(), info.self() ? 0xB8 : 0x88));
-                UITheme.drawSoftRoundedBorder(g, curX, curY, innerW, rowH - 2, 6,
+                UITheme.drawSoftRoundedBorder(g, curX, curY, innerW, rowH - 2, rowR,
                         UITheme.withAlpha(sideColor, info.self() ? 0x70 : 0x40));
                 UITheme.fillSoftRoundedRect(g, curX + 3, curY + 4, 3, rowH - 10, 2, sideColor);
 
@@ -128,9 +129,10 @@ final class KeybindTooltipRenderer {
                         if (!row.ctxTag().isEmpty()) {
                             int tagW = row.ctxTagW() + 6;
                             int tagX = rightX - tagW - 4;
-                            UITheme.fillSoftRoundedRect(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, 4,
+                            int tagR = UITheme.radius(UITheme.Shape.XS, tagW, font.lineHeight + 2);
+                            UITheme.fillSoftRoundedRect(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, tagR,
                                     UITheme.withAlpha(c.accentAlt(), 0x28));
-                            UITheme.drawSoftRoundedBorder(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, 4,
+                            UITheme.drawSoftRoundedBorder(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, tagR,
                                     UITheme.withAlpha(c.accentAlt(), 0x70));
                             g.drawString(font, row.ctxTag(), tagX, ly, c.accentAlt(), true);
                         }
@@ -156,9 +158,10 @@ final class KeybindTooltipRenderer {
 
         if (status == KeyBindingScanner.KeyStatus.CONFLICT) {
             int warnH = font.lineHeight + 7;
-            UITheme.fillSoftRoundedRect(g, curX, curY - 2, innerW, warnH, 6,
+            int warnR = UITheme.radius(UITheme.Shape.SM, innerW, warnH);
+            UITheme.fillSoftRoundedRect(g, curX, curY - 2, innerW, warnH, warnR,
                     UITheme.withAlpha(c.dangerColor(), 0x24));
-            UITheme.drawSoftRoundedBorder(g, curX, curY - 2, innerW, warnH, 6,
+            UITheme.drawSoftRoundedBorder(g, curX, curY - 2, innerW, warnH, warnR,
                     UITheme.withAlpha(c.dangerColor(), 0x88));
             g.drawString(font, layout.conflictFit(), curX + 7, curY + 1, c.dangerColor(), true);
             curY += warnH + 3;
@@ -169,9 +172,10 @@ final class KeybindTooltipRenderer {
             int yellow = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
             for (String line : comboLines) {
                 int lineH = font.lineHeight + 6;
-                UITheme.fillSoftRoundedRect(g, curX, curY - 1, innerW, lineH, 6,
+                int lineR = UITheme.radius(UITheme.Shape.SM, innerW, lineH);
+                UITheme.fillSoftRoundedRect(g, curX, curY - 1, innerW, lineH, lineR,
                         UITheme.withAlpha(yellow, 0x20));
-                UITheme.drawSoftRoundedBorder(g, curX, curY - 1, innerW, lineH, 6,
+                UITheme.drawSoftRoundedBorder(g, curX, curY - 1, innerW, lineH, lineR,
                         UITheme.withAlpha(yellow, 0x70));
                 g.drawString(font, line, curX + 7, curY + 2, yellow, true);
                 curY += lineH + 2;
@@ -329,8 +333,9 @@ final class KeybindTooltipRenderer {
         int chipW = statusChipWidth(font, status);
         if (measureOnly) return chipW;
         int chipFill = UITheme.lerpColor(c.widgetBg(), dot, 0.22f);
-        UITheme.fillSoftRoundedRect(g, x, y, chipW, chipH, 6, UITheme.withAlpha(chipFill, 0xEA));
-        UITheme.drawSoftRoundedBorder(g, x, y, chipW, chipH, 6, UITheme.withAlpha(dot, 0xD8));
+        int pill = UITheme.pill(chipW, chipH);
+        UITheme.fillSoftRoundedRect(g, x, y, chipW, chipH, pill, UITheme.withAlpha(chipFill, 0xEA));
+        UITheme.drawSoftRoundedBorder(g, x, y, chipW, chipH, pill, UITheme.withAlpha(dot, 0xD8));
         UITheme.fillSoftRoundedRect(g, x + 4, y + (chipH - 4) / 2, 4, 4, 2, dot);
         g.drawString(font, label, x + 10, y + (chipH - font.lineHeight) / 2 + 1, textColor, true);
         return chipW;

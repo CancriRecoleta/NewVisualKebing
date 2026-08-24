@@ -12,7 +12,6 @@ public class MCButton extends AbstractWidget {
     // Vanilla widget atlas; the button sprite lives at x=0 with v=46/66/86 (disabled/normal/hover).
     private static final ResourceLocation VANILLA_WIDGETS = new ResourceLocation("textures/gui/widgets.png");
 
-    private static final int CORNER_RADIUS = 6;
     private static final float ANIM_SPEED_IN = 0.15f;
     private static final float ANIM_SPEED_OUT = 0.08f;
 
@@ -65,11 +64,6 @@ public class MCButton extends AbstractWidget {
             lastEasedHover = easedHover;
         }
 
-        if (easedPress > 0.01f) {
-            int shrink = (int) (2 * easedPress);
-            x += shrink; y += shrink; w -= shrink * 2; h -= shrink * 2;
-        }
-
         if (w <= 0 || h <= 0) {
             return;
         }
@@ -89,7 +83,7 @@ public class MCButton extends AbstractWidget {
             return;
         }
 
-        int radius = Math.min(CORNER_RADIUS, Math.max(2, Math.min(w, h) / 2));
+        int radius = UITheme.radius(UITheme.Shape.SM, w, h);
         renderSurface(graphics, x, y, w, h, radius, easedHover, easedPress);
 
         if (this.active) {
@@ -127,14 +121,16 @@ public class MCButton extends AbstractWidget {
         UITheme.fillRoundedRectEx(graphics, x, y, w, topBandH,
                 radius, radius, Math.max(1, radius - 2), Math.max(1, radius - 2), cachedBgTop);
 
+        if (this.active) {
+            UITheme.fillStateLayer(graphics, x, y, w, h, radius, 0xFFFFFF,
+                    UITheme.STATE_HOVER * easedHover + UITheme.STATE_PRESSED * easedPress);
+        }
+
         if (w > 4 && h > 4) {
-            int glossAlpha = this.active ? 0x12 + (int) (0x0A * easedHover) : 0x08;
-            int shadeAlpha = this.active ? 0x0A + (int) (0x08 * easedPress) : 0x06;
+            int glossAlpha = this.active ? 0x10 + (int) (0x08 * easedHover) : 0x08;
             int innerRadius = Math.max(1, radius - 1);
             UITheme.fillRoundedRectEx(graphics, x + 1, y + 1, w - 2, Math.min(3, topBandH),
                     innerRadius, innerRadius, 0, 0, UITheme.withAlpha(0xFFFFFF, glossAlpha));
-            UITheme.fillRoundedRectEx(graphics, x + 1, y + h - Math.min(3, h / 3) - 1, w - 2,
-                    Math.min(3, h / 3), 0, 0, innerRadius, innerRadius, UITheme.withAlpha(0x000000, shadeAlpha));
         }
 
         UITheme.drawRoundedBorderFast(graphics, x, y, w, h, radius, cachedBorderColor);
@@ -146,22 +142,22 @@ public class MCButton extends AbstractWidget {
 
     private void updateRenderCache(UITheme.ColorPalette colors, float easedHover) {
         if (!this.active) {
-            cachedBgTop = UITheme.withAlpha(UITheme.lerpColor(colors.widgetBg(), colors.panelBg(), 0.12f), 0x60);
-            cachedBgBottom = UITheme.withAlpha(colors.widgetBg(), 0x60);
+            cachedBgTop = UITheme.withAlpha(UITheme.lerpColor(colors.widgetBg(), colors.panelBg(), 0.12f), 0x61);
+            cachedBgBottom = UITheme.withAlpha(colors.widgetBg(), 0x61);
         } else {
-            int normalTop = UITheme.brighten(colors.widgetBg(), 0.05f);
-            int normalBottom = colors.widgetBg();
-            int hoverTop = UITheme.brighten(colors.accent(), 0.15f);
-            int hoverBottom = colors.accent();
+            int normalTop = UITheme.brighten(colors.surfaceContainer(), 0.06f);
+            int normalBottom = colors.surfaceContainer();
+            int hoverTop = UITheme.lerpColor(normalTop, colors.primary(), 0.22f);
+            int hoverBottom = UITheme.lerpColor(normalBottom, colors.primary(), 0.18f);
             cachedBgTop = UITheme.lerpColor(normalTop, hoverTop, easedHover);
             cachedBgBottom = UITheme.lerpColor(normalBottom, hoverBottom, easedHover);
         }
         if (!this.active) {
-            cachedBorderColor = UITheme.withAlpha(colors.widgetBorder(), 0x50);
+            cachedBorderColor = UITheme.withAlpha(colors.outlineVariant(), 0x50);
         } else {
-            int normalBorder = colors.widgetBorder();
-            int hoverBorder = UITheme.lerpColor(colors.accent(), 0xFFFFFFFF, 0.3f);
-            cachedBorderColor = UITheme.lerpColor(normalBorder, hoverBorder, easedHover * 0.7f);
+            int normalBorder = colors.outlineVariant();
+            int hoverBorder = UITheme.lerpColor(colors.primary(), 0xFFFFFFFF, 0.18f);
+            cachedBorderColor = UITheme.lerpColor(normalBorder, hoverBorder, easedHover);
         }
         int baseTextColor = this.active ? colors.textPrimary() : colors.textMuted();
         cachedTextColor = this.active

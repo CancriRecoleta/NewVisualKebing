@@ -17,6 +17,39 @@ public final class UITheme {
      */
     public enum Skin { MODERN, VANILLA, CUSTOM }
 
+    /**
+     * MD3 shape scale in GUI pixels (≈ dp). Vanilla/custom skins collapse
+     * every radius to 0 via {@link #radius(Shape)}.
+     */
+    public enum Shape {
+        NONE(0),
+        /** Extra-small — chips, badges, icon buttons, keycaps. */
+        XS(4),
+        /** Small — buttons, text fields, menus. */
+        SM(8),
+        /** Medium — cards, side panels. */
+        MD(12),
+        /** Large — dialogs, sheets. */
+        LG(16),
+        /** Extra-large — large surfaces. Capped from MD3 28 dp for MC density. */
+        XL(20);
+
+        public final int px;
+
+        Shape(int px) {
+            this.px = px;
+        }
+    }
+
+    /** MD3 hover state-layer opacity (8%). */
+    public static final float STATE_HOVER = 0.08f;
+    /** MD3 focus state-layer opacity (10%). */
+    public static final float STATE_FOCUS = 0.10f;
+    /** MD3 pressed state-layer opacity (12%). */
+    public static final float STATE_PRESSED = 0.12f;
+    /** MD3 dragged state-layer opacity (16%). */
+    public static final float STATE_DRAGGED = 0.16f;
+
     private static Mode currentMode = Mode.DARK;
     private static Skin currentSkin = Skin.MODERN;
     // Bumped whenever the palette/skin changes so per-widget colour caches can detect a live switch.
@@ -28,27 +61,20 @@ public final class UITheme {
     private static final int[][] BORDER_CORNER_SPANS = new int[(COVERAGE_RADIUS_LIMIT + 1) * 4][];
 
 
+    // Tonal dark surfaces follow MD3 container steps (lowest → highest) while
+    // keeping the existing blue primary. Avoid pure #000 — it smears on OLED
+    // and flattens elevation.
     private static final ColorPalette DARK = new ColorPalette(
-
-            0xF008090C, 0xFF111317, 0xFF1A1D22, 0xFF2A2D33, 0xFF7A7E87,
-
-            0xFF4A7BFF, 0xFF6B95FF, 0xFF9DBAFF,
-
-            0xFFF5F6F7, 0xFFC2C6CC, 0xFF7B8089,
-
+            0xF0111217, 0xFF1A1B21, 0xFF22232A, 0xFF3E4048, 0xFF8E9099,
+            0xFF4A7BFF, 0xFF6B95FF, 0xFFB4C5FF,
+            0xFFE8E6ED, 0xFFC5C6D0, 0xFF8E9099,
             0xFF3DD68C, 0xFFE5A33A, 0xFFFF5C5C,
-
-            0xFF0A0C0F, 0xFF1A1D22, 0xFF3F434A,
-
-            0x60000000,
-
-            0xFF08090C, 0xFF2A2D33, 0xFF4A7BFF,
-
+            0xFF0D0E12, 0xFF1A1B21, 0xFF3E4048,
+            0x66000000,
+            0xFF0D0E12, 0xFF2A2B33, 0xFF4A7BFF,
             0xFF3457D5, 0xFF7E5BD9,
-
             0xFF1B7A4A, 0xFFC53737,
-
-            0xE0FFFFFF, 0xFF2A2D33
+            0xE0111217, 0xFF2A2B33
     );
 
     private static final ColorPalette LIGHT = new ColorPalette(
@@ -102,6 +128,34 @@ public final class UITheme {
     public static ColorPalette colors() {
         if (currentSkin != Skin.MODERN) return VANILLA;
         return currentMode == Mode.DARK ? DARK : LIGHT;
+    }
+
+    public static int radius(Shape shape) {
+        if (shape == null || currentSkin != Skin.MODERN) return 0;
+        return shape.px;
+    }
+
+    public static int radius(Shape shape, int w, int h) {
+        int r = radius(shape);
+        if (r <= 0) return 0;
+        int cap = Math.min(Math.max(w, 0), Math.max(h, 0)) / 2;
+        return Math.min(r, cap);
+    }
+
+    public static int pill(int w, int h) {
+        if (currentSkin != Skin.MODERN) return 0;
+        return Math.max(0, Math.min(w, h) / 2);
+    }
+
+    public static int stateLayer(int onColor, float opacity) {
+        int alpha = Math.round(Math.max(0f, Math.min(1f, opacity)) * 255f);
+        return withAlpha(onColor, alpha);
+    }
+
+    public static void fillStateLayer(GuiGraphics g, int x, int y, int w, int h,
+                                      int radius, int onColor, float opacity) {
+        if (opacity <= 0.01f || w <= 0 || h <= 0) return;
+        fillRoundedRectFast(g, x, y, w, h, radius, stateLayer(onColor, opacity));
     }
 
 
@@ -552,9 +606,9 @@ public final class UITheme {
     public static void drawCardShadow(GuiGraphics g, int x, int y, int w, int h, int radius) {
         if (currentSkin != Skin.MODERN) return; // vanilla has no soft drop shadows
         var c = colors();
-        int color = withAlpha(c.shadow(), 0x40);
-        g.fill(x + 2, y + h, x + w + 2, y + h + 3, color);
-        g.fill(x + w, y + 2, x + w + 3, y + h, color);
+        // MD3 elevation 1: a downward umbra, not an L-shaped hard edge.
+        fillRoundedRectFast(g, x + 1, y + 2, w, h, radius, withAlpha(c.shadow(), 0x28));
+        fillRoundedRectFast(g, x + 2, y + 4, w, h, radius, withAlpha(c.shadow(), 0x14));
     }
 
     public static void drawGlassBackground(GuiGraphics g, int x, int y, int w, int h, int radius) {
@@ -586,9 +640,12 @@ public final class UITheme {
             g.fill(x + w - 1, y, x + w, y + h, 0xFF373737);
             return;
         }
-        drawCardShadow(g, x - 2, y - 2, w + 4, h + 4, radius + 2);
-        fillSoftRoundedRect(g, x, y, w, h, radius, c.panelBg());
-        drawSoftRoundedBorder(g, x, y, w, h, radius, c.widgetBorder());
+        int r = radius > 0 ? radius : UITheme.radius(Shape.MD, w, h);
+        drawCardShadow(g, x, y, w, h, r);
+        fillSoftRoundedRect(g, x, y, w, h, r, c.panelBg());
+        fillRoundedRectEx(g, x + 1, y + 1, w - 2, Math.max(4, h / 8),
+                Math.max(1, r - 1), Math.max(1, r - 1), 2, 2, withAlpha(0xFFFFFF, 0x0A));
+        drawSoftRoundedBorder(g, x, y, w, h, r, withAlpha(c.outlineVariant(), 0xB8));
     }
 
     public static void drawGradientButton(GuiGraphics g, int x, int y, int w, int h, int radius,
@@ -629,16 +686,18 @@ public final class UITheme {
             g.fill(x0, y1 - 1, x1, y1, bBot);                        // bottom
             return;
         }
-        for (int i = 7; i >= 1; i--) {
-            int alpha = Math.max(2, 18 - i * 2);
-            fillSoftRoundedRect(g, x - i, y - i + 2, w + i * 2, h + i * 2, 9 + i, withAlpha(c.shadow(), alpha));
+        int r = radius(Shape.SM, w, h);
+        int inner = Math.max(1, r - 1);
+        for (int i = 4; i >= 1; i--) {
+            int alpha = Math.max(2, 16 - i * 3);
+            fillSoftRoundedRect(g, x - i, y - i + 2, w + i * 2, h + i * 2, r + i, withAlpha(c.shadow(), alpha));
         }
-        fillSoftRoundedRect(g, x + 1, y + 2, w, h, 9, withAlpha(0x000000, 0x70));
-        fillSoftRoundedRect(g, x, y, w, h, 9, withAlpha(c.headerBg(), 0xEA));
+        fillSoftRoundedRect(g, x + 1, y + 2, w, h, r, withAlpha(0x000000, 0x70));
+        fillSoftRoundedRect(g, x, y, w, h, r, withAlpha(c.headerBg(), 0xEA));
         fillRoundedRectEx(g, x + 1, y + 1, w - 2, Math.max(6, h / 5),
-                8, 8, 2, 2, withAlpha(0xFFFFFF, 0x12));
-        drawSoftRoundedBorder(g, x, y, w, h, 9, withAlpha(c.widgetBorderHover(), 0xC8));
-        drawSoftRoundedBorder(g, x + 1, y + 1, w - 2, h - 2, 8, withAlpha(0xFFFFFF, 0x12));
+                inner, inner, 2, 2, withAlpha(0xFFFFFF, 0x12));
+        drawSoftRoundedBorder(g, x, y, w, h, r, withAlpha(c.outline(), 0xC8));
+        drawSoftRoundedBorder(g, x + 1, y + 1, w - 2, h - 2, inner, withAlpha(0xFFFFFF, 0x12));
         fillSoftRoundedRect(g, x + 8, y, w - 16, 2, 1, withAlpha(0xFFFFFF, 0x28));
     }
 
@@ -730,5 +789,15 @@ public final class UITheme {
         public int warning() { return warningColor; }
         public int accentAlt() { return accentLight; }
         public int dimOverlay() { return widgetBorderHover; }
+
+        public int surface() { return panelBg; }
+        public int surfaceContainerLowest() { return inputBg; }
+        public int surfaceContainerLow() { return headerBg; }
+        public int surfaceContainer() { return widgetBg; }
+        public int outline() { return widgetBorderHover; }
+        public int outlineVariant() { return widgetBorder; }
+        public int onSurface() { return textPrimary; }
+        public int onSurfaceVariant() { return textSecondary; }
+        public int primary() { return accent; }
     }
 }

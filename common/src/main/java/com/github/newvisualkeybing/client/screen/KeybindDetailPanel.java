@@ -118,9 +118,10 @@ final class KeybindDetailPanel {
         if (virtualKey == null) {
             int boxH = 54;
             int boxY = contentY + Math.max(8, (innerBottom - contentY - boxH) / 2);
-            UITheme.fillRoundedRectFast(g, innerX, boxY, innerW, boxH, 6,
+            int emptyR = UITheme.radius(UITheme.Shape.SM, innerW, boxH);
+            UITheme.fillRoundedRectFast(g, innerX, boxY, innerW, boxH, emptyR,
                     UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
-            UITheme.drawRoundedBorderFast(g, innerX, boxY, innerW, boxH, 6,
+            UITheme.drawRoundedBorderFast(g, innerX, boxY, innerW, boxH, emptyR,
                     UITheme.withAlpha(c.widgetBorder(), 0x90));
             String hint = KeybindViewerScreen.fitToWidth(font, hoverHint, innerW - 16);
             g.drawString(font, hint, innerX + 8, textY(font, boxY, boxH), c.textMuted(), false);
@@ -230,9 +231,10 @@ final class KeybindDetailPanel {
             String combination = combo.comboLabel();
             String row = action + " \u00b7 " + combination;
             int chipH = font.lineHeight + 4;
-            UITheme.fillRoundedRectFast(g, x, y, w, chipH, 4,
+            int chipR = UITheme.radius(UITheme.Shape.XS, w, chipH);
+            UITheme.fillRoundedRectFast(g, x, y, w, chipH, chipR,
                     UITheme.withAlpha(c.widgetBg(), 0xA0));
-            UITheme.drawRoundedBorderFast(g, x, y, w, chipH, 4,
+            UITheme.drawRoundedBorderFast(g, x, y, w, chipH, chipR,
                     UITheme.withAlpha(yellow, 0xB0));
             UITheme.fillRoundedRectFast(g, x, y + 2, 2, chipH - 4, 1, yellow);
             String fit = KeybindViewerScreen.fitToWidth(font, row, w - 12);
@@ -246,8 +248,9 @@ final class KeybindDetailPanel {
     private static void renderInfoBox(GuiGraphics g, Font font, int x, int y, int w, String text, int textColor) {
         var c = UITheme.colors();
         int h = font.lineHeight + 12;
-        UITheme.fillSoftRoundedRect(g, x, y, w, h, 6, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
-        UITheme.drawSoftRoundedBorder(g, x, y, w, h, 6, UITheme.withAlpha(c.widgetBorder(), 0x80));
+        int boxR = UITheme.radius(UITheme.Shape.SM, w, h);
+        UITheme.fillSoftRoundedRect(g, x, y, w, h, boxR, UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.45f));
+        UITheme.drawSoftRoundedBorder(g, x, y, w, h, boxR, UITheme.withAlpha(c.widgetBorder(), 0x80));
         String fit = KeybindViewerScreen.fitToWidth(font, text, w - 16);
         g.drawString(font, fit, x + 8, textY(font, y, h), textColor, false);
     }
@@ -269,8 +272,9 @@ final class KeybindDetailPanel {
         int chipW = font.width(label) + 16;
         if (measureOnly) return chipW;
         int chipFill = UITheme.lerpColor(c.widgetBg(), dot, 0.18f);
-        UITheme.fillSoftRoundedRect(g, x, y, chipW, chipH, chipH / 2, chipFill);
-        UITheme.drawSoftRoundedBorder(g, x, y, chipW, chipH, chipH / 2, UITheme.withAlpha(dot, 0xD0));
+        int pill = UITheme.pill(chipW, chipH);
+        UITheme.fillSoftRoundedRect(g, x, y, chipW, chipH, pill, chipFill);
+        UITheme.drawSoftRoundedBorder(g, x, y, chipW, chipH, pill, UITheme.withAlpha(dot, 0xD0));
         UITheme.fillSoftRoundedRect(g, x + 5, y + (chipH - 4) / 2, 4, 4, 2, dot);
         g.drawString(font, label, x + 11, textY(font, y, chipH), textColor, false);
         return chipW;
@@ -295,9 +299,10 @@ final class KeybindDetailPanel {
 
     private static void renderInfoChip(GuiGraphics g, Font font, UITheme.ColorPalette c,
                                        int x, int y, int w, int h, String label) {
-        UITheme.fillSoftRoundedRect(g, x, y, w, h, 5,
+        int chipR = UITheme.radius(UITheme.Shape.SM, w, h);
+        UITheme.fillSoftRoundedRect(g, x, y, w, h, chipR,
                 UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.12f));
-        UITheme.drawSoftRoundedBorder(g, x, y, w, h, 5,
+        UITheme.drawSoftRoundedBorder(g, x, y, w, h, chipR,
                 UITheme.withAlpha(c.widgetBorder(), 0x70));
         g.drawString(font, KeybindViewerScreen.fitToWidth(font, label, w - 8),
                 x + 5, textY(font, y, h), c.textMuted(), false);
@@ -474,8 +479,9 @@ final class KeybindDetailPanel {
         boolean xHovered = KeybindViewerScreen.inside(mouseX, mouseY, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W);
         int fill = xHovered ? UITheme.lerpColor(c.widgetBg(), c.danger(), 0.55f)
                             : UITheme.lerpColor(c.widgetBg(), c.danger(), rowHovered ? 0.18f : 0.10f);
-        UITheme.fillRoundedRectFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3, fill);
-        UITheme.drawRoundedBorderFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3,
+        int iconR = UITheme.radius(UITheme.Shape.XS, ROW_UNBIND_W, ROW_UNBIND_W);
+        UITheme.fillRoundedRectFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, iconR, fill);
+        UITheme.drawRoundedBorderFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, iconR,
                 UITheme.withAlpha(c.danger(), xHovered ? 0xC0 : 0x78));
         int cx = xButtonX + ROW_UNBIND_W / 2;
         int cy = xButtonY + ROW_UNBIND_W / 2;
@@ -497,13 +503,14 @@ final class KeybindDetailPanel {
         priorityHits.add(new PriorityHit(plusX, y, ROW_PRIORITY_BTN_W, h, 1, info));
         priorityHits.add(new PriorityHit(minusX, y, ROW_PRIORITY_BTN_W, h, -1, info));
 
-        UITheme.fillRoundedRectFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        int btnR = UITheme.radius(UITheme.Shape.XS, ROW_PRIORITY_BTN_W, h);
+        UITheme.fillRoundedRectFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, btnR,
                 UITheme.lerpColor(c.widgetBg(), c.accent(), plusHover ? 0.48f : 0.18f));
-        UITheme.drawRoundedBorderFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.drawRoundedBorderFast(g, plusX, y, ROW_PRIORITY_BTN_W, h, btnR,
                 UITheme.withAlpha(c.accent(), plusHover ? 0xC0 : 0x80));
-        UITheme.fillRoundedRectFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.fillRoundedRectFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, btnR,
                 UITheme.lerpColor(c.widgetBg(), c.warningColor(), minusHover ? 0.48f : 0.18f));
-        UITheme.drawRoundedBorderFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, 3,
+        UITheme.drawRoundedBorderFast(g, minusX, y, ROW_PRIORITY_BTN_W, h, btnR,
                 UITheme.withAlpha(c.warningColor(), minusHover ? 0xC0 : 0x80));
 
         int buttonTextY = textY(font, y, h);
@@ -532,8 +539,9 @@ final class KeybindDetailPanel {
         int fill = ignored
                 ? UITheme.lerpColor(c.widgetBg(), c.warningColor(), hovered ? 0.55f : 0.34f)
                 : UITheme.lerpColor(c.widgetBg(), c.accentAlt(), hovered ? 0.40f : 0.12f);
-        UITheme.fillRoundedRectFast(g, x, y, ROW_IGNORE_W, ROW_IGNORE_W, 3, fill);
-        UITheme.drawRoundedBorderFast(g, x, y, ROW_IGNORE_W, ROW_IGNORE_W, 3,
+        int iconR = UITheme.radius(UITheme.Shape.XS, ROW_IGNORE_W, ROW_IGNORE_W);
+        UITheme.fillRoundedRectFast(g, x, y, ROW_IGNORE_W, ROW_IGNORE_W, iconR, fill);
+        UITheme.drawRoundedBorderFast(g, x, y, ROW_IGNORE_W, ROW_IGNORE_W, iconR,
                 UITheme.withAlpha(accent, hovered || ignored ? 0xC8 : 0x78));
         int cx = x + ROW_IGNORE_W / 2;
         int cy = y + ROW_IGNORE_W / 2;

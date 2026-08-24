@@ -8,7 +8,6 @@ import java.util.List;
 
 public class MCPanel {
 
-    private static final int CORNER_RADIUS = 8;
     private static final int TITLE_BAR_HEIGHT = 24;
     private static final int INNER_PADDING = 12;
 
@@ -47,21 +46,17 @@ public class MCPanel {
         boolean hasTitle = title != null && !title.isEmpty();
         int effectiveH = getEffectiveHeight();
 
-        for (int i = 3; i >= 1; i--) {
-            int alpha = 6 * (4 - i);
-            UITheme.fillRoundedRect(graphics, x + i, y + i, width, effectiveH,
-                    CORNER_RADIUS, UITheme.withAlpha(colors.shadow(), alpha));
-        }
+        int radius = UITheme.radius(UITheme.Shape.MD, width, effectiveH);
+        UITheme.drawCardShadow(graphics, x, y, width, effectiveH, radius);
+        UITheme.fillRoundedRect(graphics, x, y, width, effectiveH, radius, colors.surface());
+        UITheme.fillRoundedRectEx(graphics, x, y, width, Math.max(4, TITLE_BAR_HEIGHT / 3),
+                radius, radius, 2, 2, UITheme.withAlpha(0xFFFFFFFF, 0x08));
 
-        UITheme.fillRoundedRect(graphics, x, y, width, effectiveH, CORNER_RADIUS, colors.panelBg());
-        UITheme.fillRoundedRect(graphics, x, y, width, 4, CORNER_RADIUS,
-                UITheme.withAlpha(0xFFFFFFFF, 0x08));
+        if (hasTitle) renderTitleBar(graphics, colors, mouseX, mouseY, radius);
 
-        if (hasTitle) renderTitleBar(graphics, colors, mouseX, mouseY);
-
-        int borderColor = UITheme.lerpColor(colors.widgetBorder(),
-                UITheme.withAlpha(colors.accent(), 0x40), titleHoverAnim * 0.3f);
-        UITheme.drawRoundedBorder(graphics, x, y, width, effectiveH, CORNER_RADIUS, borderColor);
+        int borderColor = UITheme.lerpColor(colors.outlineVariant(),
+                UITheme.withAlpha(colors.primary(), 0x40), titleHoverAnim * 0.3f);
+        UITheme.drawRoundedBorder(graphics, x, y, width, effectiveH, radius, borderColor);
 
         if (expandProgress > 0.01f && !entries.isEmpty()) {
             int contentY = y + (hasTitle ? TITLE_BAR_HEIGHT : 0) + INNER_PADDING;
@@ -122,19 +117,16 @@ public class MCPanel {
         }
     }
 
-    private void renderTitleBar(GuiGraphics graphics, UITheme.ColorPalette colors, int mouseX, int mouseY) {
-        UITheme.fillRoundedRect(graphics, x, y, width, TITLE_BAR_HEIGHT / 2,
-                CORNER_RADIUS, UITheme.brighten(colors.headerBg(), 0.03f));
-        UITheme.fillRoundedRect(graphics, x, y + TITLE_BAR_HEIGHT / 2 - 2, width, TITLE_BAR_HEIGHT / 2 + 2,
-                CORNER_RADIUS, colors.headerBg());
+    private void renderTitleBar(GuiGraphics graphics, UITheme.ColorPalette colors, int mouseX, int mouseY, int radius) {
+        UITheme.fillRoundedRectEx(graphics, x, y, width, TITLE_BAR_HEIGHT,
+                radius, radius, 0, 0, colors.surfaceContainerLow());
         UITheme.fillRoundedRect(graphics, x + 2, y + 1, width - 4, 2, 2,
-                UITheme.withAlpha(0xFFFFFFFF, 0x15));
+                UITheme.withAlpha(0xFFFFFFFF, 0x12));
 
         if (collapsible && titleHoverAnim > 0.01f) {
             float eased = UITheme.easeOutCubic(titleHoverAnim);
-            int overlayAlpha = (int) (25 * eased);
-            UITheme.fillRoundedRect(graphics, x, y, width, TITLE_BAR_HEIGHT,
-                    CORNER_RADIUS, UITheme.withAlpha(colors.accent(), overlayAlpha));
+            UITheme.fillStateLayer(graphics, x, y, width, TITLE_BAR_HEIGHT, radius,
+                    colors.onSurface(), UITheme.STATE_HOVER * eased);
         }
 
         int borderColor = collapsible

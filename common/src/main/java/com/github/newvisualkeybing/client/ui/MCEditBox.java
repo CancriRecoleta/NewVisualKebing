@@ -10,8 +10,7 @@ import net.minecraft.util.Mth;
 
 public class MCEditBox extends EditBox {
 
-    private static final int FRAME_RADIUS = 7;
-    private static final int INNER_PAD_X = 7;
+    private static final int INNER_PAD_X = 8;
 
     private Component placeholder;
     private boolean clearAffordance;
@@ -101,18 +100,26 @@ public class MCEditBox extends EditBox {
             return;
         }
 
-        int accent = focused ? colors.accent() : hovered ? colors.accentAlt() : colors.widgetBorder();
+        int r = UITheme.radius(UITheme.Shape.SM, w, h);
+        int accent = focused ? colors.primary() : hovered ? colors.accentAlt() : colors.outlineVariant();
         int fill = focused
-                ? UITheme.lerpColor(colors.inputBg(), colors.accent(), 0.12f)
-                : hovered ? UITheme.lerpColor(colors.inputBg(), colors.widgetBg(), 0.28f) : colors.inputBg();
+                ? UITheme.lerpColor(colors.surfaceContainerLowest(), colors.primary(), 0.08f)
+                : hovered ? UITheme.lerpColor(colors.surfaceContainerLowest(), colors.surfaceContainer(), 0.28f)
+                : colors.surfaceContainerLowest();
 
         if (focused) {
-            UITheme.drawSoftGlow(graphics, x, y, w, h, FRAME_RADIUS, colors.accent(), 0x34);
+            UITheme.drawSoftGlow(graphics, x, y, w, h, r, colors.primary(), 0x28);
         }
-        UITheme.fillSoftRoundedRect(graphics, x, y, w, h, FRAME_RADIUS, fill);
+        UITheme.fillSoftRoundedRect(graphics, x, y, w, h, r, fill);
         UITheme.fillRoundedRectEx(graphics, x + 1, y + 1, w - 2, Math.max(2, h / 3),
-                FRAME_RADIUS - 1, FRAME_RADIUS - 1, 0, 0, UITheme.withAlpha(0xFFFFFF, focused ? 0x18 : 0x0C));
-        UITheme.drawSoftRoundedBorder(graphics, x, y, w, h, FRAME_RADIUS, UITheme.withAlpha(accent, focused ? 0xF0 : 0xA0));
+                Math.max(1, r - 1), Math.max(1, r - 1), 0, 0,
+                UITheme.withAlpha(0xFFFFFF, focused ? 0x14 : 0x0A));
+        UITheme.drawSoftRoundedBorder(graphics, x, y, w, h, r,
+                UITheme.withAlpha(accent, focused ? 0xF0 : hovered ? 0xC0 : 0x90));
+        if (focused && w > 12) {
+            int barW = Math.max(8, w - 16);
+            UITheme.fillSoftRoundedRect(graphics, x + (w - barW) / 2, y + h - 2, barW, 2, 1, colors.primary());
+        }
     }
 
     private void renderText(GuiGraphics graphics) {

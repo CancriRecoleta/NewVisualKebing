@@ -380,9 +380,10 @@ public class KeybindBindBoardScreen extends FixedScaleScreen {
         var c = UITheme.colors();
         int w = PANEL_COLLAPSED_W;
         boolean hovered = KeybindViewerScreen.inside(mouseX, mouseY, x, top, w, h);
-        UITheme.fillRoundedRectFast(g, x, top, w, h, 6,
+        int railR = UITheme.radius(UITheme.Shape.SM, w, h);
+        UITheme.fillRoundedRectFast(g, x, top, w, h, railR,
                 UITheme.withAlpha(c.headerBg(), hovered ? 0xF0 : 0xDC));
-        UITheme.drawRoundedBorderFast(g, x, top, w, h, 6,
+        UITheme.drawRoundedBorderFast(g, x, top, w, h, railR,
                 UITheme.withAlpha(hovered ? c.accent() : c.widgetBorder(), 0xA0));
         int[] r = panelToggleRect();
         if (hovered) {
@@ -443,8 +444,9 @@ public class KeybindBindBoardScreen extends FixedScaleScreen {
         boolean active = selectedModId != null;
         boolean hovered = KeybindViewerScreen.inside(mouseX, mouseY, x, FILTER_Y, w, FILTER_H);
         int fill = UITheme.lerpColor(c.widgetBg(), active ? c.accent() : c.accentAlt(), hovered ? 0.40f : 0.18f);
-        UITheme.fillRoundedRectFast(g, x, FILTER_Y, w, FILTER_H, 4, fill);
-        UITheme.drawRoundedBorderFast(g, x, FILTER_Y, w, FILTER_H, 4,
+        int filterR = UITheme.radius(UITheme.Shape.SM, w, FILTER_H);
+        UITheme.fillRoundedRectFast(g, x, FILTER_Y, w, FILTER_H, filterR, fill);
+        UITheme.drawRoundedBorderFast(g, x, FILTER_Y, w, FILTER_H, filterR,
                 UITheme.withAlpha(active ? c.accent() : c.widgetBorder(), 0xB0));
         String label = Component.translatable("screen.newvisualkeybing.board.filter",
                 selectedModName()).getString();
@@ -529,8 +531,9 @@ public class KeybindBindBoardScreen extends FixedScaleScreen {
         int fill = selected ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.50f)
                 : hovered ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.30f)
                 : UITheme.withAlpha(c.widgetBg(), 0x88);
-        UITheme.fillRoundedRectFast(g, x, y, w, rowH, 5, fill);
-        UITheme.drawRoundedBorderFast(g, x, y, w, rowH, 5,
+        int rowR = UITheme.radius(UITheme.Shape.SM, w, rowH);
+        UITheme.fillRoundedRectFast(g, x, y, w, rowH, rowR, fill);
+        UITheme.drawRoundedBorderFast(g, x, y, w, rowH, rowR,
                 selected ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0x80));
         // grip dots to signal draggability
         int gx = x + 5;
@@ -870,8 +873,9 @@ public class KeybindBindBoardScreen extends FixedScaleScreen {
         int x = boardX + 2;
         int y = boardTop + 2;
         int w = boardW - 4;
-        UITheme.fillRoundedRectFast(g, x, y, w, SUMMARY_H, 5, UITheme.withAlpha(c.headerBg(), 0xC8));
-        UITheme.drawRoundedBorderFast(g, x, y, w, SUMMARY_H, 5, UITheme.withAlpha(c.widgetBorder(), 0x80));
+        int sumR = UITheme.radius(UITheme.Shape.SM, w, SUMMARY_H);
+        UITheme.fillRoundedRectFast(g, x, y, w, SUMMARY_H, sumR, UITheme.withAlpha(c.headerBg(), 0xC8));
+        UITheme.drawRoundedBorderFast(g, x, y, w, SUMMARY_H, sumR, UITheme.withAlpha(c.widgetBorder(), 0x80));
 
         String scope = switch (annotateScope) {
             case ALL -> Component.translatable("screen.newvisualkeybing.board.filter_all").getString();

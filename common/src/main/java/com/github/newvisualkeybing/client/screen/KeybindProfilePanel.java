@@ -93,7 +93,8 @@ final class KeybindProfilePanel {
             int fill = active ? UITheme.lerpColor(colors.widgetBg(), colors.accent(), 0.42f)
                     : hovered ? UITheme.withAlpha(colors.widgetBg(), 0xB0)
                     : UITheme.withAlpha(colors.widgetBg(), 0x66);
-            UITheme.fillRoundedRectFast(graphics, x + 8, rowY, WIDTH - 16, ROW_H - 2, 5, fill);
+            UITheme.fillRoundedRectFast(graphics, x + 8, rowY, WIDTH - 16, ROW_H - 2,
+                    UITheme.radius(UITheme.Shape.SM, WIDTH - 16, ROW_H - 2), fill);
             if (active) {
                 UITheme.fillRoundedRectFast(graphics, x + 10, rowY + 3, 2, ROW_H - 8, 1, colors.accent());
             }
@@ -329,9 +330,10 @@ final class KeybindProfilePanel {
 
     private void renderButton(GuiGraphics graphics, Font font, int x, int y, int w, int h, String label, int accent, boolean hovered) {
         var colors = UITheme.colors();
-        UITheme.fillRoundedRectFast(graphics, x, y, w, h, 4,
+        int btnR = UITheme.radius(UITheme.Shape.SM, w, h);
+        UITheme.fillRoundedRectFast(graphics, x, y, w, h, btnR,
                 UITheme.lerpColor(colors.widgetBg(), accent, hovered ? 0.42f : 0.24f));
-        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, 4, UITheme.withAlpha(accent, 0xA0));
+        UITheme.drawRoundedBorderFast(graphics, x, y, w, h, btnR, UITheme.withAlpha(accent, 0xA0));
         String fitted = fit(font, label, w - 8);
         graphics.drawString(font, fitted, x + (w - font.width(fitted)) / 2,
                 textY(font, y, h), colors.textPrimary(), false);

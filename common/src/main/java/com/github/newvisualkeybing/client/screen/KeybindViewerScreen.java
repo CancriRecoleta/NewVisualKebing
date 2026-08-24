@@ -42,7 +42,6 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private static final float FIXED_KEY_UNIT = 30.0f;
 
     private static final int PANEL_PAD = 12;
-    private static final int PANEL_RADIUS = 8;
     private static final int PANEL_TITLE_Y = 10;
     private static final int PANEL_CONTENT_TOP = 28;
     private static final int ACTION_BTN_H = 22;
@@ -511,8 +510,9 @@ public class KeybindViewerScreen extends FixedScaleScreen {
             int fill = active
                     ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.55f)
                     : hovered ? UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f) : c.widgetBg();
-            UITheme.fillRoundedRectFast(g, x, y, w, h, h / 2, fill);
-            UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 2,
+            int tabR = UITheme.pill(w, h);
+            UITheme.fillRoundedRectFast(g, x, y, w, h, tabR, fill);
+            UITheme.drawRoundedBorderFast(g, x, y, w, h, tabR,
                     active ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xB0));
             g.drawString(font, tabLabels[i], x + 7, y + (h - font.lineHeight) / 2,
                     active ? 0xFFFFFFFF : c.textSecondary(), false);
@@ -598,8 +598,9 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         var c = UITheme.colors();
         int accent = active ? c.accent() : c.widgetBorder();
         float blend = active ? 0.55f : hover ? 0.42f : 0.24f;
-        UITheme.fillRoundedRectFast(g, x, y, w, h, h / 3, UITheme.lerpColor(c.widgetBg(), accent, blend));
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 3,
+        int chipR = UITheme.pill(w, h);
+        UITheme.fillRoundedRectFast(g, x, y, w, h, chipR, UITheme.lerpColor(c.widgetBg(), accent, blend));
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, chipR,
                 UITheme.withAlpha(accent, hover || active ? 0xE0 : 0xA0));
         g.drawString(font, label, x + (w - font.width(label)) / 2, y + (h - font.lineHeight) / 2,
                 active ? 0xFFFFFFFF : c.textSecondary(), false);
@@ -614,13 +615,15 @@ public class KeybindViewerScreen extends FixedScaleScreen {
             boolean hover = inside(mouseX, mouseY, rect.x(), rect.y(), rect.w(), rect.h());
             int border = active ? c.accentLight()
                     : hover ? c.accent() : UITheme.withAlpha(c.accent(), 0xB0);
+            int panelR = UITheme.radius(UITheme.Shape.MD, rect.w(), rect.h());
             UITheme.drawRoundedBorder(g, rect.x() - 1, rect.y() - 1, rect.w() + 2, rect.h() + 2,
-                    PANEL_RADIUS, border);
+                    panelR, border);
             int gripW = 18;
             int gripH = 8;
             int gx = rect.x() + (rect.w() - gripW) / 2;
             int gy = rect.y() + 2;
-            UITheme.fillRoundedRectFast(g, gx, gy, gripW, gripH, 3, UITheme.withAlpha(c.accent(), 0xCC));
+            UITheme.fillRoundedRectFast(g, gx, gy, gripW, gripH,
+                    UITheme.radius(UITheme.Shape.XS, gripW, gripH), UITheme.withAlpha(c.accent(), 0xCC));
             for (int i = 0; i < 2; i++) {
                 g.fill(gx + 4, gy + 3 + i * 2, gx + gripW - 4, gy + 4 + i * 2,
                         UITheme.withAlpha(0xFFFFFF, 0x90));
@@ -630,7 +633,7 @@ public class KeybindViewerScreen extends FixedScaleScreen {
 
 static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int x, int y, int w, int h, String title) {
         var c = UITheme.colors();
-        UITheme.drawGlassPanel(g, x, y, w, h, PANEL_RADIUS);
+        UITheme.drawGlassPanel(g, x, y, w, h, UITheme.radius(UITheme.Shape.MD, w, h));
         g.drawString(font, title, x + PANEL_PAD, y + PANEL_TITLE_Y, c.textPrimary(), false);
         int divY = y + PANEL_TITLE_Y + font.lineHeight + 4;
         UITheme.fillRoundedRectFast(g, x + PANEL_PAD, divY, w - PANEL_PAD * 2, 1, 1,
@@ -674,7 +677,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             boolean hovered = inside(mouseX, mouseY, fieldX, rowY, fieldW, rowH - 1);
             int fill = selected ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.40f)
                     : hovered ? UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.18f) : c.widgetBg();
-            UITheme.fillRoundedRectFast(g, fieldX, rowY, fieldW, rowH - 1, 5, fill);
+            UITheme.fillRoundedRectFast(g, fieldX, rowY, fieldW, rowH - 1,
+                    UITheme.radius(UITheme.Shape.SM, fieldW, rowH - 1), fill);
             if (!selected && !hovered && i < mods.size() - 1
                     && i < modScrollOffset + visibleRows - 1) {
                 UITheme.fillRoundedRectFast(g, fieldX + 6, rowY + rowH - 2, fieldW - 12, 1, 1,
@@ -728,8 +732,9 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
 
     private void renderKeyboardTopBand(GuiGraphics g, int x, int y, int w, int h) {
         var c = UITheme.colors();
-        UITheme.fillRoundedRectFast(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xC4));
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x8E));
+        int bandR = UITheme.radius(UITheme.Shape.SM, w, h);
+        UITheme.fillRoundedRectFast(g, x, y, w, h, bandR, UITheme.withAlpha(c.headerBg(), 0xC4));
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, bandR, UITheme.withAlpha(c.widgetBorder(), 0x8E));
         int textY = y + (h - font.lineHeight) / 2;
         if (selectedModId == null) {
             // No mod selected: use the band as a persistent color legend so the key colors are
@@ -774,8 +779,9 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         for (int i = 0; i < legendLabels.length; i++) {
             int itemW = sw + gap + legendLabelWidths[i];
             if (cx + itemW > right) break;
-            UITheme.fillRoundedRectFast(g, cx, swatchY, sw, sw, 2, cols[i]);
-            UITheme.drawRoundedBorderFast(g, cx, swatchY, sw, sw, 2, UITheme.withAlpha(c.widgetBorder(), 0xC0));
+            int swR = UITheme.radius(UITheme.Shape.XS, sw, sw);
+            UITheme.fillRoundedRectFast(g, cx, swatchY, sw, sw, swR, cols[i]);
+            UITheme.drawRoundedBorderFast(g, cx, swatchY, sw, sw, swR, UITheme.withAlpha(c.widgetBorder(), 0xC0));
             g.drawString(font, legendLabels[i], cx + sw + gap, cy, c.textSecondary(), false);
             cx += itemW + itemGap;
         }
@@ -783,8 +789,9 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
 
     private void renderKeyboardBottomBand(GuiGraphics g, int x, int y, int w, int h, Integer virtualKey) {
         var c = UITheme.colors();
-        UITheme.fillRoundedRectFast(g, x, y, w, h, 7, UITheme.withAlpha(c.headerBg(), 0xB8));
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, 7, UITheme.withAlpha(c.widgetBorder(), 0x78));
+        int bandR = UITheme.radius(UITheme.Shape.SM, w, h);
+        UITheme.fillRoundedRectFast(g, x, y, w, h, bandR, UITheme.withAlpha(c.headerBg(), 0xB8));
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, bandR, UITheme.withAlpha(c.widgetBorder(), 0x78));
         int textY = y + (h - font.lineHeight) / 2;
         if (virtualKey == null) {
             g.drawString(font, fitToWidth(font, bandHoverHint, w - 18), x + 9, textY, c.textMuted(), false);
@@ -793,7 +800,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         List<KeyBindingScanner.KeyBindingInfo> bindings = scanner.getVirtualBindings(virtualKey);
         String keyLabel = scanner.getVirtualKeyLabel(virtualKey);
         int labelW = Math.min(font.width(keyLabel) + 16, Math.max(46, w / 5));
-        UITheme.fillRoundedRectFast(g, x + 7, y + 4, labelW, h - 8, 5,
+        int chipR = UITheme.radius(UITheme.Shape.SM, labelW, h - 8);
+        UITheme.fillRoundedRectFast(g, x + 7, y + 4, labelW, h - 8, chipR,
                 UITheme.lerpColor(c.widgetBg(), statusAccentColor(scanner.getVirtualStatus(virtualKey)), 0.18f));
         g.drawString(font, fitToWidth(font, keyLabel, labelW - 8), x + 11, textY, c.textPrimary(), false);
         int curX = x + labelW + 14;
@@ -806,7 +814,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         for (int i = 0; i < max && curX < right - 20; i++) {
             KeyBindingScanner.KeyBindingInfo info = bindings.get(i);
             int chunkW = Math.min(Math.max(78, w / 4), right - curX);
-            UITheme.fillRoundedRectFast(g, curX, y + 4, chunkW, h - 8, 5, UITheme.withAlpha(c.widgetBg(), 0x90));
+            UITheme.fillRoundedRectFast(g, curX, y + 4, chunkW, h - 8,
+                    UITheme.radius(UITheme.Shape.SM, chunkW, h - 8), UITheme.withAlpha(c.widgetBg(), 0x90));
             String text = info.modName() + " / " + info.actionName();
             g.drawString(font, fitToWidth(font, text, chunkW - 10), curX + 5, textY, c.textSecondary(), false);
             curX += chunkW + 5;
@@ -880,7 +889,8 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
     private void renderCollapsedPanel(GuiGraphics g, int x, int y, int w, String title,
                                       int mouseX, int mouseY, boolean isMouse) {
         var c = UITheme.colors();
-        UITheme.drawGlassPanel(g, x, y, w, COLLAPSED_PANEL_H, PANEL_RADIUS);
+        UITheme.drawGlassPanel(g, x, y, w, COLLAPSED_PANEL_H,
+                UITheme.radius(UITheme.Shape.MD, w, COLLAPSED_PANEL_H));
         g.drawString(font, fitToWidth(font, title, w - PANEL_PAD * 2 - PANEL_TOGGLE_SIZE - 4),
                 x + PANEL_PAD, y + (COLLAPSED_PANEL_H - font.lineHeight) / 2, c.textPrimary(), false);
         drawPanelToggle(g, x, y, w, COLLAPSED_PANEL_H, mouseX, mouseY, isMouse, true);
@@ -902,8 +912,9 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         boolean hover = inside(mouseX, mouseY, tx, ty, size, size);
         int fill = hover ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.45f)
                 : UITheme.withAlpha(c.widgetBg(), 0xB0);
-        UITheme.fillRoundedRectFast(g, tx, ty, size, size, 3, fill);
-        UITheme.drawRoundedBorderFast(g, tx, ty, size, size, 3,
+        int toggleR = UITheme.radius(UITheme.Shape.XS, size, size);
+        UITheme.fillRoundedRectFast(g, tx, ty, size, size, toggleR, fill);
+        UITheme.drawRoundedBorderFast(g, tx, ty, size, size, toggleR,
                 UITheme.withAlpha(c.widgetBorder(), hover ? 0xC0 : 0x80));
         drawChevron(g, tx + size / 2, ty + size / 2, collapsed, hover ? 0xFFFFFFFF : c.textSecondary());
     }
@@ -936,9 +947,11 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         var c = UITheme.colors();
         String fitted = fitToWidth(font, label, w - 10);
         int fill = UITheme.lerpColor(c.widgetBg(), accent, hovered ? 0.50f : 0.26f);
-        UITheme.fillRoundedRectFast(g, x, y, w, h, h / 3, fill);
-        UITheme.drawRoundedBorderFast(g, x, y, w, h, h / 3, UITheme.withAlpha(accent, 0xC0));
-        UITheme.fillRoundedRectFast(g, x + 1, y + 1, w - 2, 1, h / 3, UITheme.withAlpha(0xFFFFFF, hovered ? 0x18 : 0x10));
+        int btnR = UITheme.radius(UITheme.Shape.SM, w, h);
+        UITheme.fillRoundedRectFast(g, x, y, w, h, btnR, fill);
+        UITheme.drawRoundedBorderFast(g, x, y, w, h, btnR, UITheme.withAlpha(accent, 0xC0));
+        UITheme.fillRoundedRectFast(g, x + 1, y + 1, w - 2, 1, Math.max(1, btnR - 1),
+                UITheme.withAlpha(0xFFFFFF, hovered ? 0x18 : 0x10));
         g.drawString(font, fitted,
                 x + (w - font.width(fitted)) / 2,
                 y + (h - font.lineHeight) / 2,
@@ -971,9 +984,10 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
         int boxX = (width - boxW) / 2;
         int boxY = height - STATUS_H - boxH - 8;
 
-        UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, boxH, 8, bgColor);
-        UITheme.drawRoundedBorderFast(g, boxX, boxY, boxW, boxH, 8, accent);
-        UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, 2, 2, accent);
+        int noticeR = UITheme.radius(UITheme.Shape.SM, boxW, boxH);
+        UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, boxH, noticeR, bgColor);
+        UITheme.drawRoundedBorderFast(g, boxX, boxY, boxW, boxH, noticeR, accent);
+        UITheme.fillRoundedRectFast(g, boxX, boxY, boxW, 2, 1, accent);
         g.drawString(font, noticeMsg, boxX + padX, boxY + padY, textColor, false);
     }
 
