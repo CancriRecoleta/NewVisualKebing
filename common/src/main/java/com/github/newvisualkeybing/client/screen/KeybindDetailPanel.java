@@ -416,87 +416,193 @@ final class KeybindDetailPanel {
         return count;
     }
 
-    
+
     private void renderBindingRow(GuiGraphics g, Font font, int x, int y, int w, int rowH,
                                   KeyBindingScanner.KeyBindingInfo info, boolean showPriority,
                                   int mouseX, int mouseY) {
         var c = UITheme.colors();
+
         int reservedRight = ROW_UNBIND_W + ROW_UNBIND_GAP + ROW_IGNORE_W + ROW_IGNORE_GAP
                 + (showPriority ? ROW_PRIORITY_W + ROW_PRIORITY_GAP : 0);
+
         int textW = w - reservedRight;
+
         boolean rowHovered = KeybindViewerScreen.inside(mouseX, mouseY, x, y, w, rowH);
         boolean ignored = info.conflictIgnored();
 
         if (info.self()) {
-            UITheme.fillSoftRoundedRect(g, x, y, textW, rowH, 5,
-                    UITheme.lerpColor(c.widgetBg(), c.accent(), 0.10f));
+            UITheme.fillSoftRoundedRect(
+                    g, x, y, textW, rowH, 5,
+                    UITheme.lerpColor(c.widgetBg(), c.accent(), 0.10f)
+            );
         }
-        int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
+
+        int sideColor = info.self()
+                ? c.accent()
+                : UITheme.withAlpha(c.widgetBorder(), 0xC0);
+
         UITheme.fillSoftRoundedRect(g, x, y + 2, 2, rowH - 4, 1, sideColor);
 
-        int actionColor = ignored ? c.textMuted() : (info.self() ? c.accent() : c.textPrimary());
+        int actionColor = ignored
+                ? c.textMuted()
+                : (info.self() ? c.accent() : c.textPrimary());
+
         String ctxTag = bindingTag(info);
         String modText = info.modName();
 
         int ctxW = ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 6;
         int modMaxW = Math.max(32, Math.min(textW / 3, textW - 44 - ctxW));
+
         String modFit = KeybindViewerScreen.fitToWidth(font, modText, modMaxW);
         int modW = font.width(modFit);
+
         int rightBlockW = modW + ctxW;
         int actionMaxW = Math.max(24, textW - 8 - rightBlockW - 4);
-        String actionText = KeybindViewerScreen.fitToWidth(font, info.actionName(), actionMaxW);
+
+        String actionText = KeybindViewerScreen.fitToWidth(
+                font,
+                info.actionName(),
+                actionMaxW
+        );
+
         int rowTextY = textY(font, y, rowH);
+
         g.drawString(font, actionText, x + 6, rowTextY, actionColor, false);
+
         if (ignored) {
             int strikeY = rowTextY + font.lineHeight / 2;
-            g.fill(x + 6, strikeY, x + 6 + font.width(actionText), strikeY + 1, c.textMuted());
+            g.fill(
+                    x + 6,
+                    strikeY,
+                    x + 6 + font.width(actionText),
+                    strikeY + 1,
+                    c.textMuted()
+            );
         }
+
         int rightX = x + textW - modW;
         g.drawString(font, modFit, rightX, rowTextY, c.textMuted(), false);
+
         if (!ctxTag.isEmpty()) {
             int tagX = rightX - font.width(ctxTag) - 6;
             int tagBgW = font.width(ctxTag) + 4;
             int tagBgH = font.lineHeight + 1;
-            UITheme.fillSoftRoundedRect(g, tagX - 2, rowTextY - 1, tagBgW, tagBgH, 4,
-                    UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f));
+
+            UITheme.fillSoftRoundedRect(
+                    g,
+                    tagX - 2,
+                    rowTextY - 1,
+                    tagBgW,
+                    tagBgH,
+                    4,
+                    UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.20f)
+            );
+
             g.drawString(font, ctxTag, tagX, rowTextY, c.accentAlt(), false);
         }
 
         int xButtonX = x + w - ROW_UNBIND_W;
         int xButtonY = y + (rowH - ROW_UNBIND_W) / 2;
+
         int ignoreX = xButtonX - ROW_IGNORE_GAP - ROW_IGNORE_W;
-        renderIgnoreToggle(g, font, ignoreX, xButtonY, ignored, info, mouseX, mouseY);
+
+        renderIgnoreToggle(
+                g,
+                font,
+                ignoreX,
+                xButtonY,
+                ignored,
+                info,
+                mouseX,
+                mouseY
+        );
+
         if (showPriority) {
             int priorityX = ignoreX - ROW_PRIORITY_GAP - ROW_PRIORITY_W;
-            renderPriorityControls(g, font, info, priorityX, xButtonY, mouseX, mouseY);
+
+            renderPriorityControls(
+                    g,
+                    font,
+                    info,
+                    priorityX,
+                    xButtonY,
+                    mouseX,
+                    mouseY
+            );
         }
-        rowHits.add(new RowHit(xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, info));
-        boolean xHovered = KeybindViewerScreen.inside(mouseX, mouseY, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W);
-        int fill = xHovered ? UITheme.lerpColor(c.widgetBg(), c.danger(), 0.55f)
-                            : UITheme.lerpColor(c.widgetBg(), c.danger(), rowHovered ? 0.18f : 0.10f);
-        UITheme.fillRoundedRectFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3, fill);
-        UITheme.drawRoundedBorderFast(g, xButtonX, xButtonY, ROW_UNBIND_W, ROW_UNBIND_W, 3,
-                UITheme.withAlpha(c.danger(), xHovered ? 0xC0 : 0x78));
+
+        rowHits.add(
+                new RowHit(
+                        xButtonX,
+                        xButtonY,
+                        ROW_UNBIND_W,
+                        ROW_UNBIND_W,
+                        info
+                )
+        );
+
+        boolean xHovered = KeybindViewerScreen.inside(
+                mouseX,
+                mouseY,
+                xButtonX,
+                xButtonY,
+                ROW_UNBIND_W,
+                ROW_UNBIND_W
+        );
+
+        int fill = xHovered
+                ? UITheme.lerpColor(c.widgetBg(), c.danger(), 0.55f)
+                : UITheme.lerpColor(
+                c.widgetBg(),
+                c.danger(),
+                rowHovered ? 0.18f : 0.10f
+        );
+
+        UITheme.fillRoundedRectFast(
+                g,
+                xButtonX,
+                xButtonY,
+                ROW_UNBIND_W,
+                ROW_UNBIND_W,
+                3,
+                fill
+        );
+
+        UITheme.drawRoundedBorderFast(
+                g,
+                xButtonX,
+                xButtonY,
+                ROW_UNBIND_W,
+                ROW_UNBIND_W,
+                3,
+                UITheme.withAlpha(c.danger(), xHovered ? 0xC0 : 0x78)
+        );
+
         int cx = xButtonX + ROW_UNBIND_W / 2;
         int cy = xButtonY + ROW_UNBIND_W / 2;
-        int markColor = xHovered ? 0xFFFFFFFF : c.danger();
+
+        int markColor = xHovered
+                ? 0xFFFFFFFF
+                : c.danger();
+
         for (int d = -3; d <= 3; d++) {
             g.fill(cx + d, cy + d, cx + d + 1, cy + d + 1, markColor);
             g.fill(cx + d, cy - d, cx + d + 1, cy - d + 1, markColor);
         }
-        if (rowHovered && (!actionText.equals(info.actionName()) || !modFit.equals(modText))) {
+
+        if (rowHovered) {
             g.renderComponentTooltip(
                     font,
                     List.of(
                             Component.literal("Action: " + info.actionName()),
-                            Component.literal("Mod: " + info.modName())
+                            Component.literal("Mod: " + info.modName()),
+                            Component.literal("Keybind: " + info.currentKeyName())
                     ),
                     mouseX,
                     mouseY
             );
         }
     }
-
     private void renderPriorityControls(GuiGraphics g, Font font, KeyBindingScanner.KeyBindingInfo info,
                                         int x, int y, int mouseX, int mouseY) {
         var c = UITheme.colors();
