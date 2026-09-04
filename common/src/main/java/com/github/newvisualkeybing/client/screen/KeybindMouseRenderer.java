@@ -14,25 +14,35 @@ import net.minecraft.util.Mth;
 import java.util.Set;
 import java.util.function.IntPredicate;
 
-
-
-
+/**
+ * Draws the mouse panel: a top-down mouse whose two main buttons are plates cut out of an
+ * egg-shaped body, a recessed wheel slot with the wheel (middle button) and scroll ticks, and
+ * thumb/side buttons attached to the flanks. The modern skin renders the silhouette through
+ * {@link MouseSilhouette}; the flat skins (vanilla / custom textures) keep a blocky rectangle body.
+ */
 final class KeybindMouseRenderer {
 
-    static final int MOUSE_BODY_W = 80;
-    static final int MOUSE_BODY_H = 116;
-    static final int MOUSE_TOP_R = 26;
-    static final int MOUSE_BOT_R = 14;
-    static final int MOUSE_TOP_AREA_H = 50;
-    static final int WHEEL_COL_W = 14;
-    static final int WHEEL_TICK_H = 10;
-    static final int SIDE_W = 14;
-    static final int SIDE_H = 18;
+    static final int MOUSE_BODY_W = 78;
+    static final int MOUSE_BODY_H = 118;
+    static final int SIDE_W = 15;
+    static final int SIDE_H = 15;
     static final int SIDE_GAP = 3;
-    static final int SIDE_OFFSET = 3;
+    /** How far a side button sticks out beyond the body outline. */
+    static final int SIDE_PROTRUDE = 6;
+    /** Vertical position (fraction of body height) of the first left / right side button. */
+    private static final float LEFT_SIDE_T = 0.40f;
+    private static final float RIGHT_SIDE_T = 0.31f;
 
     private static final int PANEL_PAD = 12;
     private static final int PANEL_CONTENT_TOP = 28;
+
+    private static final int IDX_LMB = 0;
+    private static final int IDX_MMB = 1;
+    private static final int IDX_RMB = 2;
+    private static final int IDX_M4 = 3;
+    private static final int IDX_M8 = 7;
+    private static final int IDX_WHEEL_UP = 8;
+    private static final int IDX_WHEEL_DOWN = 9;
 
     private final KeyBindingScanner scanner;
 
@@ -41,11 +51,11 @@ final class KeybindMouseRenderer {
     private int panelW;
     private int panelH;
     private final Rect[] bounds = new Rect[KeyboardLayoutData.MOUSE_KEYS.size()];
-    private int cachedBodyX = Integer.MIN_VALUE;
-    private int cachedBodyY = Integer.MIN_VALUE;
-    private int cachedBodyW = Integer.MIN_VALUE;
-    private int cachedBodyH = Integer.MIN_VALUE;
-    private float cachedMouseScale = Float.NaN;
+    private int bodyX = Integer.MIN_VALUE;
+    private int bodyY = Integer.MIN_VALUE;
+    private int bodyW = Integer.MIN_VALUE;
+    private int bodyH = Integer.MIN_VALUE;
+    private MouseSilhouette silhouette;
     private final int[] labelWidths = new int[KeyboardLayoutData.MOUSE_KEYS.size()];
     private final KeyBindingScanner.KeyStatus[] cachedStatuses =
             new KeyBindingScanner.KeyStatus[KeyboardLayoutData.MOUSE_KEYS.size()];
@@ -58,18 +68,25 @@ final class KeybindMouseRenderer {
     private Set<Integer> cachedComboKeys = java.util.Collections.emptySet();
     private long lastFrameMs;
 
+    /** Per-frame flags, filled by {@link #updateStates} and read by the drawing passes. */
+    private final boolean[] matched = new boolean[KeyboardLayoutData.MOUSE_KEYS.size()];
+    private final boolean[] hidden = new boolean[KeyboardLayoutData.MOUSE_KEYS.size()];
+    private final boolean[] hover = new boolean[KeyboardLayoutData.MOUSE_KEYS.size()];
+    private final boolean[] selected = new boolean[KeyboardLayoutData.MOUSE_KEYS.size()];
+    private final boolean[] searchMatch = new boolean[KeyboardLayoutData.MOUSE_KEYS.size()];
+    private final boolean[] combo = new boolean[KeyboardLayoutData.MOUSE_KEYS.size()];
+    private int pulseAccent;
+    private int searchPulseColor;
+    private int searchPulseAlpha;
+
     KeybindMouseRenderer(KeyBindingScanner scanner) {
         this.scanner = scanner;
     }
-
-    
-
 
     Integer render(GuiGraphics g, Font font, int x, int y, int w, int h,
                    Integer selectedVirtualKey, IntPredicate isVisibleKey,
                    IntPredicate isHiddenKey, IntPredicate isSearchMatch,
                    int mouseX, int mouseY, float animTick, long nowMs) {
-        var c = UITheme.colors();
         this.panelX = x;
         this.panelY = y;
         this.panelW = w;
@@ -78,157 +95,56 @@ final class KeybindMouseRenderer {
         KeybindViewerScreen.paintPanelBase(g, font, x, y, w, h,
                 Component.translatable("screen.newvisualkeybing.viewer.mouse").getString());
         ensureLabelWidths(font);
-
-        int innerTop = y + PANEL_CONTENT_TOP;
-        int innerBottom = y + h - PANEL_PAD;
-        int availH = innerBottom - innerTop;
-
-        float mouseScale = Mth.clamp(Math.min(
-                (w - PANEL_PAD * 2 - SIDE_W * 2 - SIDE_OFFSET * 2) / (float) MOUSE_BODY_W,
-                availH / (float) MOUSE_BODY_H), 0.78f, 1.0f);
-        int bodyW = Math.round(MOUSE_BODY_W * mouseScale);
-        int bodyH = Math.round(MOUSE_BODY_H * mouseScale);
-        int bodyX = x + (w - bodyW) / 2;
-        int bodyY = innerTop + (availH - bodyH) / 2;
-        int rTop = Math.round(MOUSE_TOP_R * mouseScale);
-        int rBot = Math.round(MOUSE_BOT_R * mouseScale);
-        updateBounds(bodyX, bodyY, bodyW, bodyH, mouseScale);
+        layoutBody();
         refreshInputData();
-
-        boolean customBody = UITheme.custom() && UITextureStore.global().has(UITextureSlot.MOUSE_BODY);
-        if (customBody) {
-            UITextureStore.global().draw(UITextureSlot.MOUSE_BODY, g, bodyX, bodyY, bodyW, bodyH);
-        } else {
-            int shadow = UITheme.withAlpha(0x000000, 0x40);
-            UITheme.fillRoundedRectEx(g, bodyX - 1, bodyY + 3, bodyW + 2, bodyH,
-                    rTop + 1, rTop + 1, rBot + 1, rBot + 1, shadow);
-
-            int frameFill = UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.42f);
-            UITheme.fillRoundedRectEx(g, bodyX, bodyY, bodyW, bodyH,
-                    rTop, rTop, rBot, rBot, frameFill);
-
-            int hlH = Math.max(4, Math.round(MOUSE_TOP_AREA_H * mouseScale * 0.7f));
-            UITheme.fillRoundedRectEx(g, bodyX + 2, bodyY + 2, bodyW - 4, hlH,
-                    rTop - 2, rTop - 2, 2, 2, UITheme.withAlpha(0xFFFFFF, 0x10));
-
-            int splitY = bodyY + Math.round(MOUSE_TOP_AREA_H * mouseScale);
-            g.fill(bodyX + 8, splitY, bodyX + bodyW - 8, splitY + 1,
-                    UITheme.withAlpha(c.divider(), 0xC0));
-            g.fill(bodyX + 8, splitY + 1, bodyX + bodyW - 8, splitY + 2,
-                    UITheme.withAlpha(0x000000, 0x20));
-
-            int leftW = (bodyW - WHEEL_COL_W) / 2;
-            int wheelX = bodyX + leftW;
-            int wheelDepthColor = UITheme.lerpColor(frameFill, 0x000000, 0.45f);
-            UITheme.fillRoundedRectFast(g, wheelX, bodyY + 1, WHEEL_COL_W,
-                    Math.round(MOUSE_TOP_AREA_H * mouseScale) - 1, 4, wheelDepthColor);
-
-            UITheme.drawRoundedBorderEx(g, bodyX, bodyY, bodyW, bodyH,
-                    rTop, rTop, rBot, rBot,
-                    UITheme.withAlpha(c.widgetBorder(), 0xD0));
-        }
 
         float dt = lastFrameMs > 0 ? Math.min((nowMs - lastFrameMs) / 1000f, 0.05f) : 0.016f;
         lastFrameMs = nowMs;
-        int pulseAccent = KeybindViewerScreen.pulseAccent(animTick);
-        int searchPulseColor = KeybindViewerScreen.searchPulseColor(animTick);
-        int searchPulseAlpha = KeybindViewerScreen.searchPulseAlpha(animTick);
-        Set<Integer> comboKeys = comboParticipantKeys();
-        Integer hovered = null;
-        for (int i = 0; i < KeyboardLayoutData.MOUSE_KEYS.size(); i++) {
-            Rect b = boundsAt(i);
-            if (b == null) continue;
-            KeyboardLayoutData.KeyDef key = KeyboardLayoutData.MOUSE_KEYS.get(i);
-            boolean wheel = KeyboardLayoutData.isWheel(key.glfwKey());
-            boolean matched = isVisibleKey.test(key.glfwKey());
-            boolean hidden = isHiddenKey.test(key.glfwKey());
-            boolean hover = KeybindViewerScreen.inside(mouseX, mouseY, b.x, b.y, b.w, b.h);
-            boolean selected = selectedVirtualKey != null && selectedVirtualKey == key.glfwKey();
-            if (hidden) hover = false;
-            if (hover) hovered = key.glfwKey();
+        pulseAccent = KeybindViewerScreen.pulseAccent(animTick);
+        searchPulseColor = KeybindViewerScreen.searchPulseColor(animTick);
+        searchPulseAlpha = KeybindViewerScreen.searchPulseAlpha(animTick);
+        Integer hovered = updateStates(selectedVirtualKey, isVisibleKey, isHiddenKey, isSearchMatch,
+                mouseX, mouseY, dt);
 
-            hoverProgress[i] = advanceProgress(hoverProgress[i],
-                    hover && matched ? 1f : 0f, dt, 16f);
-            selectProgress[i] = advanceProgress(selectProgress[i],
-                    selected ? 1f : 0f, dt, 18f);
-            float hoverEase = UITheme.easeOutCubic(hoverProgress[i]);
-            float selectEase = UITheme.easeOutCubic(selectProgress[i]);
-
-            KeyBindingScanner.KeyStatus status = cachedStatuses[i];
-            int bindingCount = cachedBindingCounts[i];
-            int radius = Math.max(3, Math.min(6, Math.min(b.w, b.h) / 4));
-
-            boolean searchMatch = matched && !hidden && isSearchMatch.test(key.glfwKey());
-            if (searchMatch && hoverEase < 0.99f && selectEase < 0.99f) {
-                int searchInner = Math.round(searchPulseAlpha * (1f - Math.max(hoverEase, selectEase)));
-                if (searchInner > 0) {
-                    UITheme.drawRoundedBorderFast(g, b.x - 2, b.y - 2, b.w + 4, b.h + 4, radius + 2,
-                            UITheme.withAlpha(searchPulseColor, Math.max(0x14, searchInner / 3)));
-                }
-            }
-            if (matched && !hidden && hoverProgress[i] > 0.005f && selectProgress[i] < 0.99f) {
-                int alpha = Math.round(0x55 * hoverEase * (1f - selectEase));
-                if (alpha > 0) {
-                    UITheme.drawRoundedBorderFast(g, b.x - 1, b.y - 1, b.w + 2, b.h + 2, radius + 1,
-                            UITheme.withAlpha(c.accentAlt(), alpha));
-                }
-            }
-            if (selectProgress[i] > 0.005f) {
-                int outerAlpha = Math.round(0x38 * selectEase);
-                int grow = Math.round(2f * selectEase);
-                if (outerAlpha > 0 && grow > 0) {
-                    UITheme.drawRoundedBorderFast(g, b.x - grow - 1, b.y - grow - 1,
-                            b.w + grow * 2 + 2, b.h + grow * 2 + 2, radius + 2,
-                            UITheme.withAlpha(pulseAccent, outerAlpha));
-                }
-            }
-
-            int fill = KeybindViewerScreen.keyStatusColor(status, matched);
-            if (hidden) fill = UITheme.withAlpha(c.widgetBg(), 0x24);
-            boolean texturedBtn = false;
-            if (UITheme.custom() && !wheel) {
-                UITextureStore store = UITextureStore.global();
-                texturedBtn = store.drawTinted(UITextureSlot.MOUSE_BUTTON, g, b.x, b.y, b.w, b.h, fill)
-                        || store.drawTinted(UITextureSlot.KEY, g, b.x, b.y, b.w, b.h, fill);
-            }
-            if (!texturedBtn) {
-                UITheme.fillRoundedRectFast(g, b.x, b.y, b.w, b.h, radius, fill);
-                renderMouseButtonSurface(g, b, radius, status, hover || selected, wheel, hidden);
-                int baseBorder = matched && !hidden ? c.widgetBorder()
-                        : UITheme.withAlpha(c.widgetBorder(), hidden ? 0x28 : 0x60);
-                int targetBorder = selectProgress[i] > hoverProgress[i]
-                        ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
-                        : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
-                UITheme.drawRoundedBorderFast(g, b.x, b.y, b.w, b.h, radius, targetBorder);
-            }
-
-            if (!hidden && b.w >= 14 && b.h >= 10) {
-                int textColor = matched ? KeybindViewerScreen.labelColorForStatus(status)
-                        : UITheme.withAlpha(c.textMuted(), 0x80);
-                String label = key.label();
-                g.drawString(font, label,
-                        b.x + (b.w - labelWidths[i]) / 2,
-                        b.y + (b.h - font.lineHeight) / 2,
-                        textColor, false);
-            }
-            boolean comboParticipant = !hidden && comboKeys.contains(key.glfwKey());
-            if (comboParticipant && b.w >= 10 && b.h >= 8) {
-                int comboColor = matched ? KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR
-                        : UITheme.withAlpha(KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0x70);
-                int barH = Math.min(3, Math.max(2, b.h / 5));
-                UITheme.fillRoundedRectFast(g, b.x + 3, b.y + 1, b.w - 6, barH,
-                        Math.max(1, barH / 2), comboColor);
-            }
-            if (!hidden) renderBindingBadge(g, font, b, bindingCount, status, comboParticipant);
+        if (UITheme.flat()) {
+            renderFlat(g, font);
+        } else {
+            renderModern(g, font);
         }
         return hovered;
     }
 
-    /**
-     * Combo participant keys, recomputed only when the store changes. Mirrors the keyboard
-     * renderer's caching so a frame no longer rebuilds the participant set (with its string
-     * parsing and a store-monitor acquisition) once per mouse button.
-     */
+    // ------------------------------------------------------------------ state ---------------------
+
+    private Integer updateStates(Integer selectedVirtualKey, IntPredicate isVisibleKey,
+                                 IntPredicate isHiddenKey, IntPredicate isSearchMatch,
+                                 int mouseX, int mouseY, float dt) {
+        Set<Integer> comboKeys = comboParticipantKeys();
+        Integer hovered = null;
+        for (int i = 0; i < KeyboardLayoutData.MOUSE_KEYS.size(); i++) {
+            int key = KeyboardLayoutData.MOUSE_KEYS.get(i).glfwKey();
+            matched[i] = isVisibleKey.test(key);
+            hidden[i] = isHiddenKey.test(key);
+            hover[i] = !hidden[i] && hits(i, mouseX, mouseY);
+            selected[i] = selectedVirtualKey != null && selectedVirtualKey == key;
+            searchMatch[i] = matched[i] && !hidden[i] && isSearchMatch.test(key);
+            combo[i] = !hidden[i] && comboKeys.contains(key);
+            if (hover[i]) hovered = key;
+            hoverProgress[i] = advanceProgress(hoverProgress[i], hover[i] && matched[i] ? 1f : 0f, dt, 16f);
+            selectProgress[i] = advanceProgress(selectProgress[i], selected[i] ? 1f : 0f, dt, 18f);
+        }
+        return hovered;
+    }
+
+    private boolean hits(int index, double mx, double my) {
+        Rect b = bounds[index];
+        if (b == null || !KeybindViewerScreen.inside(mx, my, b.x, b.y, b.w, b.h)) return false;
+        if ((index == IDX_LMB || index == IDX_RMB) && silhouette != null && !UITheme.flat()) {
+            return silhouette.insideBody(mx - bodyX, my - bodyY);
+        }
+        return true;
+    }
+
     private Set<Integer> comboParticipantKeys() {
         KeybindComboStore store = KeybindComboStore.global();
         long v = store.version();
@@ -256,127 +172,407 @@ final class KeybindMouseRenderer {
         }
     }
 
-    private static void renderMouseButtonSurface(GuiGraphics g, Rect b, int radius,
-                                                 KeyBindingScanner.KeyStatus status, boolean active,
-                                                 boolean wheel, boolean hidden) {
-        var c = UITheme.colors();
-        if (hidden) return;
-        UITheme.fillRoundedRectEx(g, b.x + 1, b.y + 1, b.w - 2,
-                Math.max(2, b.h / 2 - 1),
-                Math.max(1, radius - 1), Math.max(1, radius - 1), 1, 1,
-                UITheme.withAlpha(0xFFFFFF, active ? 0x18 : 0x0E));
-        if (wheel) {
-            int midX = b.x + b.w / 2;
-            UITheme.fillRoundedRectFast(g, midX - 1, b.y + 3, 1, b.h - 6, 1,
-                    UITheme.withAlpha(c.divider(), 0x80));
-            return;
-        }
-        if (status != KeyBindingScanner.KeyStatus.FREE) {
-            int edgeColor = KeybindViewerScreen.keyStatusColor(status);
-            UITheme.fillRoundedRectFast(g, b.x + 2, b.y + b.h - 3, b.w - 4, 2, Math.max(1, radius - 1),
-                    UITheme.withAlpha(edgeColor, active ? 0xD0 : 0x9A));
-        }
-    }
-
-    private static void renderBindingBadge(GuiGraphics g, Font font, Rect b, int count,
-                                           KeyBindingScanner.KeyStatus status,
-                                           boolean comboTopBar) {
-        if (count <= 1 || b.w < 16 || b.h < 14) return;
-        var c = UITheme.colors();
-        String text = String.valueOf(count);
-        int bw = font.width(text) + 6;
-        int bh = font.lineHeight;
-        int bx = b.x + b.w - bw - 2;
-        int by = b.y + (comboTopBar ? 5 : 2);
-        int chipColor = status == KeyBindingScanner.KeyStatus.CONFLICT ? c.danger()
-                : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
-                : c.accent();
-        UITheme.fillRoundedRectFast(g, bx, by, bw, bh, bh / 2, chipColor);
-        g.drawString(font, text, bx + 3, by + 1, 0xFFFFFFFF, false);
-    }
-
-    
-
-
-    Integer hitTest(double mx, double my) {
-        for (int i = 0; i < KeyboardLayoutData.MOUSE_KEYS.size(); i++) {
-            Rect b = boundsAt(i);
-            if (b != null && KeybindViewerScreen.inside(mx, my, b.x, b.y, b.w, b.h)) {
-                return KeyboardLayoutData.MOUSE_KEYS.get(i).glfwKey();
-            }
-        }
-        return null;
-    }
+    // ------------------------------------------------------------------ geometry ------------------
 
     private float computeMouseScale() {
         int innerTop = panelY + PANEL_CONTENT_TOP;
         int innerBottom = panelY + panelH - PANEL_PAD;
         int availH = innerBottom - innerTop;
-        return Mth.clamp(Math.min(
-                (panelW - PANEL_PAD * 2 - SIDE_W * 2 - SIDE_OFFSET * 2) / (float) MOUSE_BODY_W,
-                availH / (float) MOUSE_BODY_H), 0.78f, 1.0f);
+        float byWidth = (panelW - PANEL_PAD * 2 - SIDE_PROTRUDE * 2 - 4) / (float) MOUSE_BODY_W;
+        float byHeight = (availH - 4) / (float) MOUSE_BODY_H;
+        return Mth.clamp(Math.min(byWidth, byHeight), 0.72f, 1.0f);
     }
 
-    private Rect boundsAt(int index) {
-        if (index < 0 || index >= bounds.length) return null;
-        if (bounds[index] == null) updateBoundsFromPanel();
-        return bounds[index];
-    }
-
-    private void updateBoundsFromPanel() {
+    private void layoutBody() {
         int innerTop = panelY + PANEL_CONTENT_TOP;
         int innerBottom = panelY + panelH - PANEL_PAD;
         int availH = innerBottom - innerTop;
         float ms = computeMouseScale();
-        int bodyW = Math.round(MOUSE_BODY_W * ms);
-        int bodyH = Math.round(MOUSE_BODY_H * ms);
-        int bodyX = panelX + (panelW - bodyW) / 2;
-        int bodyY = innerTop + (availH - bodyH) / 2;
-        updateBounds(bodyX, bodyY, bodyW, bodyH, ms);
-    }
+        int bw = Math.round(MOUSE_BODY_W * ms);
+        int bh = Math.round(MOUSE_BODY_H * ms);
+        int bx = panelX + (panelW - bw) / 2;
+        int by = innerTop + Math.max(0, (availH - bh) / 2);
+        if (bx == bodyX && by == bodyY && bw == bodyW && bh == bodyH && silhouette != null) return;
+        bodyX = bx;
+        bodyY = by;
+        if (silhouette == null || bw != bodyW || bh != bodyH) silhouette = new MouseSilhouette(bw, bh);
+        bodyW = bw;
+        bodyH = bh;
+        MouseSilhouette s = silhouette;
 
-    private void updateBounds(int bodyX, int bodyY, int bodyW, int bodyH, float ms) {
-        if (bodyX == cachedBodyX && bodyY == cachedBodyY && bodyW == cachedBodyW
-                && bodyH == cachedBodyH && Float.compare(ms, cachedMouseScale) == 0) {
-            return;
+        int plateY1 = s.seamY - MouseSilhouette.PLATE_GAP;
+        bounds[IDX_LMB] = new Rect(bx, by, s.leftPlateX1, plateY1);
+        bounds[IDX_RMB] = new Rect(bx + s.rightPlateX0, by, bw - s.rightPlateX0, plateY1);
+        bounds[IDX_MMB] = new Rect(bx + s.wheelX + 1, by + s.mmbY, s.wheelW - 2, s.mmbH);
+        bounds[IDX_WHEEL_UP] = new Rect(bx + s.wheelX + 1, by + s.wheelY + 1, s.wheelW - 2, s.tickH - 1);
+        bounds[IDX_WHEEL_DOWN] = new Rect(bx + s.wheelX + 1, by + s.wheelY + s.wheelH - s.tickH,
+                s.wheelW - 2, s.tickH - 1);
+
+        int leftY = by + Math.round(bh * LEFT_SIDE_T);
+        for (int i = 0; i < 2; i++) {
+            int yy = leftY + i * (SIDE_H + SIDE_GAP);
+            int edge = Math.round(s.leftEdge(Math.min(bh - 1, yy - by + SIDE_H / 2)));
+            bounds[IDX_M4 + i] = new Rect(bx + edge - SIDE_PROTRUDE, yy, SIDE_W, SIDE_H);
         }
-        cachedBodyX = bodyX;
-        cachedBodyY = bodyY;
-        cachedBodyW = bodyW;
-        cachedBodyH = bodyH;
-        cachedMouseScale = ms;
-
-        int leftW = (bodyW - WHEEL_COL_W) / 2;
-        int rightW = bodyW - leftW - WHEEL_COL_W;
-        int topH = Math.round(MOUSE_TOP_AREA_H * ms);
-        int wheelTickH = WHEEL_TICK_H;
-        int mmbH = topH - wheelTickH * 2;
-
-        int wheelX = bodyX + leftW;
-        int wheelY = bodyY;
-
-        int leftSideX = bodyX - SIDE_W - SIDE_OFFSET;
-        int leftStackH = SIDE_H * 2 + SIDE_GAP;
-        int leftSideY = bodyY + (bodyH - leftStackH) / 2;
-
-        int rightSideX = bodyX + bodyW + SIDE_OFFSET;
-        int rightStackH = SIDE_H * 3 + SIDE_GAP * 2;
-        int rightSideY = bodyY + (bodyH - rightStackH) / 2;
-
-        int rTop = Math.round(MOUSE_TOP_R * ms);
-        int topInset = Math.max(2, rTop / 4);
-
-        bounds[0] = new Rect(bodyX + topInset, bodyY + 2, leftW - topInset - 1, topH - 4);
-        bounds[1] = new Rect(wheelX + 1, wheelY + wheelTickH + 1, WHEEL_COL_W - 2, mmbH - 2);
-        bounds[2] = new Rect(bodyX + leftW + WHEEL_COL_W + 1, bodyY + 2, rightW - topInset - 1, topH - 4);
-        bounds[3] = new Rect(leftSideX, leftSideY, SIDE_W, SIDE_H);
-        bounds[4] = new Rect(leftSideX, leftSideY + SIDE_H + SIDE_GAP, SIDE_W, SIDE_H);
-        bounds[5] = new Rect(rightSideX, rightSideY, SIDE_W, SIDE_H);
-        bounds[6] = new Rect(rightSideX, rightSideY + SIDE_H + SIDE_GAP, SIDE_W, SIDE_H);
-        bounds[7] = new Rect(rightSideX, rightSideY + (SIDE_H + SIDE_GAP) * 2, SIDE_W, SIDE_H);
-        bounds[8] = new Rect(wheelX + 1, wheelY + 1, WHEEL_COL_W - 2, wheelTickH - 2);
-        bounds[9] = new Rect(wheelX + 1, wheelY + wheelTickH + mmbH + 1, WHEEL_COL_W - 2, wheelTickH - 2);
+        int rightY = by + Math.round(bh * RIGHT_SIDE_T);
+        for (int i = 0; i < 3; i++) {
+            int yy = rightY + i * (SIDE_H + SIDE_GAP);
+            int edge = Math.round(s.rightEdge(Math.min(bh - 1, yy - by + SIDE_H / 2)));
+            bounds[IDX_M4 + 2 + i] = new Rect(bx + edge - SIDE_W + SIDE_PROTRUDE, yy, SIDE_W, SIDE_H);
+        }
     }
+
+    Integer hitTest(double mx, double my) {
+        if (bounds[0] == null) return null;
+        // Side buttons first: they overlap the body flanks and must win over the plates.
+        for (int i = IDX_M4; i <= IDX_M8; i++) {
+            if (hits(i, mx, my)) return KeyboardLayoutData.MOUSE_KEYS.get(i).glfwKey();
+        }
+        for (int i = 0; i < KeyboardLayoutData.MOUSE_KEYS.size(); i++) {
+            if (i >= IDX_M4 && i <= IDX_M8) continue;
+            if (hits(i, mx, my)) return KeyboardLayoutData.MOUSE_KEYS.get(i).glfwKey();
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ modern skin ---------------
+
+    private void renderModern(GuiGraphics g, Font font) {
+        var c = UITheme.colors();
+        MouseSilhouette s = silhouette;
+        int bx = bodyX, by = bodyY;
+        int frameFill = UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.42f);
+
+        UITheme.fillShape(g, s.shadow, bx, by + 3, UITheme.withAlpha(0x000000, 0x48));
+        UITheme.fillShape(g, s.body, bx, by, frameFill);
+
+        renderPlate(g, IDX_LMB, s.leftPlate, s.leftPlateStroke, s.leftPlateGlow, s.leftPlateGloss,
+                s.leftPlateEdge, s.leftPlateCombo);
+        renderPlate(g, IDX_RMB, s.rightPlate, s.rightPlateStroke, s.rightPlateGlow, s.rightPlateGloss,
+                s.rightPlateEdge, s.rightPlateCombo);
+
+        for (int i = 0; i < MouseSilhouette.PALM_BANDS; i++) {
+            UITheme.fillShape(g, s.palmBands[i], bx, by, UITheme.withAlpha(0x000000, 0x07 * (i + 1)));
+        }
+        UITheme.fillShape(g, s.seam, bx, by, UITheme.withAlpha(0x000000, 0x90));
+        UITheme.fillShape(g, s.seamLight, bx, by, UITheme.withAlpha(0xFFFFFF, 0x1C));
+
+        renderWheelSlot(g, frameFill);
+        UITheme.fillShape(g, s.bodyStroke, bx, by, UITheme.withAlpha(c.widgetBorder(), 0xE0));
+
+        for (int i = IDX_M4; i <= IDX_M8; i++) renderPill(g, i, SIDE_W / 2);
+
+        renderLabels(g, font);
+    }
+
+    private void renderPlate(GuiGraphics g, int idx, int[] fill, int[] stroke, int[] glow,
+                             int[] gloss, int[] edge, int[] comboBar) {
+        var c = UITheme.colors();
+        int bx = bodyX, by = bodyY;
+        KeyBindingScanner.KeyStatus status = cachedStatuses[idx];
+        boolean active = hover[idx] || selected[idx];
+        float hoverEase = UITheme.easeOutCubic(hoverProgress[idx]);
+        float selectEase = UITheme.easeOutCubic(selectProgress[idx]);
+
+        int plateFill = hidden[idx] ? UITheme.withAlpha(c.widgetBg(), 0x30)
+                : KeybindViewerScreen.keyStatusColor(status, matched[idx]);
+        UITheme.fillShape(g, fill, bx, by, plateFill);
+        if (!hidden[idx]) {
+            UITheme.fillShape(g, gloss, bx, by, UITheme.withAlpha(0xFFFFFF, active ? 0x1E : 0x12));
+            if (status != KeyBindingScanner.KeyStatus.FREE) {
+                UITheme.fillShape(g, edge, bx, by,
+                        UITheme.withAlpha(KeybindViewerScreen.keyStatusColor(status), active ? 0xD8 : 0xA0));
+            }
+            if (combo[idx]) {
+                int comboColor = matched[idx] ? KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR
+                        : UITheme.withAlpha(KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0x70);
+                UITheme.fillShape(g, comboBar, bx, by, comboColor);
+            }
+        }
+
+        if (searchMatch[idx] && hoverEase < 0.99f && selectEase < 0.99f) {
+            int a = Math.round(searchPulseAlpha * (1f - Math.max(hoverEase, selectEase)));
+            if (a > 0) UITheme.fillShape(g, glow, bx, by, UITheme.withAlpha(searchPulseColor, Math.max(0x14, a / 2)));
+        }
+        if (selectProgress[idx] > 0.005f) {
+            UITheme.fillShape(g, glow, bx, by, UITheme.withAlpha(pulseAccent, Math.round(0x60 * selectEase)));
+        }
+        int baseBorder = matched[idx] && !hidden[idx] ? UITheme.withAlpha(c.widgetBorder(), 0xB0)
+                : UITheme.withAlpha(c.widgetBorder(), hidden[idx] ? 0x30 : 0x60);
+        int border = selectProgress[idx] > hoverProgress[idx]
+                ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
+                : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
+        UITheme.fillShape(g, stroke, bx, by, border);
+    }
+
+    private void renderWheelSlot(GuiGraphics g, int frameFill) {
+        var c = UITheme.colors();
+        MouseSilhouette s = silhouette;
+        int sx = bodyX + s.wheelX;
+        int sy = bodyY + s.wheelY;
+        int slotR = s.wheelW / 2;
+        int slotColor = UITheme.lerpColor(frameFill, 0x000000, 0.58f);
+        UITheme.fillRoundedRect(g, sx, sy, s.wheelW, s.wheelH, slotR, slotColor);
+        UITheme.fillRoundedRectEx(g, sx + 1, sy + 1, s.wheelW - 2, Math.max(3, s.tickH / 2),
+                slotR - 1, slotR - 1, 1, 1, UITheme.withAlpha(0x000000, 0x50));
+        UITheme.drawRoundedBorder(g, sx, sy, s.wheelW, s.wheelH, slotR, UITheme.withAlpha(0x000000, 0x70));
+
+        renderTick(g, IDX_WHEEL_UP, true);
+        renderTick(g, IDX_WHEEL_DOWN, false);
+
+        // The wheel itself is the middle button.
+        int idx = IDX_MMB;
+        Rect b = bounds[idx];
+        int inset = Math.max(2, s.wheelW / 6);
+        int wx = sx + inset;
+        int ww = s.wheelW - inset * 2;
+        int wy = b.y + 1;
+        int wh = b.h - 2;
+        int wr = Math.max(2, ww / 2);
+        KeyBindingScanner.KeyStatus status = cachedStatuses[idx];
+        boolean active = hover[idx] || selected[idx];
+        float hoverEase = UITheme.easeOutCubic(hoverProgress[idx]);
+        float selectEase = UITheme.easeOutCubic(selectProgress[idx]);
+        int wheelFill = hidden[idx] ? UITheme.withAlpha(c.widgetBg(), 0x40)
+                : status == KeyBindingScanner.KeyStatus.FREE
+                    ? UITheme.lerpColor(c.widgetBg(), 0xFFFFFFFF, matched[idx] ? 0.16f : 0.06f)
+                    : KeybindViewerScreen.keyStatusColor(status, matched[idx]);
+        if (searchMatch[idx] && hoverEase < 0.99f && selectEase < 0.99f) {
+            int a = Math.round(searchPulseAlpha * (1f - Math.max(hoverEase, selectEase)));
+            if (a > 0) {
+                UITheme.drawRoundedBorder(g, wx - 2, wy - 2, ww + 4, wh + 4, wr + 2,
+                        UITheme.withAlpha(searchPulseColor, Math.max(0x14, a / 3)));
+            }
+        }
+        if (selectProgress[idx] > 0.005f) {
+            UITheme.drawRoundedBorder(g, wx - 2, wy - 2, ww + 4, wh + 4, wr + 2,
+                    UITheme.withAlpha(pulseAccent, Math.round(0x50 * selectEase)));
+        }
+        UITheme.fillRoundedRect(g, wx, wy, ww, wh, wr, wheelFill);
+        if (!hidden[idx]) {
+            // Rubber ribs + a soft highlight so the wheel reads as a cylinder.
+            int ribColor = UITheme.withAlpha(0x000000, 0x48);
+            for (int ry = wy + wr; ry < wy + wh - wr; ry += 3) {
+                g.fill(wx + 1, ry, wx + ww - 1, ry + 1, ribColor);
+            }
+            UITheme.fillRoundedRectEx(g, wx + 1, wy + 1, ww - 2, Math.max(2, wh / 4),
+                    wr - 1, wr - 1, 1, 1, UITheme.withAlpha(0xFFFFFF, active ? 0x28 : 0x18));
+        }
+        int baseBorder = UITheme.withAlpha(0x000000, hidden[idx] ? 0x30 : 0x70);
+        int border = selectProgress[idx] > hoverProgress[idx]
+                ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
+                : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
+        UITheme.drawRoundedBorder(g, wx, wy, ww, wh, wr, border);
+    }
+
+    /** Scroll-up / scroll-down zone at an end of the wheel slot: a small triangle, lit on hover. */
+    private void renderTick(GuiGraphics g, int idx, boolean up) {
+        var c = UITheme.colors();
+        Rect b = bounds[idx];
+        float hoverEase = UITheme.easeOutCubic(hoverProgress[idx]);
+        float selectEase = UITheme.easeOutCubic(selectProgress[idx]);
+        if (hoverEase > 0.01f || selectEase > 0.01f) {
+            int a = Math.round(0x38 * Math.max(hoverEase, selectEase));
+            int col = selectEase > hoverEase ? pulseAccent : c.accentAlt();
+            UITheme.fillRoundedRect(g, b.x, b.y, b.w, b.h, Math.min(4, b.w / 2), UITheme.withAlpha(col, a));
+        }
+        if (hidden[idx]) return;
+        int size = Math.max(2, Math.min(3, b.w / 4));
+        int cx = b.x + b.w / 2;
+        int cy = b.y + (b.h - size) / 2;
+        int col = !matched[idx] ? UITheme.withAlpha(c.textMuted(), 0x80)
+                : hover[idx] || selected[idx] ? c.textPrimary() : c.textSecondary();
+        for (int i = 0; i < size; i++) {
+            int row = up ? cy + i : cy + size - 1 - i;
+            g.fill(cx - i, row, cx + i + 1, row + 1, col);
+        }
+    }
+
+    /** Side / thumb button: a pill hugging the body flank, with the standard key state chrome. */
+    private void renderPill(GuiGraphics g, int idx, int radius) {
+        var c = UITheme.colors();
+        Rect b = bounds[idx];
+        KeyBindingScanner.KeyStatus status = cachedStatuses[idx];
+        boolean active = hover[idx] || selected[idx];
+        float hoverEase = UITheme.easeOutCubic(hoverProgress[idx]);
+        float selectEase = UITheme.easeOutCubic(selectProgress[idx]);
+
+        if (searchMatch[idx] && hoverEase < 0.99f && selectEase < 0.99f) {
+            int a = Math.round(searchPulseAlpha * (1f - Math.max(hoverEase, selectEase)));
+            if (a > 0) {
+                UITheme.drawRoundedBorder(g, b.x - 2, b.y - 2, b.w + 4, b.h + 4, radius + 2,
+                        UITheme.withAlpha(searchPulseColor, Math.max(0x14, a / 3)));
+            }
+        }
+        if (selectProgress[idx] > 0.005f) {
+            UITheme.drawRoundedBorder(g, b.x - 2, b.y - 2, b.w + 4, b.h + 4, radius + 2,
+                    UITheme.withAlpha(pulseAccent, Math.round(0x50 * selectEase)));
+        }
+        UITheme.fillRoundedRect(g, b.x, b.y + 2, b.w, b.h, radius, UITheme.withAlpha(0x000000, 0x40));
+        int fill = hidden[idx] ? UITheme.withAlpha(c.widgetBg(), 0x30)
+                : KeybindViewerScreen.keyStatusColor(status, matched[idx]);
+        UITheme.fillRoundedRect(g, b.x, b.y, b.w, b.h, radius, fill);
+        if (!hidden[idx]) {
+            UITheme.fillRoundedRectEx(g, b.x + 1, b.y + 1, b.w - 2, Math.max(2, b.h / 2 - 1),
+                    radius - 1, radius - 1, 1, 1, UITheme.withAlpha(0xFFFFFF, active ? 0x1E : 0x12));
+            if (status != KeyBindingScanner.KeyStatus.FREE) {
+                UITheme.fillRoundedRectEx(g, b.x + 3, b.y + b.h - 3, b.w - 6, 2, 1, 1, 1, 1,
+                        UITheme.withAlpha(KeybindViewerScreen.keyStatusColor(status), active ? 0xD8 : 0xA0));
+            }
+            if (combo[idx]) {
+                int comboColor = matched[idx] ? KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR
+                        : UITheme.withAlpha(KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0x70);
+                UITheme.fillRoundedRect(g, b.x + 3, b.y + 1, b.w - 6, 2, 1, comboColor);
+            }
+        }
+        int baseBorder = matched[idx] && !hidden[idx] ? c.widgetBorder()
+                : UITheme.withAlpha(c.widgetBorder(), hidden[idx] ? 0x28 : 0x60);
+        int border = selectProgress[idx] > hoverProgress[idx]
+                ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
+                : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
+        UITheme.drawRoundedBorder(g, b.x, b.y, b.w, b.h, radius, border);
+    }
+
+    private void renderLabels(GuiGraphics g, Font font) {
+        var c = UITheme.colors();
+        MouseSilhouette s = silhouette;
+        int plateY1 = s.seamY - MouseSilhouette.PLATE_GAP;
+        int labelRow = Math.round(plateY1 * 0.58f);
+        float leftEdge = s.leftEdge(labelRow);
+        float rightEdge = s.rightEdge(labelRow);
+        int lmbCx = Math.round((leftEdge + s.leftPlateX1) / 2f);
+        int rmbCx = Math.round((s.rightPlateX0 + rightEdge) / 2f);
+        int labelY = bodyY + labelRow - font.lineHeight / 2;
+        drawPlateLabel(g, font, IDX_LMB, bodyX + lmbCx, labelY);
+        drawPlateLabel(g, font, IDX_RMB, bodyX + rmbCx, labelY);
+
+        for (int i = IDX_M4; i <= IDX_M8; i++) {
+            Rect b = bounds[i];
+            if (hidden[i]) continue;
+            KeyBindingScanner.KeyStatus status = cachedStatuses[i];
+            int textColor = matched[i] ? KeybindViewerScreen.labelColorForStatus(status)
+                    : UITheme.withAlpha(c.textMuted(), 0x80);
+            g.drawString(font, KeyboardLayoutData.MOUSE_KEYS.get(i).label(),
+                    b.x + (b.w - labelWidths[i]) / 2, b.y + (b.h - font.lineHeight) / 2 + 1, textColor, false);
+            if (!hidden[i]) renderBadge(g, font, b.x + b.w - 2, b.y - 2, cachedBindingCounts[i], status, true);
+        }
+
+        // Badges sit just above the seam, tucked against the wheel slot.
+        int badgeY = bodyY + plateY1 - font.lineHeight - 3;
+        if (!hidden[IDX_LMB]) {
+            renderBadge(g, font, bodyX + s.leftPlateX1 - 3, badgeY, cachedBindingCounts[IDX_LMB],
+                    cachedStatuses[IDX_LMB], true);
+        }
+        if (!hidden[IDX_RMB]) {
+            renderBadge(g, font, bodyX + s.rightPlateX0 + 3, badgeY, cachedBindingCounts[IDX_RMB],
+                    cachedStatuses[IDX_RMB], false);
+        }
+        if (!hidden[IDX_MMB]) {
+            Rect b = bounds[IDX_MMB];
+            renderBadge(g, font, b.x + b.w + 1, b.y - 1, cachedBindingCounts[IDX_MMB], cachedStatuses[IDX_MMB], false);
+        }
+    }
+
+    private void drawPlateLabel(GuiGraphics g, Font font, int idx, int centerX, int y) {
+        if (hidden[idx]) return;
+        var c = UITheme.colors();
+        KeyBindingScanner.KeyStatus status = cachedStatuses[idx];
+        int textColor = matched[idx] ? KeybindViewerScreen.labelColorForStatus(status)
+                : UITheme.withAlpha(c.textMuted(), 0x80);
+        g.drawString(font, KeyboardLayoutData.MOUSE_KEYS.get(idx).label(),
+                centerX - labelWidths[idx] / 2, y, textColor, false);
+    }
+
+    /**
+     * Binding-count chip. {@code anchorX} is the chip's right edge when {@code alignRight}, else its
+     * left edge; the chip is skipped for counts below two.
+     */
+    private static void renderBadge(GuiGraphics g, Font font, int anchorX, int y, int count,
+                                    KeyBindingScanner.KeyStatus status, boolean alignRight) {
+        if (count <= 1) return;
+        var c = UITheme.colors();
+        String text = String.valueOf(count);
+        int bw = font.width(text) + 6;
+        int bh = font.lineHeight;
+        int bx = alignRight ? anchorX - bw : anchorX;
+        int chipColor = status == KeyBindingScanner.KeyStatus.CONFLICT ? c.danger()
+                : status == KeyBindingScanner.KeyStatus.COMBO ? c.warning()
+                : c.accent();
+        UITheme.fillRoundedRect(g, bx, y, bw, bh, bh / 2, chipColor);
+        g.drawString(font, text, bx + 3, y + 1, 0xFFFFFFFF, false);
+    }
+
+    // ------------------------------------------------------------------ flat skins ----------------
+
+    /**
+     * Vanilla / custom skins: blocky rectangle body (the theme helpers degrade rounded shapes to
+     * flat fills + bevels), rectangular buttons, and optional user textures for body and buttons.
+     */
+    private void renderFlat(GuiGraphics g, Font font) {
+        var c = UITheme.colors();
+        MouseSilhouette s = silhouette;
+        boolean customBody = UITheme.custom() && UITextureStore.global().has(UITextureSlot.MOUSE_BODY);
+        if (customBody) {
+            UITextureStore.global().draw(UITextureSlot.MOUSE_BODY, g, bodyX, bodyY, bodyW, bodyH);
+        } else {
+            int frameFill = UITheme.lerpColor(c.widgetBg(), c.panelBg(), 0.42f);
+            UITheme.fillRoundedRect(g, bodyX, bodyY, bodyW, bodyH, 0, frameFill);
+            int splitY = bodyY + s.seamY;
+            g.fill(bodyX + 4, splitY, bodyX + bodyW - 4, splitY + 1, UITheme.withAlpha(c.divider(), 0xC0));
+            UITheme.fillRoundedRect(g, bodyX + s.wheelX, bodyY + s.wheelY, s.wheelW, s.wheelH, 0,
+                    UITheme.lerpColor(frameFill, 0x000000, 0.45f));
+            UITheme.drawRoundedBorder(g, bodyX, bodyY, bodyW, bodyH, 0, UITheme.withAlpha(c.widgetBorder(), 0xD0));
+        }
+        for (int i = 0; i < KeyboardLayoutData.MOUSE_KEYS.size(); i++) {
+            Rect b = bounds[i];
+            boolean wheel = i == IDX_WHEEL_UP || i == IDX_WHEEL_DOWN;
+            KeyBindingScanner.KeyStatus status = cachedStatuses[i];
+            int radius = Math.max(2, Math.min(4, Math.min(b.w, b.h) / 4));
+            float hoverEase = UITheme.easeOutCubic(hoverProgress[i]);
+            float selectEase = UITheme.easeOutCubic(selectProgress[i]);
+            int fill = hidden[i] ? UITheme.withAlpha(c.widgetBg(), 0x24)
+                    : KeybindViewerScreen.keyStatusColor(status, matched[i]);
+            boolean textured = false;
+            if (UITheme.custom() && !wheel) {
+                UITextureStore store = UITextureStore.global();
+                textured = store.drawTinted(UITextureSlot.MOUSE_BUTTON, g, b.x, b.y, b.w, b.h, fill)
+                        || store.drawTinted(UITextureSlot.KEY, g, b.x, b.y, b.w, b.h, fill);
+            }
+            if (!textured) {
+                UITheme.fillRoundedRect(g, b.x, b.y, b.w, b.h, radius, fill);
+                if (!hidden[i] && status != KeyBindingScanner.KeyStatus.FREE) {
+                    g.fill(b.x + 2, b.y + b.h - 3, b.x + b.w - 2, b.y + b.h - 1,
+                            UITheme.withAlpha(KeybindViewerScreen.keyStatusColor(status), 0xA0));
+                }
+                int baseBorder = matched[i] && !hidden[i] ? c.widgetBorder()
+                        : UITheme.withAlpha(c.widgetBorder(), hidden[i] ? 0x28 : 0x60);
+                int border = selectProgress[i] > hoverProgress[i]
+                        ? UITheme.lerpColor(baseBorder, pulseAccent, selectEase)
+                        : UITheme.lerpColor(baseBorder, c.accentAlt(), hoverEase);
+                UITheme.drawRoundedBorder(g, b.x, b.y, b.w, b.h, radius, border);
+            } else if (selected[i]) {
+                UITheme.drawRoundedBorder(g, b.x - 1, b.y - 1, b.w + 2, b.h + 2, 2, 0xFFFFFFFF);
+            } else if (hover[i] && matched[i]) {
+                UITheme.drawRoundedBorder(g, b.x, b.y, b.w, b.h, 2, c.accentLight());
+            }
+            if (combo[i] && b.w >= 10 && b.h >= 8) {
+                int comboColor = matched[i] ? KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR
+                        : UITheme.withAlpha(KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR, 0x70);
+                g.fill(b.x + 3, b.y + 1, b.x + b.w - 3, b.y + 3, comboColor);
+            }
+            if (!hidden[i] && b.w >= labelWidths[i] + 2 && b.h >= font.lineHeight) {
+                int textColor = matched[i] ? KeybindViewerScreen.labelColorForStatus(status)
+                        : UITheme.withAlpha(c.textMuted(), 0x80);
+                g.drawString(font, KeyboardLayoutData.MOUSE_KEYS.get(i).label(),
+                        b.x + (b.w - labelWidths[i]) / 2, b.y + (b.h - font.lineHeight) / 2, textColor, false);
+            }
+            if (!hidden[i] && b.w >= 14 && b.h >= 12) {
+                renderBadge(g, font, b.x + b.w - 2, b.y + (combo[i] ? 4 : 2), cachedBindingCounts[i], status, true);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ helpers -------------------
 
     private static float advanceProgress(float current, float target, float dt, float speed) {
         float updated = current + (target - current) * Math.min(1f, dt * speed);

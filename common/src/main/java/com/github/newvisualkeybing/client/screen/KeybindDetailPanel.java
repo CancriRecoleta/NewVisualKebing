@@ -53,6 +53,9 @@ final class KeybindDetailPanel {
     private String modifyLabel;
     private String unbindLabel;
     private boolean textCacheReady;
+    private KeyBindingScanner.KeyBindingInfo pendingTipInfo;
+    private int pendingTipX;
+    private int pendingTipY;
 
     record RowHit(int x, int y, int w, int h, KeyBindingScanner.KeyBindingInfo info) {}
     record PriorityHit(int x, int y, int w, int h, int delta, KeyBindingScanner.KeyBindingInfo info) {}
@@ -104,6 +107,7 @@ final class KeybindDetailPanel {
                 Integer virtualKey, int mouseX, int mouseY) {
         ensureTextCache();
         modifyX = modifyY = unbindX = unbindY = -1;
+        pendingTipInfo = null;
         rowHits.clear();
         ignoreHits.clear();
         priorityHits.clear();
@@ -486,17 +490,54 @@ final class KeybindDetailPanel {
         }
 
         if (rowHovered) {
-            g.renderComponentTooltip(
-                    font,
-                    List.of(
-                            Component.literal("Action: " + info.actionName()),
-                            Component.literal("Mod: " + info.modName()),
-                            Component.literal("Keybind: " + info.currentKeyName())
-                    ),
-                    mouseX,
-                    mouseY
-            );
+            // Rows truncate action and mod names to fit; the full text is deferred to a tooltip that
+            // the screen draws after every panel so nothing paints over it.
+            pendingTipInfo = info;
+            pendingTipX = mouseX;
+            pendingTipY = mouseY;
         }
+    }
+
+    /**
+     * Draws the tooltip requested by the most recent {@link #render} (if a binding row was hovered).
+     * Called by the owning screen at the end of the frame, on top of all panels.
+     */
+    void renderPendingTooltip(GuiGraphics g, Font font, int screenW, int screenH) {
+        KeyBindingScanner.KeyBindingInfo info = pendingTipInfo;
+        if (info == null) return;
+        pendingTipInfo = null;
+        var c = UITheme.colors();
+        List<KeybindTooltipRenderer.TipLine> lines = new ArrayList<>(10);
+        lines.add(new KeybindTooltipRenderer.TipLine(info.actionName(), info.self() ? c.accent() : c.textPrimary()));
+        String mod = info.modId() != null && !info.modId().isEmpty() && !info.modId().equals(info.modName())
+                ? info.modName() + "  (" + info.modId() + ")" : info.modName();
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable("screen.newvisualkeybing.viewer.tooltip.row.mod", mod).getString(),
+                c.textSecondary()));
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable("screen.newvisualkeybing.viewer.tooltip.row.category", info.categoryName()).getString(),
+                c.textSecondary()));
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable("screen.newvisualkeybing.viewer.tooltip.row.context", info.contextDescription()).getString(),
+                c.textSecondary()));
+        lines.add(KeybindTooltipRenderer.TipLine.divider());
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key", info.currentKeyName()).getString(),
+                c.textPrimary()));
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable("screen.newvisualkeybing.viewer.tooltip.default_key", info.defaultKeyName()).getString(),
+                c.textMuted()));
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable("screen.newvisualkeybing.viewer.tooltip.row.priority",
+                        profileStore.priorityOf(info.translationKey())).getString(),
+                c.textMuted()));
+        if (info.conflictIgnored()) {
+            lines.add(new KeybindTooltipRenderer.TipLine(
+                    Component.translatable("screen.newvisualkeybing.viewer.tooltip.row.ignored").getString(),
+                    c.warning()));
+        }
+        lines.add(new KeybindTooltipRenderer.TipLine(info.translationKey(), UITheme.withAlpha(c.textMuted(), 0xB0)));
+        KeybindTooltipRenderer.renderLines(g, font, screenW, screenH, lines, pendingTipX, pendingTipY);
     }
 
     private void renderPriorityControls(GuiGraphics g, Font font, KeyBindingScanner.KeyBindingInfo info,

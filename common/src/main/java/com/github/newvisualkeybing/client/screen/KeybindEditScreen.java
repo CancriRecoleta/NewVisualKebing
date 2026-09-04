@@ -218,17 +218,19 @@ public class KeybindEditScreen extends FixedScaleScreen {
         int fixedMouseY = fixedMouseY(mouseY);
         pushFixedScale(graphics);
         try {
-        var colors = UITheme.colors();
-        graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE4));
+            UITheme.batched(graphics, () -> {
+                var colors = UITheme.colors();
+                graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE4));
 
-        renderHeader(graphics);
-        profilePanel.render(graphics, font, 8, listTop(), listHeight(), fixedMouseX, fixedMouseY);
-        renderEntries(graphics, fixedMouseX, fixedMouseY);
-        renderFooter(graphics);
-        super.render(graphics, fixedMouseX, fixedMouseY, partialTick);
+                renderHeader(graphics);
+                profilePanel.render(graphics, font, 8, listTop(), listHeight(), fixedMouseX, fixedMouseY);
+                renderEntries(graphics, fixedMouseX, fixedMouseY);
+                renderFooter(graphics);
+                super.render(graphics, fixedMouseX, fixedMouseY, partialTick);
 
-        if (waitingMapping != null) renderWaitingOverlay(graphics);
-        renderNotice(graphics);
+                if (waitingMapping != null) renderWaitingOverlay(graphics);
+                renderNotice(graphics);
+            });
         } finally {
             popFixedScale(graphics);
         }

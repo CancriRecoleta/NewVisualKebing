@@ -105,13 +105,15 @@ public class KeybindProfileImportScreen extends FixedScaleScreen {
         int fmy = fixedMouseY(mouseY);
         pushFixedScale(graphics);
         try {
-            var colors = UITheme.colors();
-            graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE6));
-            renderHeader(graphics);
-            renderList(graphics, fmx, fmy);
-            renderFooter(graphics);
-            super.render(graphics, fmx, fmy, partialTick);
-            renderNotice(graphics);
+            UITheme.batched(graphics, () -> {
+                var colors = UITheme.colors();
+                graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE6));
+                renderHeader(graphics);
+                renderList(graphics, fmx, fmy);
+                renderFooter(graphics);
+                super.render(graphics, fmx, fmy, partialTick);
+                renderNotice(graphics);
+            });
         } finally {
             popFixedScale(graphics);
         }

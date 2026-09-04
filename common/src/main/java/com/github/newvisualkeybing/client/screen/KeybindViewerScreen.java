@@ -82,6 +82,9 @@ public class KeybindViewerScreen extends FixedScaleScreen {
     private long tooltipHoverStartMs;
     private static final long TOOLTIP_DELAY_MS = 80;
     private static final long TOOLTIP_FADE_MS = 90;
+    private ModRow hoveredModRow;
+    private String modTipHoverId;
+    private long modTipHoverStartMs;
 
     private FilterTab activeFilter = FilterTab.ALL;
     private Set<Integer> textFilteredKeys;
@@ -411,9 +414,19 @@ public class KeybindViewerScreen extends FixedScaleScreen {
         animTick += partialTick;
         layoutPanels();
         hoveredVirtualKey = null;
+        hoveredModRow = null;
 
         pushFixedScale(g);
         try {
+            // One managed batch for the whole frame: consecutive fills/text collapse into a few draw
+            // calls instead of one per quad. Texture blits inside flush the batch themselves.
+            UITheme.batched(g, () -> renderContents(g, fixedMouseX, fixedMouseY, partialTick, nowMs));
+        } finally {
+            popFixedScale(g);
+        }
+    }
+
+    private void renderContents(GuiGraphics g, int fixedMouseX, int fixedMouseY, float partialTick, long nowMs) {
         var c = UITheme.colors();
         if (!(UITheme.custom() && UITextureStore.global().draw(UITextureSlot.BACKGROUND, g, 0, 0, width, height))) {
             g.fill(0, 0, width, height, c.panelBg() | 0xFF000000);
@@ -467,12 +480,54 @@ public class KeybindViewerScreen extends FixedScaleScreen {
             tooltipHoverKey = null;
         }
 
+        // Secondary tooltips (binding rows in the detail panel, mod list rows) are drawn after every
+        // panel so they are never painted over.
+        detailPanel.renderPendingTooltip(g, font, width, height);
+        renderModRowTooltip(g, fixedMouseX, fixedMouseY, nowMs);
+
         renderNotice(g, nowMs);
 
         quickEdit.render(g, font, width, height, fixedMouseX, fixedMouseY);
-        } finally {
-            popFixedScale(g);
+    }
+
+    /**
+     * Full, untruncated mod information for the hovered mod-list row (the row itself ellipsizes the
+     * name to fit the narrow rail). Uses the same short hover delay as the key tooltip so scanning
+     * the list doesn't flash cards.
+     */
+    private void renderModRowTooltip(GuiGraphics g, int mouseX, int mouseY, long nowMs) {
+        ModRow row = hoveredModRow;
+        if (row == null || quickEdit.isOpen()) {
+            modTipHoverId = null;
+            return;
         }
+        if (!row.modId().equals(modTipHoverId)) {
+            modTipHoverId = row.modId();
+            modTipHoverStartMs = nowMs;
+        }
+        if (nowMs - modTipHoverStartMs < TOOLTIP_DELAY_MS * 4) return;
+        var c = UITheme.colors();
+        String fullName = scanner.getAllRegisteredMods().getOrDefault(row.modId(), row.modId());
+        KeyBindingScanner.ModStats stats = scanner.getModStats(row.modId());
+        boolean selected = row.modId().equals(selectedModId);
+        List<KeybindTooltipRenderer.TipLine> lines = new ArrayList<>(5);
+        lines.add(new KeybindTooltipRenderer.TipLine(fullName, c.textPrimary()));
+        if (!fullName.equals(row.modId())) {
+            lines.add(new KeybindTooltipRenderer.TipLine(
+                    Component.translatable("screen.newvisualkeybing.viewer.tooltip.mod.id", row.modId()).getString(),
+                    c.textMuted()));
+        }
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable("screen.newvisualkeybing.viewer.tooltip.mod.stats",
+                        stats.bindings(), stats.inputs(), stats.conflicts()).getString(),
+                stats.conflicts() > 0 ? c.danger() : c.textSecondary()));
+        lines.add(KeybindTooltipRenderer.TipLine.divider());
+        lines.add(new KeybindTooltipRenderer.TipLine(
+                Component.translatable(selected
+                        ? "screen.newvisualkeybing.viewer.tooltip.mod.click_clear"
+                        : "screen.newvisualkeybing.viewer.tooltip.mod.click_filter").getString(),
+                c.textMuted()));
+        KeybindTooltipRenderer.renderLines(g, font, width, height, lines, mouseX, mouseY);
     }
 
     private void renderHeaderBar(GuiGraphics g) {
@@ -672,6 +727,7 @@ static int paintPanelBase(GuiGraphics g, net.minecraft.client.gui.Font font, int
             ModRow mod = mods.get(i);
             boolean selected = mod.modId().equals(selectedModId);
             boolean hovered = inside(mouseX, mouseY, fieldX, rowY, fieldW, rowH - 1);
+            if (hovered) hoveredModRow = mod;
             int fill = selected ? UITheme.lerpColor(c.widgetBg(), c.accent(), 0.40f)
                     : hovered ? UITheme.lerpColor(c.widgetBg(), c.accentAlt(), 0.18f) : c.widgetBg();
             UITheme.fillRoundedRectFast(g, fieldX, rowY, fieldW, rowH - 1, 5, fill);

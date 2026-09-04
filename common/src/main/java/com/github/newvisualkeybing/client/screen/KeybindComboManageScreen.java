@@ -138,17 +138,19 @@ public class KeybindComboManageScreen extends FixedScaleScreen {
         int fixedMouseY = fixedMouseY(mouseY);
         pushFixedScale(graphics);
         try {
-        var colors = UITheme.colors();
-        graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE6));
+            UITheme.batched(graphics, () -> {
+                var colors = UITheme.colors();
+                graphics.fill(0, 0, width, height, UITheme.withAlpha(colors.panelBg(), 0xE6));
 
-        renderHeader(graphics);
-        renderList(graphics, fixedMouseX, fixedMouseY);
-        renderFooter(graphics);
+                renderHeader(graphics);
+                renderList(graphics, fixedMouseX, fixedMouseY);
+                renderFooter(graphics);
 
-        super.render(graphics, fixedMouseX, fixedMouseY, partialTick);
+                super.render(graphics, fixedMouseX, fixedMouseY, partialTick);
 
-        if (capture != null) renderCaptureOverlay(graphics);
-        renderNotice(graphics);
+                if (capture != null) renderCaptureOverlay(graphics);
+                renderNotice(graphics);
+            });
         } finally {
             popFixedScale(graphics);
         }

@@ -338,6 +338,9 @@ public final class UITextureStore {
     public boolean drawTinted(UITextureSlot slot, GuiGraphics g, int x, int y, int w, int h, int argb) {
         Loaded t = loaded.get(slot);
         if (t == null || w <= 0 || h <= 0) return false;
+        // Blits draw immediately, bypassing the managed fill batch; flush first so the quads queued
+        // before this texture really land underneath it.
+        UITheme.flushBatch(g);
         boolean tinted = argb != 0xFFFFFFFF;
         if (tinted) {
             g.setColor(((argb >> 16) & 0xFF) / 255f, ((argb >> 8) & 0xFF) / 255f,

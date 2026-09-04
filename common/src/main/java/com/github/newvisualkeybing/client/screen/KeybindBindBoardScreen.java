@@ -291,29 +291,31 @@ public class KeybindBindBoardScreen extends FixedScaleScreen {
 
         pushFixedScale(graphics);
         try {
-            var c = UITheme.colors();
-            if (!(UITheme.custom() && UITextureStore.global().draw(UITextureSlot.BACKGROUND, graphics, 0, 0, width, height))) {
-                graphics.fill(0, 0, width, height, c.panelBg() | 0xFF000000);
-            }
-            renderHeader(graphics);
-            renderPalette(graphics, mx, my);
+            UITheme.batched(graphics, () -> {
+                var c = UITheme.colors();
+                if (!(UITheme.custom() && UITextureStore.global().draw(UITextureSlot.BACKGROUND, graphics, 0, 0, width, height))) {
+                    graphics.fill(0, 0, width, height, c.panelBg() | 0xFF000000);
+                }
+                renderHeader(graphics);
+                renderPalette(graphics, mx, my);
 
-            long nowMs = System.currentTimeMillis();
-            // The keyboard is always drawn solid (never ghosted): every key renders fully, with
-            // status colour distinguishing bound keys from free ones. Callouts carry the labels.
-            Integer highlightKey = dropTargetKey != null ? dropTargetKey : prevHoverKey;
-            keyboardRenderer.render(graphics, font, currentStyle, keyboardX, keyboardY, keyScale,
-                    highlightKey, k -> true, k -> false, k -> false, mx, my, animTick, nowMs);
+                long nowMs = System.currentTimeMillis();
+                // The keyboard is always drawn solid (never ghosted): every key renders fully, with
+                // status colour distinguishing bound keys from free ones. Callouts carry the labels.
+                Integer highlightKey = dropTargetKey != null ? dropTargetKey : prevHoverKey;
+                keyboardRenderer.render(graphics, font, currentStyle, keyboardX, keyboardY, keyScale,
+                        highlightKey, k -> true, k -> false, k -> false, mx, my, animTick, nowMs);
 
-            renderCallouts(graphics, mx, my);
-            renderLegend(graphics);
+                renderCallouts(graphics, mx, my);
+                renderLegend(graphics);
 
-            if (dragging != null) renderUnbindZone(graphics, mx, my);
-            renderFooter(graphics);
-            super.render(graphics, mx, my, partialTick);
-            if (dragging == null && selectedMapping == null) renderHoverDetails(graphics, mx, my);
-            if (dragging != null) renderDragChip(graphics);
-            renderNotice(graphics);
+                if (dragging != null) renderUnbindZone(graphics, mx, my);
+                renderFooter(graphics);
+                super.render(graphics, mx, my, partialTick);
+                if (dragging == null && selectedMapping == null) renderHoverDetails(graphics, mx, my);
+                if (dragging != null) renderDragChip(graphics);
+                renderNotice(graphics);
+            });
         } finally {
             popFixedScale(graphics);
         }

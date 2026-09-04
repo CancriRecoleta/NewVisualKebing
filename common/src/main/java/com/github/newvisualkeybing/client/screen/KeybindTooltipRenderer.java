@@ -16,7 +16,24 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 
+/**
+ * Hover tooltip for a keyboard key / mouse input, plus a generic multi-line tooltip used by the
+ * detail panel and mod list.
+ *
+ * <p>Layout policy: the card grows to the natural width of its content (within a screen-relative
+ * cap) and anything still wider is <em>wrapped</em>, never silently clipped. When the card would
+ * not fit the screen height it first drops the translation-key lines, then shows fewer binding
+ * rows (with a "+N more" line), so the most important information always stays readable. The card
+ * is placed beside the cursor and flips to the other side instead of covering the hovered input.
+ */
 final class KeybindTooltipRenderer {
+
+    private static final int PAD_X = 10;
+    private static final int PAD_Y = 8;
+    private static final int ROW_TEXT_INSET = 8;
+    private static final int MAX_ROWS = 4;
+    private static final int CURSOR_GAP = 12;
+    private static final int SCREEN_MARGIN = 4;
 
     private final KeyBindingScanner scanner;
 
@@ -63,126 +80,132 @@ final class KeybindTooltipRenderer {
         cacheReady = true;
     }
 
+    // ------------------------------------------------------------------ key tooltip ---------------
+
     void render(GuiGraphics g, Font font, int screenW, int screenH, int virtualKey, int mouseX, int mouseY) {
-        TooltipLayout layout = layout(font, screenW, virtualKey);
+        TooltipLayout layout = layout(font, screenW, screenH, virtualKey);
         var c = UITheme.colors();
-        List<KeyBindingScanner.KeyBindingInfo> bindings = layout.bindings();
         KeyBindingScanner.KeyStatus status = layout.status();
         int innerW = layout.innerW();
         int totalW = layout.totalW();
         int totalH = layout.totalH();
-        int chipW = layout.chipW();
-        int titleH = layout.titleH();
-        int padX = 10;
-        int padY = 8;
-        int tx = clamp(mouseX + 12, 4, screenW - totalW - 4);
-        int ty = clamp(mouseY + 12, 4, screenH - totalH - 4);
+        int lineH = font.lineHeight + 2;
+        int tx = placeX(mouseX, totalW, screenW);
+        int ty = placeY(mouseY, totalH, screenH);
 
         int accent = statusAccentColor(status);
         UITheme.renderTooltipBackground(g, tx, ty, totalW, totalH);
-        UITheme.fillSoftRoundedRect(g, tx + 8, ty, totalW - 16, 2, 1, UITheme.withAlpha(accent, 0xE0));
+        if (!UITheme.flat()) {
+            UITheme.fillRoundedRect(g, tx + UITheme.TOOLTIP_RADIUS, ty, totalW - UITheme.TOOLTIP_RADIUS * 2, 2, 1,
+                    UITheme.withAlpha(accent, 0xE0));
+        }
 
-        int curX = tx + padX;
-        int curY = ty + padY;
+        int curX = tx + PAD_X;
+        int curY = ty + PAD_Y;
 
-        int chipX = tx + totalW - padX - chipW;
-        renderStatusChip(g, font, chipX, curY, status, false);
-        g.drawString(font, layout.keyNameFit(), curX, curY + 1, c.textPrimary(), true);
-        curY += titleH + 4;
-
-        UITheme.fillSoftRoundedRect(g, curX, curY, innerW, 1, 1, UITheme.withAlpha(c.divider(), 0x90));
+        // Title: key name (wrapped) with the status chip riding the first line.
+        int chipW = layout.chipW();
+        renderStatusChip(g, font, tx + totalW - PAD_X - chipW, curY, status);
+        for (int i = 0; i < layout.keyNameLines().size(); i++) {
+            g.drawString(font, layout.keyNameLines().get(i), curX, curY + 1, c.textPrimary(), true);
+            curY += i == 0 ? layout.titleH() : lineH;
+        }
         curY += 4;
-        g.drawString(font, layout.statusLineFit(), curX, curY, c.textSecondary(), true);
-        curY += font.lineHeight + 5;
+
+        UITheme.fillRoundedRect(g, curX, curY, innerW, 1, 1, UITheme.withAlpha(c.divider(), 0x90));
+        curY += 4;
+        curY = drawLines(g, font, layout.statusLines(), curX, curY, c.textSecondary(), lineH) + 3;
 
         if (layout.isWheel()) {
-            g.drawString(font, wheelHintText, curX, curY, c.textMuted(), true);
-            curY += font.lineHeight + 4;
-        } else if (bindings.isEmpty()) {
-            g.drawString(font, unboundText, curX, curY, c.textMuted(), true);
-            curY += font.lineHeight + 4;
+            curY = drawLines(g, font, layout.hintLines(), curX, curY, c.textMuted(), lineH) + 2;
+        } else if (layout.bindings().isEmpty()) {
+            curY = drawLines(g, font, layout.hintLines(), curX, curY, c.textMuted(), lineH) + 2;
         } else {
-            g.drawString(font, layout.summaryFit(), curX, curY, c.textSecondary(), true);
-            curY += font.lineHeight + 5;
-            int lineH = font.lineHeight + 2;
+            curY = drawLines(g, font, layout.summaryLines(), curX, curY, c.textSecondary(), lineH) + 3;
             for (BindingRowLayout row : layout.rows()) {
                 KeyBindingScanner.KeyBindingInfo info = row.info();
                 int rowH = row.rowH();
                 int sideColor = info.self() ? c.accent() : UITheme.withAlpha(c.widgetBorder(), 0xC0);
-                UITheme.fillSoftRoundedRect(g, curX, curY, innerW, rowH - 2, 6,
+                UITheme.fillRoundedRect(g, curX, curY, innerW, rowH - 2, 6,
                         UITheme.withAlpha(c.widgetBg(), info.self() ? 0xB8 : 0x88));
-                UITheme.drawSoftRoundedBorder(g, curX, curY, innerW, rowH - 2, 6,
+                UITheme.drawRoundedBorder(g, curX, curY, innerW, rowH - 2, 6,
                         UITheme.withAlpha(sideColor, info.self() ? 0x70 : 0x40));
-                UITheme.fillSoftRoundedRect(g, curX + 3, curY + 4, 3, rowH - 10, 2, sideColor);
+                UITheme.fillRoundedRect(g, curX + 3, curY + 4, 3, rowH - 10, 2, sideColor);
 
+                int textX = curX + ROW_TEXT_INSET;
                 int ly = curY + 3;
-                // Action name wraps to up to two lines; the mod source and context tag ride the
-                // first line, right-aligned, so the header reads "<action> ........ [tag] <mod>".
+                int actionColor = info.self() ? c.accent() : c.textPrimary();
                 List<String> actionLines = row.actionLines();
                 for (int i = 0; i < actionLines.size(); i++) {
-                    g.drawString(font, actionLines.get(i), curX + 8, ly,
-                            info.self() ? c.accent() : c.textPrimary(), true);
-                    if (i == 0) {
-                        int rightX = curX + innerW - 6 - row.modW();
-                        g.drawString(font, row.modText(), rightX, ly, c.textSecondary(), true);
-                        if (!row.ctxTag().isEmpty()) {
-                            int tagW = row.ctxTagW() + 6;
-                            int tagX = rightX - tagW - 4;
-                            UITheme.fillSoftRoundedRect(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, 4,
-                                    UITheme.withAlpha(c.accentAlt(), 0x28));
-                            UITheme.drawSoftRoundedBorder(g, tagX - 3, ly - 1, tagW, font.lineHeight + 2, 4,
-                                    UITheme.withAlpha(c.accentAlt(), 0x70));
-                            g.drawString(font, row.ctxTag(), tagX, ly, c.accentAlt(), true);
-                        }
+                    g.drawString(font, actionLines.get(i), textX, ly, actionColor, true);
+                    if (i == 0 && !row.modOnOwnLine()) {
+                        drawSourceBlock(g, font, row, curX + innerW - 6, ly);
                     }
                     ly += lineH;
                 }
-                g.drawString(font, row.metaFit(), curX + 8, ly, c.textMuted(), true);
-                ly += lineH;
-                // Translation key wraps on its own (mod ids can be long); the key pair sits below it.
-                for (String idLine : row.idLines()) {
-                    g.drawString(font, idLine, curX + 8, ly, UITheme.withAlpha(c.textMuted(), 0xBE), true);
+                if (row.modOnOwnLine()) {
+                    drawSourceBlock(g, font, row, curX + innerW - 6, ly);
                     ly += lineH;
                 }
-                g.drawString(font, row.keyInfoFit(), curX + 8, ly,
-                        UITheme.withAlpha(c.textMuted(), 0xD8), true);
+                ly = drawLines(g, font, row.metaLines(), textX, ly, c.textMuted(), lineH);
+                ly = drawLines(g, font, row.idLines(), textX, ly, UITheme.withAlpha(c.textMuted(), 0xBE), lineH);
+                drawLines(g, font, row.keyInfoLines(), textX, ly, UITheme.withAlpha(c.textMuted(), 0xD8), lineH);
                 curY += rowH;
             }
             if (layout.moreText() != null) {
                 g.drawString(font, layout.moreText(), curX, curY, c.textMuted(), true);
-                curY += font.lineHeight + 2;
+                curY += lineH;
             }
         }
 
         if (status == KeyBindingScanner.KeyStatus.CONFLICT) {
-            int warnH = font.lineHeight + 7;
-            UITheme.fillSoftRoundedRect(g, curX, curY - 2, innerW, warnH, 6,
-                    UITheme.withAlpha(c.dangerColor(), 0x24));
-            UITheme.drawSoftRoundedBorder(g, curX, curY - 2, innerW, warnH, 6,
-                    UITheme.withAlpha(c.dangerColor(), 0x88));
-            g.drawString(font, layout.conflictFit(), curX + 7, curY + 1, c.dangerColor(), true);
+            int warnH = layout.conflictLines().size() * lineH + 5;
+            UITheme.fillRoundedRect(g, curX, curY - 2, innerW, warnH, 6, UITheme.withAlpha(c.dangerColor(), 0x24));
+            UITheme.drawRoundedBorder(g, curX, curY - 2, innerW, warnH, 6, UITheme.withAlpha(c.dangerColor(), 0x88));
+            drawLines(g, font, layout.conflictLines(), curX + 7, curY + 1, c.dangerColor(), lineH);
             curY += warnH + 3;
         }
 
-        String[] comboLines = layout.comboLines();
-        if (comboLines.length > 0) {
+        if (!layout.comboLines().isEmpty()) {
             int yellow = KeybindKeyboardRenderer.COMBO_HIGHLIGHT_COLOR;
-            for (String line : comboLines) {
-                int lineH = font.lineHeight + 6;
-                UITheme.fillSoftRoundedRect(g, curX, curY - 1, innerW, lineH, 6,
-                        UITheme.withAlpha(yellow, 0x20));
-                UITheme.drawSoftRoundedBorder(g, curX, curY - 1, innerW, lineH, 6,
-                        UITheme.withAlpha(yellow, 0x70));
-                g.drawString(font, line, curX + 7, curY + 2, yellow, true);
-                curY += lineH + 2;
+            for (List<String> combo : layout.comboLines()) {
+                int boxH = combo.size() * lineH + 4;
+                UITheme.fillRoundedRect(g, curX, curY - 1, innerW, boxH, 6, UITheme.withAlpha(yellow, 0x20));
+                UITheme.drawRoundedBorder(g, curX, curY - 1, innerW, boxH, 6, UITheme.withAlpha(yellow, 0x70));
+                drawLines(g, font, combo, curX + 7, curY + 2, yellow, lineH);
+                curY += boxH + 2;
             }
             curY += 2;
         }
 
-        g.drawString(font, layout.clickFit(), curX, curY, c.textMuted(), true);
+        drawLines(g, font, layout.clickLines(), curX, curY, c.textMuted(), lineH);
     }
 
-    private TooltipLayout layout(Font font, int screenW, int virtualKey) {
+    /** Right-aligned "[ctx] mod" block whose right edge sits at {@code rightX}. */
+    private void drawSourceBlock(GuiGraphics g, Font font, BindingRowLayout row, int rightX, int y) {
+        var c = UITheme.colors();
+        int modX = rightX - row.modW();
+        g.drawString(font, row.modText(), modX, y, c.textSecondary(), true);
+        if (!row.ctxTag().isEmpty()) {
+            int tagW = row.ctxTagW() + 6;
+            int tagX = modX - tagW - 4;
+            UITheme.fillRoundedRect(g, tagX - 3, y - 1, tagW, font.lineHeight + 2, 4,
+                    UITheme.withAlpha(c.accentAlt(), 0x28));
+            UITheme.drawRoundedBorder(g, tagX - 3, y - 1, tagW, font.lineHeight + 2, 4,
+                    UITheme.withAlpha(c.accentAlt(), 0x70));
+            g.drawString(font, row.ctxTag(), tagX, y, c.accentAlt(), true);
+        }
+    }
+
+    private static int drawLines(GuiGraphics g, Font font, List<String> lines, int x, int y, int color, int lineH) {
+        for (String line : lines) {
+            g.drawString(font, line, x, y, color, true);
+            y += lineH;
+        }
+        return y;
+    }
+
+    private TooltipLayout layout(Font font, int screenW, int screenH, int virtualKey) {
         ensureCache();
         long version = scanner.version();
         long comboVersion = KeybindComboStore.global().version();
@@ -190,7 +213,9 @@ final class KeybindTooltipRenderer {
                 && cachedLayout.virtualKey() == virtualKey
                 && cachedLayout.scannerVersion() == version
                 && cachedLayout.comboVersion() == comboVersion
-                && cachedLayout.screenW() == screenW) {
+                && cachedLayout.screenW() == screenW
+                && cachedLayout.screenH() == screenH
+                && cachedLayout.lineHeight() == font.lineHeight) {
             return cachedLayout;
         }
         boolean isWheel = KeyboardLayoutData.isWheel(virtualKey);
@@ -212,109 +237,144 @@ final class KeybindTooltipRenderer {
         }
 
         int chipW = statusChipWidth(font, status);
-        int padX = 10;
-        int padY = 8;
-        int maxInnerW = Math.max(160, Math.min(360, screenW - 32));
-        int innerW = Math.min(maxInnerW, Math.max(200, font.width(keyName) + 8 + chipW));
-        String inputType = inputTypeName(virtualKey);
+        int maxInnerW = maxInnerWidth(screenW);
+        int minInnerW = Math.min(200, maxInnerW);
+
         String statusLine = Component.translatable("screen.newvisualkeybing.viewer.tooltip.status_line",
-                inputType, contextCountText(bindings)).getString();
-        innerW = Math.min(maxInnerW, Math.max(innerW, font.width(statusLine)));
-        int maxRows = Math.min(bindings.size(), 4);
-        // Widen only to fit each row's header line (action + tag + mod). The longer detail lines
-        // (category, translation id, key pair) wrap to multiple lines instead of forcing width.
-        for (int i = 0; i < maxRows; i++) {
-            KeyBindingScanner.KeyBindingInfo info = bindings.get(i);
-            String ctxTag = contextTag(info.conflictContext());
-            int headW = 14 + font.width(info.actionName()) + 10 + font.width(info.modName())
-                    + (ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 10);
-            innerW = Math.min(maxInnerW, Math.max(innerW, headW));
-        }
-        if (status == KeyBindingScanner.KeyStatus.CONFLICT) {
-            innerW = Math.min(maxInnerW, Math.max(innerW, font.width(conflictWarningText)));
-        }
-        innerW = Math.min(maxInnerW, Math.max(innerW, font.width(clickHintText)));
-
+                inputTypeName(virtualKey), contextCountText(bindings)).getString();
+        String hint = isWheel ? wheelHintText : unboundText;
+        String summary = Component.translatable("screen.newvisualkeybing.viewer.tooltip.summary",
+                bindings.size(), countSources(bindings), countCategories(bindings), countContexts(bindings)).getString();
         List<KeybindComboStore.ComboBinding> combos = KeybindComboStore.global().combosForVirtualKey(virtualKey);
-        String[] comboLines = new String[combos.size()];
-        for (int i = 0; i < combos.size(); i++) {
-            KeybindComboStore.ComboBinding cb = combos.get(i);
-            String line = "\u25cf " + cb.comboLabel() + " \u2014 " + KeybindComboStore.describeMapping(cb.mappingName);
-            innerW = Math.min(maxInnerW, Math.max(innerW, font.width(line)));
-            comboLines[i] = line;
+        List<String> comboTexts = new ArrayList<>(combos.size());
+        for (KeybindComboStore.ComboBinding cb : combos) {
+            comboTexts.add("\u25cf " + cb.comboLabel() + " \u2014 " + KeybindComboStore.describeMapping(cb.mappingName));
         }
 
-        // Rows are built before content height so the variable wrapped heights can be summed.
-        int lineH = font.lineHeight + 2;
-        String summaryFit = null;
-        String moreText = null;
-        BindingRowLayout[] rows = new BindingRowLayout[maxRows];
-        if (!isWheel && !bindings.isEmpty()) {
-            String summary = Component.translatable("screen.newvisualkeybing.viewer.tooltip.summary",
-                    bindings.size(), countSources(bindings), countCategories(bindings), countContexts(bindings)).getString();
-            summaryFit = fitToWidth(font, summary, innerW);
-            for (int i = 0; i < maxRows; i++) {
+        // Natural width: the widest single line of anything we will show. Row header lines count
+        // action + tag + mod; the detail lines are allowed to wrap, so they only widen the card up
+        // to a comfortable reading width rather than dictating it.
+        int natural = font.width(keyName) + 8 + chipW;
+        natural = Math.max(natural, font.width(statusLine));
+        natural = Math.max(natural, font.width(clickHintText));
+        if (isWheel || bindings.isEmpty()) {
+            natural = Math.max(natural, font.width(hint));
+        } else {
+            natural = Math.max(natural, font.width(summary));
+            int visibleRows = Math.min(bindings.size(), MAX_ROWS);
+            for (int i = 0; i < visibleRows; i++) {
                 KeyBindingScanner.KeyBindingInfo info = bindings.get(i);
                 String ctxTag = contextTag(info.conflictContext());
-                int ctxTagW = ctxTag.isEmpty() ? 0 : font.width(ctxTag);
-                int tagW = ctxTag.isEmpty() ? 0 : ctxTagW + 6;
-                int modMaxW = Math.max(40, Math.min(innerW / 3, innerW - 90));
-                String modText = fitToWidth(font, info.modName(), modMaxW);
-                int modW = font.width(modText);
-                int rightBlockW = tagW + modW + 6;
-                List<String> actionLines = wrapLines(font, info.actionName(),
-                        Math.max(40, innerW - 14 - rightBlockW), 2);
-                String meta = info.categoryName() + "  \u00b7  " + contextName(info.conflictContext());
-                String metaFit = fitToWidth(font, meta, innerW - 12);
-                List<String> idLines = wrapLines(font, info.translationKey(), innerW - 12, 2);
-                String keyInfo = Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key",
-                        info.currentKeyName()).getString() + "   \u00b7   "
-                        + Component.translatable("screen.newvisualkeybing.viewer.tooltip.default_key",
-                        info.defaultKeyName()).getString();
-                String keyInfoFit = fitToWidth(font, keyInfo, innerW - 12);
-                int nLines = actionLines.size() + 1 + idLines.size() + 1;
-                int rh = 6 + nLines * lineH;
-                rows[i] = new BindingRowLayout(info, ctxTag, ctxTagW, actionLines, modText, modW,
-                        metaFit, idLines, keyInfoFit, rh);
-            }
-            if (bindings.size() > maxRows) {
-                moreText = Component.translatable("screen.newvisualkeybing.viewer.tooltip.more",
-                        bindings.size() - maxRows).getString();
+                int headW = ROW_TEXT_INSET + 6 + font.width(info.actionName()) + 12 + font.width(info.modName())
+                        + (ctxTag.isEmpty() ? 0 : font.width(ctxTag) + 10);
+                natural = Math.max(natural, headW);
+                natural = Math.max(natural, Math.min(ROW_TEXT_INSET + 6 + font.width(keyInfoText(info)), 300));
+                natural = Math.max(natural, Math.min(ROW_TEXT_INSET + 6 + font.width(metaText(info)), 300));
             }
         }
+        if (status == KeyBindingScanner.KeyStatus.CONFLICT) {
+            natural = Math.max(natural, Math.min(font.width(conflictWarningText) + 14, 320));
+        }
+        for (String comboText : comboTexts) natural = Math.max(natural, Math.min(font.width(comboText) + 14, 320));
+        int innerW = Math.max(minInnerW, Math.min(maxInnerW, natural));
 
+        int lineH = font.lineHeight + 2;
         int titleH = Math.max(font.lineHeight, 12);
-        int contentH = titleH + 6;
-        contentH += font.lineHeight + 5;
-        if (isWheel || bindings.isEmpty()) {
-            contentH += font.lineHeight + 4;
-        } else {
-            contentH += font.lineHeight + 5;
-            for (BindingRowLayout r : rows) contentH += r.rowH();
-            if (bindings.size() > maxRows) contentH += font.lineHeight + 2;
-        }
-        if (status == KeyBindingScanner.KeyStatus.CONFLICT) contentH += font.lineHeight + 10;
-        if (comboLines.length > 0) contentH += comboLines.length * (font.lineHeight + 8) + 2;
-        contentH += font.lineHeight + 6;
+        List<String> keyNameLines = wrapLines(font, keyName, innerW - chipW - 6, 2);
+        List<String> statusLines = wrapLines(font, statusLine, innerW, 2);
+        List<String> hintLines = wrapLines(font, hint, innerW, 3);
+        List<String> summaryLines = wrapLines(font, summary, innerW, 2);
+        List<String> conflictLines = status == KeyBindingScanner.KeyStatus.CONFLICT
+                ? wrapLines(font, conflictWarningText, innerW - 14, 3) : List.of();
+        List<List<String>> comboLines = new ArrayList<>(comboTexts.size());
+        for (String comboText : comboTexts) comboLines.add(wrapLines(font, comboText, innerW - 14, 2));
+        List<String> clickLines = wrapLines(font, clickHintText, innerW, 2);
 
-        int totalW = innerW + padX * 2;
-        int totalH = contentH + padY * 2;
-        String keyNameFit = fitToWidth(font, keyName, innerW - chipW - 6);
-        String statusLineFit = fitToWidth(font, statusLine, innerW);
-
-        String[] comboLinesFit = new String[comboLines.length];
-        for (int i = 0; i < comboLines.length; i++) {
-            comboLinesFit[i] = fitToWidth(font, comboLines[i], innerW);
+        // Fit to the screen height: drop translation keys first, then rows.
+        int availH = screenH - SCREEN_MARGIN * 2;
+        int maxRows = Math.min(bindings.size(), MAX_ROWS);
+        boolean compact = false;
+        BindingRowLayout[] rows;
+        String moreText;
+        int totalH;
+        while (true) {
+            rows = buildRows(font, bindings, maxRows, innerW, compact, lineH);
+            moreText = bindings.size() > maxRows
+                    ? Component.translatable("screen.newvisualkeybing.viewer.tooltip.more",
+                            bindings.size() - maxRows).getString()
+                    : null;
+            int contentH = titleH + (keyNameLines.size() - 1) * lineH + 4 + 4;
+            contentH += statusLines.size() * lineH + 3;
+            if (isWheel || bindings.isEmpty()) {
+                contentH += hintLines.size() * lineH + 2;
+            } else {
+                contentH += summaryLines.size() * lineH + 3;
+                for (BindingRowLayout r : rows) contentH += r.rowH();
+                if (moreText != null) contentH += lineH;
+            }
+            if (status == KeyBindingScanner.KeyStatus.CONFLICT) contentH += conflictLines.size() * lineH + 5 + 3;
+            if (!comboLines.isEmpty()) {
+                for (List<String> combo : comboLines) contentH += combo.size() * lineH + 4 + 2;
+                contentH += 2;
+            }
+            contentH += clickLines.size() * lineH;
+            totalH = contentH + PAD_Y * 2;
+            if (totalH <= availH) break;
+            if (!compact && !bindings.isEmpty()) {
+                compact = true;
+            } else if (maxRows > 1) {
+                maxRows--;
+            } else {
+                break;
+            }
         }
-        cachedLayout = new TooltipLayout(virtualKey, version, comboVersion, screenW, isWheel, bindings, status,
-                keyNameFit, statusLineFit, summaryFit, moreText,
-                fitToWidth(font, conflictWarningText, innerW), fitToWidth(font, clickHintText, innerW),
-                innerW, totalW, totalH, chipW, titleH, rows, comboLinesFit);
+
+        cachedLayout = new TooltipLayout(virtualKey, version, comboVersion, screenW, screenH, font.lineHeight,
+                isWheel, bindings, status, keyNameLines, statusLines, hintLines, summaryLines, moreText,
+                conflictLines, clickLines, innerW, innerW + PAD_X * 2, totalH, chipW, titleH, rows, comboLines);
         return cachedLayout;
     }
 
-    private int renderStatusChip(GuiGraphics g, Font font, int x, int y,
-                                 KeyBindingScanner.KeyStatus status, boolean measureOnly) {
+    private BindingRowLayout[] buildRows(Font font, List<KeyBindingScanner.KeyBindingInfo> bindings,
+                                         int maxRows, int innerW, boolean compact, int lineH) {
+        BindingRowLayout[] rows = new BindingRowLayout[maxRows];
+        int textW = innerW - ROW_TEXT_INSET - 6;
+        for (int i = 0; i < maxRows; i++) {
+            KeyBindingScanner.KeyBindingInfo info = bindings.get(i);
+            String ctxTag = contextTag(info.conflictContext());
+            int ctxTagW = ctxTag.isEmpty() ? 0 : font.width(ctxTag);
+            int tagBlockW = ctxTag.isEmpty() ? 0 : ctxTagW + 6 + 4;
+            int modNaturalW = font.width(info.modName());
+            // The source block shares the header line while it leaves the action at least half the
+            // width; otherwise it moves to its own right-aligned line so neither gets squeezed.
+            boolean modOnOwnLine = tagBlockW + modNaturalW > textW / 2;
+            String modText = modOnOwnLine ? fitToWidth(font, info.modName(), textW - tagBlockW) : info.modName();
+            int modW = font.width(modText);
+            int actionW = modOnOwnLine ? textW : textW - tagBlockW - modW - 8;
+            List<String> actionLines = wrapLines(font, info.actionName(), Math.max(40, actionW), 3);
+            List<String> metaLines = wrapLines(font, metaText(info), textW, 2);
+            List<String> idLines = compact ? List.of() : wrapLines(font, info.translationKey(), textW, 2);
+            List<String> keyInfoLines = wrapLines(font, keyInfoText(info), textW, 2);
+            int nLines = actionLines.size() + (modOnOwnLine ? 1 : 0) + metaLines.size()
+                    + idLines.size() + keyInfoLines.size();
+            rows[i] = new BindingRowLayout(info, ctxTag, ctxTagW, actionLines, modText, modW, modOnOwnLine,
+                    metaLines, idLines, keyInfoLines, 6 + nLines * lineH);
+        }
+        return rows;
+    }
+
+    private String metaText(KeyBindingScanner.KeyBindingInfo info) {
+        return info.categoryName() + "  \u00b7  " + contextName(info.conflictContext());
+    }
+
+    private static String keyInfoText(KeyBindingScanner.KeyBindingInfo info) {
+        return Component.translatable("screen.newvisualkeybing.viewer.tooltip.current_key",
+                info.currentKeyName()).getString() + "   \u00b7   "
+                + Component.translatable("screen.newvisualkeybing.viewer.tooltip.default_key",
+                info.defaultKeyName()).getString();
+    }
+
+    private void renderStatusChip(GuiGraphics g, Font font, int x, int y, KeyBindingScanner.KeyStatus status) {
         var c = UITheme.colors();
         int dot = statusAccentColor(status);
         int textColor = switch (status) {
@@ -327,26 +387,101 @@ final class KeybindTooltipRenderer {
         String label = statusLabels.get(status);
         int chipH = 12;
         int chipW = statusChipWidth(font, status);
-        if (measureOnly) return chipW;
         int chipFill = UITheme.lerpColor(c.widgetBg(), dot, 0.22f);
-        UITheme.fillSoftRoundedRect(g, x, y, chipW, chipH, 6, UITheme.withAlpha(chipFill, 0xEA));
-        UITheme.drawSoftRoundedBorder(g, x, y, chipW, chipH, 6, UITheme.withAlpha(dot, 0xD8));
-        UITheme.fillSoftRoundedRect(g, x + 4, y + (chipH - 4) / 2, 4, 4, 2, dot);
+        UITheme.fillRoundedRect(g, x, y, chipW, chipH, 6, UITheme.withAlpha(chipFill, 0xEA));
+        UITheme.drawRoundedBorder(g, x, y, chipW, chipH, 6, UITheme.withAlpha(dot, 0xD8));
+        UITheme.fillRoundedRect(g, x + 4, y + (chipH - 4) / 2, 4, 4, 2, dot);
         g.drawString(font, label, x + 10, y + (chipH - font.lineHeight) / 2 + 1, textColor, true);
-        return chipW;
     }
 
     private int statusChipWidth(Font font, KeyBindingScanner.KeyStatus status) {
         return font.width(statusLabels.get(status)) + 14;
     }
 
-    private static String fitToWidth(Font font, String text, int maxW) {
-        return TextFitCache.fitPlain(font, text, maxW);
+    // ------------------------------------------------------------------ generic tooltip -----------
+
+    /** One line of a generic tooltip. A {@code null} text draws a thin divider instead. */
+    record TipLine(String text, int color) {
+        static TipLine divider() {
+            return new TipLine(null, 0);
+        }
     }
 
-    private static int clamp(int value, int min, int max) {
-        if (max < min) return min;
-        return Math.max(min, Math.min(value, max));
+    /**
+     * Draws a themed tooltip made of plain text lines next to the cursor. Lines wider than the
+     * screen-relative cap wrap (up to four visual lines each); the card flips to the other side of
+     * the cursor when it would run off the screen.
+     */
+    static void renderLines(GuiGraphics g, Font font, int screenW, int screenH,
+                            List<TipLine> lines, int mouseX, int mouseY) {
+        if (lines.isEmpty()) return;
+        int maxInnerW = maxInnerWidth(screenW);
+        int natural = 0;
+        for (TipLine line : lines) {
+            if (line.text() != null) natural = Math.max(natural, font.width(line.text()));
+        }
+        int innerW = Math.max(Math.min(60, maxInnerW), Math.min(maxInnerW, natural));
+        int lineH = font.lineHeight + 2;
+        List<List<String>> wrapped = new ArrayList<>(lines.size());
+        int contentH = 0;
+        for (TipLine line : lines) {
+            if (line.text() == null) {
+                wrapped.add(null);
+                contentH += 5;
+            } else {
+                List<String> w = wrapLines(font, line.text(), innerW, 4);
+                wrapped.add(w);
+                contentH += w.size() * lineH;
+            }
+        }
+        int totalW = innerW + PAD_X * 2;
+        int totalH = contentH + PAD_Y * 2 - 2;
+        int tx = placeX(mouseX, totalW, screenW);
+        int ty = placeY(mouseY, totalH, screenH);
+        UITheme.renderTooltipBackground(g, tx, ty, totalW, totalH);
+        var c = UITheme.colors();
+        int curY = ty + PAD_Y;
+        for (int i = 0; i < lines.size(); i++) {
+            List<String> w = wrapped.get(i);
+            if (w == null) {
+                UITheme.fillRoundedRect(g, tx + PAD_X, curY + 2, innerW, 1, 1, UITheme.withAlpha(c.divider(), 0x90));
+                curY += 5;
+                continue;
+            }
+            curY = drawLines(g, font, w, tx + PAD_X, curY, lines.get(i).color(), lineH);
+        }
+    }
+
+    // ------------------------------------------------------------------ placement / measuring -----
+
+    /** Widest content the card may have on this screen: roughly half the width, within sane bounds. */
+    private static int maxInnerWidth(int screenW) {
+        int cap = Math.round(screenW * 0.5f);
+        return Math.max(120, Math.min(Math.min(440, screenW - 32), Math.max(240, cap)));
+    }
+
+    /** Prefers the right of the cursor, flips to the left when that would overflow, then clamps. */
+    private static int placeX(int mouseX, int totalW, int screenW) {
+        int x = mouseX + CURSOR_GAP;
+        if (x + totalW > screenW - SCREEN_MARGIN) {
+            int flipped = mouseX - CURSOR_GAP - totalW;
+            x = flipped >= SCREEN_MARGIN ? flipped : Math.max(SCREEN_MARGIN, screenW - SCREEN_MARGIN - totalW);
+        }
+        return Math.max(SCREEN_MARGIN, x);
+    }
+
+    /** Prefers below the cursor, flips above when that would overflow, then clamps. */
+    private static int placeY(int mouseY, int totalH, int screenH) {
+        int y = mouseY + CURSOR_GAP;
+        if (y + totalH > screenH - SCREEN_MARGIN) {
+            int flipped = mouseY - CURSOR_GAP - totalH;
+            y = flipped >= SCREEN_MARGIN ? flipped : Math.max(SCREEN_MARGIN, screenH - SCREEN_MARGIN - totalH);
+        }
+        return Math.max(SCREEN_MARGIN, y);
+    }
+
+    private static String fitToWidth(Font font, String text, int maxW) {
+        return TextFitCache.fitPlain(font, text, maxW);
     }
 
     private static int countSources(List<KeyBindingScanner.KeyBindingInfo> bindings) {
@@ -449,7 +584,7 @@ final class KeybindTooltipRenderer {
      * Greedy word/character wrap (via Minecraft's line splitter) capped at {@code maxLines}; the last
      * kept line is ellipsized when the text overflows the cap so nothing is silently dropped.
      */
-    private static List<String> wrapLines(Font font, String text, int maxW, int maxLines) {
+    static List<String> wrapLines(Font font, String text, int maxW, int maxLines) {
         if (text == null || text.isEmpty()) return List.of("");
         if (maxW <= 0) return List.of(fitToWidth(font, text, Math.max(1, maxW)));
         if (font.width(text) <= maxW) return List.of(text);
@@ -467,17 +602,18 @@ final class KeybindTooltipRenderer {
     }
 
     private record TooltipLayout(int virtualKey, long scannerVersion, long comboVersion,
-                                 int screenW, boolean isWheel,
+                                 int screenW, int screenH, int lineHeight, boolean isWheel,
                                  List<KeyBindingScanner.KeyBindingInfo> bindings,
                                  KeyBindingScanner.KeyStatus status,
-                                 String keyNameFit, String statusLineFit,
-                                 String summaryFit, String moreText,
-                                 String conflictFit, String clickFit,
+                                 List<String> keyNameLines, List<String> statusLines,
+                                 List<String> hintLines, List<String> summaryLines, String moreText,
+                                 List<String> conflictLines, List<String> clickLines,
                                  int innerW, int totalW, int totalH, int chipW,
                                  int titleH, BindingRowLayout[] rows,
-                                 String[] comboLines) {}
+                                 List<List<String>> comboLines) {}
 
     private record BindingRowLayout(KeyBindingScanner.KeyBindingInfo info, String ctxTag, int ctxTagW,
-                                    List<String> actionLines, String modText, int modW,
-                                    String metaFit, List<String> idLines, String keyInfoFit, int rowH) {}
+                                    List<String> actionLines, String modText, int modW, boolean modOnOwnLine,
+                                    List<String> metaLines, List<String> idLines, List<String> keyInfoLines,
+                                    int rowH) {}
 }

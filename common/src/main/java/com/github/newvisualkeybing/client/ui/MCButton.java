@@ -105,6 +105,7 @@ public class MCButton extends AbstractWidget {
     private void renderVanillaButton(GuiGraphics graphics, int x, int y, int w, int h) {
         boolean hovered = isHoveredOrFocused() && this.active;
         ResourceLocation sprite = !this.active ? BUTTON_DISABLED : hovered ? BUTTON_HIGHLIGHTED : BUTTON;
+        UITheme.flushBatch(graphics); // sprite blits bypass the managed batch
         graphics.blitSprite(sprite, x, y, w, h);
     }
 
