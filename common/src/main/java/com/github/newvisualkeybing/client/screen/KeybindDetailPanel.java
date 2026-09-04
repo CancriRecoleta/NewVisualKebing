@@ -484,6 +484,19 @@ final class KeybindDetailPanel {
             g.fill(cx + d, cy + d, cx + d + 1, cy + d + 1, markColor);
             g.fill(cx + d, cy - d, cx + d + 1, cy - d + 1, markColor);
         }
+
+        if (rowHovered) {
+            g.renderComponentTooltip(
+                    font,
+                    List.of(
+                            Component.literal("Action: " + info.actionName()),
+                            Component.literal("Mod: " + info.modName()),
+                            Component.literal("Keybind: " + info.currentKeyName())
+                    ),
+                    mouseX,
+                    mouseY
+            );
+        }
     }
 
     private void renderPriorityControls(GuiGraphics g, Font font, KeyBindingScanner.KeyBindingInfo info,
